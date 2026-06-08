@@ -1,0 +1,57 @@
+package com.calit.google;
+
+import io.quarkus.test.TestTransaction;
+import io.quarkus.test.junit.QuarkusTest;
+import org.junit.jupiter.api.Test;
+
+import java.time.Instant;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+@QuarkusTest
+class GoogleCredentialTest {
+
+    @Test
+    @TestTransaction
+    void getReturnsNullWhenNotConnected() {
+        assertNull(GoogleCredential.get());
+    }
+
+    @Test
+    @TestTransaction
+    void persistsAndReadsSingletonWithTokens() {
+        GoogleCredential c = new GoogleCredential();
+        c.id = GoogleCredential.SINGLETON_ID;
+        c.refreshToken = "refresh-abc";
+        c.accessToken = "access-xyz";
+        c.accessTokenExpiry = Instant.parse("2030-01-01T00:00:00Z");
+        c.persist();
+
+        GoogleCredential loaded = GoogleCredential.get();
+        assertNotNull(loaded);
+        assertEquals(GoogleCredential.SINGLETON_ID, loaded.id);
+        assertEquals("refresh-abc", loaded.refreshToken);
+        assertEquals("access-xyz", loaded.accessToken);
+        assertEquals(Instant.parse("2030-01-01T00:00:00Z"), loaded.accessTokenExpiry);
+    }
+
+    @Test
+    @TestTransaction
+    void accessTokenIsExpiredWhenNullOrPast() {
+        GoogleCredential c = new GoogleCredential();
+        c.id = GoogleCredential.SINGLETON_ID;
+        c.refreshToken = "refresh-abc";
+        // No access token yet.
+        assertTrue(c.isAccessTokenExpired(Instant.parse("2026-06-08T00:00:00Z")));
+
+        c.accessToken = "access-xyz";
+        c.accessTokenExpiry = Instant.parse("2026-06-08T00:00:00Z");
+        // Exactly at expiry counts as expired (with safety margin).
+        assertTrue(c.isAccessTokenExpired(Instant.parse("2026-06-08T00:00:00Z")));
+        // Comfortably before expiry: not expired.
+        assertEquals(false, c.isAccessTokenExpired(Instant.parse("2026-06-07T23:00:00Z")));
+    }
+}
