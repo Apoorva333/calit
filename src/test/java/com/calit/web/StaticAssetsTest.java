@@ -11,7 +11,7 @@ class StaticAssetsTest {
 
     @Test
     void picoWebjarIsServedVersionAgnostically() {
-        given().when().get("/webjars/picocss__pico/css/pico.jade.min.css")
+        given().when().get("/webjars/picocss__pico/css/pico.indigo.min.css")
                 .then().statusCode(200)
                 .contentType(containsString("css"));
     }

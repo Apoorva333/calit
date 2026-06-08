@@ -84,3 +84,30 @@ input[name="website"] { display: none !important; }
 
 /* Inline form error (e.g. booking validation message). */
 .err { color: var(--pico-del-color); margin: .5rem 0; }
+
+/* ============================================================
+   Calendly-look upgrade — canvas, cards, shared tokens.
+   Variable-driven so Pico's auto light/dark flips it for free.
+   ============================================================ */
+:root { --calit-canvas: #f3f4f6; }            /* soft grey behind cards (light) */
+[data-theme="light"] { --calit-canvas: #f3f4f6; }
+[data-theme="dark"]  { --calit-canvas: #11141b; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --calit-canvas: #11141b; }
+}
+
+/* Soft canvas behind the centered card(s). */
+body.canvas { background: var(--calit-canvas); }
+
+/* The signature floating card. Surface + border + shadow all adapt with the theme. */
+.calit-card {
+  background: var(--pico-card-background-color);
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(16, 24, 40, .08);
+  padding: clamp(1.25rem, 3vw, 2.25rem);
+  margin-top: 2rem;
+}
+
+/* Booking page wants a wider column than the default 48rem reading width. */
+body.book-page main.container { max-width: 58rem; }
