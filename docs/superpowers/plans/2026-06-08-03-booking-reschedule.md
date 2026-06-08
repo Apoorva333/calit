@@ -2608,6 +2608,20 @@ git commit -m "feat: booking REST API (available/book/approve/decline + manage-t
 
 ---
 
+## Built deviations (synced to reality — Tasks 5–8)
+
+These were applied during implementation and verified sound:
+- **`io.quarkus.test.InjectMock`** import in every booking test (Quarkus 3.35 relocated it from `io.quarkus.test.junit.mockito.InjectMock`).
+- **`LocationType` is a nested enum** `com.calit.domain.MeetingType.LocationType` (Plan 1b built it nested), so imports/usages reference the nested form, not a standalone `com.calit.domain.LocationType`.
+- **`TurnstileVerifier.secret` is `Optional<String>`** (empty-string config crashes SmallRye `@ConfigProperty` at startup), and the siteverify success check uses a **whitespace-tolerant regex** `"success"\s*:\s*true` — Cloudflare returns `{"success": true}` with a space after the colon, so the plan's literal `contains("\"success\":true")` would never match a real success and would reject every booking.
+- **`BookingService` uses hybrid injection:** constructor for `SlotService`/`CalendarPort`/`TurnstileVerifier`/`perEmailDailyCap` (immutable, testable, consistent with the Plan 2 google package); the six `Event<>` emitters stay `@Inject` fields to avoid a ten-arg constructor.
+- **Booking tests derive slot dates from `Instant.now()`** (`DAY = now.atZone(ZONE).toLocalDate().plusDays(7)`, rule day-of-week = `DAY.getDayOfWeek()`, instants via `DAY.atTime(..).atZone(ZONE).toInstant()`) instead of a fixed calendar date. A fixed past/elapsing date is dropped by the `minNotice` filter (`earliest = now`), so fixed dates were a time-bomb.
+- **`GET /api/meeting-types/{slug}/available` lives in `MeetingTypeResource`**, not `BookingResource`. With both `@Path("/api")` (BookingResource) and `@Path("/api/meeting-types")` present, JAX-RS selects the more-specific root resource, leaving a `BookingResource`-declared `/meeting-types/...` method unreachable (404). The client URL contract is unchanged.
+- **`BookingResourceTest`** (not `@TestTransaction` — REST writes commit) seeds via `QuarkusTransaction.requiringNew()`, uses a **per-type** `AvailabilityRule` (`meetingTypeId = t.id`) instead of a global one to avoid cross-test accumulation, and cleans held bookings `@BeforeEach`/`@AfterEach`.
+- **`MalformedDateTimeMapper`** maps a malformed ISO-8601 date/time (bad `startUtc`/`newStartUtc`/`from`/`to`) to **400** instead of a leaked 500 on the public endpoints. (Known minor follow-up: a *null/absent* `startUtc` JSON field still yields an NPE→500; the frontend always supplies it, so left for a later bean-validation pass.)
+
+---
+
 ## Self-Review against spec
 
 **1. Spec coverage (Plan 3 scope — features 1, 5, 6, 10, 11, 12 (consumed), 13, 14, 16 + manage-token):**
