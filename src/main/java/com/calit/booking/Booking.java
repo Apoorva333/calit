@@ -54,7 +54,8 @@ public class Booking extends PanacheEntityBase {
 
     /**
      * Invitee manage/reschedule/cancel key: a random UUID set at creation. Unique.
-     * Plan 4 emails a tokenized link; Plan 5 routes /manage/{manageToken}.
+     * Plan 4 emails a tokenized link {app.base-url}/booking/{manageToken}/manage; Plan 5 must
+     * expose that exact UI route. (The REST API uses /api/bookings/{manageToken}/... separately.)
      */
     @Column(name = "manage_token", nullable = false, length = 36, unique = true)
     public String manageToken;
