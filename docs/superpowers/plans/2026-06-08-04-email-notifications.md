@@ -1296,6 +1296,16 @@ git commit -m "test: verify AFTER_SUCCESS observer wiring fires on committed boo
 
 ---
 
+## Built deviations (synced to reality)
+
+- **`io.quarkus.test.InjectMock`** in both test files (Quarkus relocated it from `io.quarkus.test.junit.mockito.InjectMock`).
+- **Nested enums:** `LocationType` is `com.calit.domain.MeetingType.LocationType` and `FieldType` is `com.calit.domain.BookingField.FieldType` (built nested in earlier plans), not the top-level `com.calit.domain.LocationType`/`FieldType` the plan's code blocks assumed. `EmailService` and both tests import the nested forms.
+- **`ReminderDue` created here:** `com.calit.booking.events.ReminderDue(Long bookingId)` did not yet exist (Plan 6 will *fire* it; Plan 4 only *observes*). Created as the Plan 4↔6 contract record.
+- **Test isolation:** both email tests add `@BeforeEach` `QuarkusTransaction.requiringNew().run(() -> Booking.deleteAll())`. The verbatim seeds commit HELD (PENDING/CONFIRMED) bookings at a fixed start time with no `@TestTransaction` rollback, so across the HELD-status tests the second seed onward tripped the `booking_no_overlap_held` exclusion constraint. Cleanup between tests fixes it; fixed dates and direct-helper-call design are otherwise kept verbatim (the email path does no now-relative filtering, so fixed dates are safe here).
+- **Known v1 follow-up (non-blocking):** observers don't wrap `mailer.send`/render in try-catch — `AFTER_SUCCESS` timing already guarantees the booking is committed first (a mail failure cannot roll it back; CDI logs the throw), but a failed send is not retried and a thrown invitee-send would skip the owner-send. Acceptable for v1; revisit if delivery reliability matters.
+
+---
+
 ## Self-Review against spec
 
 **1. Spec coverage (Plan 4 scope):**
