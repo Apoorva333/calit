@@ -40,10 +40,10 @@ public class AdminResource {
         public static native TemplateInstance dashboard(List<Booking> upcoming, long pendingCount);
 
         public static native TemplateInstance meetingTypes(
-                List<MeetingType> types, LocationType[] locationTypes, String css);
+                List<MeetingType> types, LocationType[] locationTypes, Long pendingCount);
 
         public static native TemplateInstance availability(
-                List<AvailabilityRule> rules, List<MeetingType> types, String css);
+                List<AvailabilityRule> rules, List<MeetingType> types, Long pendingCount);
 
         public static native TemplateInstance settings(
                 OwnerSettings settings, int reminderLeadMinutes, String css);
@@ -65,6 +65,11 @@ public class AdminResource {
     @ConfigProperty(name = "calit.reminder.lead-minutes", defaultValue = "1440")
     int reminderLeadMinutes;
 
+    /** Pending-approval count for the shared admin nav badge. */
+    private long pendingCount() {
+        return Booking.count("status = ?1", com.calit.booking.BookingStatus.PENDING);
+    }
+
     @GET
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance dashboard() {
@@ -82,7 +87,7 @@ public class AdminResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance meetingTypes() {
         // Pass LocationType.values() so the form can render the location dropdown options.
-        return Templates.meetingTypes(MeetingType.listAll(), LocationType.values(), Layout.CSS); // includes secret
+        return Templates.meetingTypes(MeetingType.listAll(), LocationType.values(), pendingCount()); // includes secret
     }
 
     @POST
@@ -114,7 +119,7 @@ public class AdminResource {
                 ? null : Integer.valueOf(slotIntervalMinutes);
         t.requiresApproval = "on".equals(requiresApproval);
         t.persist();
-        return Templates.meetingTypes(MeetingType.listAll(), LocationType.values(), Layout.CSS);
+        return Templates.meetingTypes(MeetingType.listAll(), LocationType.values(), pendingCount());
     }
 
     @POST
@@ -125,7 +130,7 @@ public class AdminResource {
     public TemplateInstance toggleActive(@PathParam("id") Long id) {
         MeetingType t = MeetingType.findById(id);
         if (t != null) { t.active = !t.active; }
-        return Templates.meetingTypes(MeetingType.listAll(), LocationType.values(), Layout.CSS);
+        return Templates.meetingTypes(MeetingType.listAll(), LocationType.values(), pendingCount());
     }
 
     @POST
@@ -135,7 +140,7 @@ public class AdminResource {
     @Transactional
     public TemplateInstance deleteMeetingType(@PathParam("id") Long id) {
         MeetingType.deleteById(id);
-        return Templates.meetingTypes(MeetingType.listAll(), LocationType.values(), Layout.CSS);
+        return Templates.meetingTypes(MeetingType.listAll(), LocationType.values(), pendingCount());
     }
 
     @GET
@@ -144,7 +149,7 @@ public class AdminResource {
     public TemplateInstance availability() {
         return Templates.availability(
                 AvailabilityRule.listAll(),
-                MeetingType.listAll(), Layout.CSS);
+                MeetingType.listAll(), pendingCount());
     }
 
     @POST
@@ -165,7 +170,7 @@ public class AdminResource {
         r.persist();
         return Templates.availability(
                 AvailabilityRule.<AvailabilityRule>listAll(),
-                MeetingType.listAll(), Layout.CSS);
+                MeetingType.listAll(), pendingCount());
     }
 
     @POST
@@ -177,7 +182,7 @@ public class AdminResource {
         AvailabilityRule.deleteById(id);
         return Templates.availability(
                 AvailabilityRule.<AvailabilityRule>listAll(),
-                MeetingType.listAll(), Layout.CSS);
+                MeetingType.listAll(), pendingCount());
     }
 
     @GET
