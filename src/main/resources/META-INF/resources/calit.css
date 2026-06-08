@@ -1,4 +1,4 @@
-/* calit custom layer — sits on top of Pico v2 (pico.jade.min.css). */
+/* calit custom layer — sits on top of Pico v2 (pico.indigo.min.css). */
 :root {
   --calit-container: 48rem;        /* narrower than Pico default — Calendly-like column */
   --pico-form-element-spacing-vertical: .6rem;
@@ -133,10 +133,14 @@ body.book-page main.container { max-width: 58rem; }
 .book-loc { font-size: .95rem; margin: 0 0 .5rem; }
 .book-main h2 { font-size: 1.2rem; margin: 0 0 1rem; }
 
-/* --- Admin shell: fixed left sidebar (Calendly-style) --- */
+/* --- Admin shell: sticky left sidebar (Calendly-style) --- */
 body.admin-canvas { background: var(--calit-canvas); }
 .admin-shell { display: grid; grid-template-columns: 1fr; min-height: 100vh; }
-@media (min-width: 48rem) { .admin-shell { grid-template-columns: 250px 1fr; } }
+@media (min-width: 48rem) {
+  .admin-shell { grid-template-columns: 250px 1fr; }
+  /* Keep the nav in view while the content scrolls. */
+  .admin-side { position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+}
 
 .admin-side {
   background: var(--pico-card-background-color);
