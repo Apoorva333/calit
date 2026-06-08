@@ -81,3 +81,6 @@ main.container { max-width: var(--calit-container); }
 
 /* Keep the honeypot invisible regardless of framework resets. */
 input[name="website"] { display: none !important; }
+
+/* Inline form error (e.g. booking validation message). */
+.err { color: var(--pico-del-color); margin: .5rem 0; }

@@ -1,27 +1,12 @@
 package com.calit.web;
 
 /**
- * Shared inline CSS (all pages) plus the invitee-only timezone-picker bar and reformat
- * script. Owner/admin pages use only {@link #CSS}; the invitee pages additionally use
- * {@link #TZ_BAR}/{@link #TZ_SCRIPT} to relabel times into the viewer's local zone.
+ * The invitee-only timezone-picker bar + reformat script, and the booking-page calendar
+ * enhancement script. Styling now comes from Pico CSS + {@code /calit.css}, not an inline string.
  */
 public final class Layout {
 
     private Layout() {}
-
-    public static final String CSS = """
-            body{font-family:system-ui,sans-serif;max-width:760px;margin:2rem auto;padding:0 1rem;color:#222}
-            a{color:#2563eb}
-            .card{border:1px solid #ddd;border-radius:8px;padding:1rem;margin:.75rem 0}
-            .badge{background:#fde68a;border-radius:4px;padding:.1rem .4rem;font-size:.75rem}
-            .slot{display:inline-block;margin:.2rem;padding:.4rem .6rem;border:1px solid #2563eb;border-radius:6px}
-            nav a{margin-right:1rem}
-            label{display:block;margin:.5rem 0}
-            input,select{padding:.3rem}
-            .err{color:#b91c1c}
-            button{padding:.4rem .8rem;cursor:pointer}
-            .tz-bar{margin:.5rem 0;font-size:.9rem;color:#444}
-            """;
 
     /**
      * Shared inline vanilla JS reused by every invitee-facing page that shows times
