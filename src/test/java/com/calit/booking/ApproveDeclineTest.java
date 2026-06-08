@@ -96,8 +96,14 @@ class ApproveDeclineTest {
     // --- helpers ---
 
     private void seedSettings() {
-        OwnerSettings s = new OwnerSettings();
-        s.id = OwnerSettings.SINGLETON_ID;
+        // Idempotent upsert: a non-@TestTransaction REST test (MeetingTypeResourceTest PUT /api/settings)
+        // may have committed the singleton row before this suite runs, so reuse it if present rather
+        // than re-inserting the same primary key (which would violate owner_settings_pkey).
+        OwnerSettings s = OwnerSettings.get();
+        if (s == null) {
+            s = new OwnerSettings();
+            s.id = OwnerSettings.SINGLETON_ID;
+        }
         s.ownerName = "Owner";
         s.ownerEmail = "owner@example.com";
         s.timezone = "Europe/Amsterdam";
