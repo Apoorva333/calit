@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Implement **after Plan 1** — this plan reuses the bootstrapped project (pom.xml, application.properties, Flyway, Dev Services).
 
-**Goal:** Dual-way Google Calendar sync for the single owner: one-time OAuth2 (offline refresh token, stored once), reading FREE/BUSY across N configured calendars, writing events to ONE configured calendar, and auto-creating a Google Meet link on each created event. Exposes a clean `CalendarPort` seam so downstream plans (booking/reschedule/cancel) consume it and mock it in tests.
+**Goal:** Dual-way Google Calendar sync for the single owner: one-time OAuth2 (offline refresh token, stored once), reading FREE/BUSY across N configured calendars, writing events to ONE configured calendar, and auto-creating a Google Meet link on each created event **of a GOOGLE_MEET meeting type** (other types carry a per-type location text instead). Exposes a clean `CalendarPort` seam — including an `isConnected()` connection-state check for Plan 3's degraded (Google-optional) mode — so downstream plans (booking/reschedule/cancel) consume it and mock it in tests. All event writes use `sendUpdates="all"` so Google notifies invitees.
 
-**Architecture:** Two Panache entities persist owner state: `GoogleCredential` (a singleton holding the OAuth refresh/access tokens) and `GoogleCalendar` (the owner's chosen read/write calendars). A JAX-RS layer (`GoogleOAuthResource`, `GoogleCalendarResource`) drives the consent flow and the calendar-selection UX. A `GoogleTokenService` exchanges the auth code, persists the refresh token, and always hands out a fresh access token (refreshing when expired). The `CalendarPort` interface is the public contract; `GoogleCalendarPort` is the `@ApplicationScoped` implementation that talks to the Google Calendar Java client. The overlapping-interval **merge logic is extracted into a pure static helper `BusyIntervals.merge(...)`** so it is unit-testable without Google. Conference (Meet) links are requested via `conferenceData.createRequest` with `setConferenceDataVersion(1)`. Google is **never** called from tests; downstream code mocks `CalendarPort` with `@InjectMock`.
+**Architecture:** Two Panache entities persist owner state: `GoogleCredential` (a singleton holding the OAuth refresh/access tokens) and `GoogleCalendar` (the owner's chosen read/write calendars). A JAX-RS layer (`GoogleOAuthResource`, `GoogleCalendarResource`) drives the consent flow and the calendar-selection UX. A `GoogleTokenService` exchanges the auth code, persists the refresh token, and always hands out a fresh access token (refreshing when expired). The `CalendarPort` interface is the public contract; `GoogleCalendarPort` is the `@ApplicationScoped` implementation that talks to the Google Calendar Java client. `isConnected()` returns true iff the singleton `GoogleCredential` exists, letting Plan 3 run Google-optional. The overlapping-interval **merge logic is extracted into a pure static helper `BusyIntervals.merge(...)`** so it is unit-testable without Google. Conference (Meet) links are requested via `conferenceData.createRequest` with `setConferenceDataVersion(1)` **only when the caller passes `createMeetLink=true`** (GOOGLE_MEET types); other types pass `createMeetLink=false` + a `locationText` set as the event's location. All event insert/patch/delete calls set `sendUpdates="all"` so Google emails invitees. Google is **never** called from tests; downstream code mocks `CalendarPort` with `@InjectMock`.
 
 **Tech Stack:** Java 25, Quarkus 3.35.3, Hibernate ORM Panache, PostgreSQL, Flyway, quarkus-rest (+jackson), Google API Java client (`google-api-client`, `google-oauth-client`, `google-api-services-calendar`), JUnit 5, RestAssured, `quarkus-junit5-mockito`. Tests run against Quarkus **Dev Services** (Testcontainers Postgres) — **Docker must be running**. No live Google credentials are required for any test.
 
@@ -80,14 +80,16 @@ git commit -m "chore: add Google API client deps and OAuth config keys"
 
 ---
 
-### Task 2: Flyway V2 schema (google_credential, google_calendar)
+### Task 2: Flyway V3 schema (google_credential, google_calendar)
+
+> **Migration numbering:** This plan owns **V3** (`V3__google.sql`). V2 belongs to Plan 1b (domain extensions: meeting_type/owner_settings columns + date_override). Booking (Plan 3) is V4. Flyway therefore runs V1 → V2 (Plan 1b) → V3 (this plan) → V4 in order.
 
 **Files:**
-- Create: `src/main/resources/db/migration/V2__google.sql`
+- Create: `src/main/resources/db/migration/V3__google.sql`
 
 - [ ] **Step 1: Write the migration**
 
-`src/main/resources/db/migration/V2__google.sql`:
+`src/main/resources/db/migration/V3__google.sql`:
 
 ```sql
 -- Owner OAuth tokens. Singleton row (id = 1).
@@ -116,13 +118,13 @@ CREATE UNIQUE INDEX idx_google_calendar_single_write_target
 - [ ] **Step 2: Verify the schema applies at startup**
 
 Run: `mvn test -Dtest=HealthResourceTest`
-Expected: PASS. Flyway runs V1 then V2 at boot against the Dev Services DB; no migration errors in the log.
+Expected: PASS. Flyway runs V1 → V2 (Plan 1b) → V3 (this migration) at boot against the Dev Services DB; no migration errors in the log.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add src/main/resources/db/migration/V2__google.sql
-git commit -m "feat: add google_credential and google_calendar schema (V2)"
+git add src/main/resources/db/migration/V3__google.sql
+git commit -m "feat: add google_credential and google_calendar schema (V3)"
 ```
 
 ---
@@ -429,19 +431,25 @@ git commit -m "feat: add GoogleCalendar entity with read/write selection queries
 - Create: `src/main/java/com/calit/google/BusyIntervals.java`
 - Test: `src/test/java/com/calit/google/BusyIntervalsTest.java`
 
-> **Contract note (Plans 3 & 4 depend on these EXACT signatures):**
+> **Contract note (Plans 3 & 4 depend on these EXACT signatures — matches the overview "Defined in Plan 2" bullet verbatim):**
 > ```java
 > public record BusyInterval(java.time.Instant start, java.time.Instant end) {}
 > public record CreatedEvent(String googleEventId, String meetLink, String htmlLink) {}
 > public interface CalendarPort {
+>     boolean isConnected();
 >     java.util.List<BusyInterval> freeBusy(java.time.Instant from, java.time.Instant to);
 >     CreatedEvent createEvent(String summary, String description,
 >                              java.time.Instant start, java.time.Instant end,
->                              java.util.List<String> attendeeEmails);
+>                              java.util.List<String> attendeeEmails,
+>                              boolean createMeetLink, String locationText);
 >     void updateEvent(String eventId, java.time.Instant start, java.time.Instant end);
 >     void deleteEvent(String eventId);
 > }
 > ```
+> **Behavioral contract:**
+> - `isConnected()` returns true **iff** a `GoogleCredential` (with refresh token) exists — implemented by querying the singleton credential. This is the degraded-mode seam: Plan 3's `BookingService` runs Google-optional and calls `freeBusy`/`createEvent`/`updateEvent`/`deleteEvent` **only when `isConnected()` is true**.
+> - `createEvent` takes `boolean createMeetLink, String locationText`. When `createMeetLink` is true it adds a `conferenceData.createRequest` (with `setConferenceDataVersion(1)`) and returns a non-null `meetLink`; when false, `meetLink` is null and `locationText` (may be null) is set as the event's `location`. Plan 3 derives `createMeetLink = (MeetingType.locationType == GOOGLE_MEET)` and passes `locationDetail` as `locationText` for PHONE/IN_PERSON/CUSTOM.
+> - `createEvent`, `updateEvent`, and `deleteEvent` **all** set `sendUpdates="all"` so Google emails the invitee the invite / change / cancellation. This is the chosen invitee-notification path: the app itself only emails invitees as a fallback when Google is **not** connected (Plan 4). Owner emails are always sent by the app (Plan 4).
 
 - [ ] **Step 1: Write the failing pure-helper test (plain JUnit, no Quarkus)**
 
@@ -580,18 +588,33 @@ import java.util.List;
  */
 public interface CalendarPort {
 
+    /**
+     * True iff Google is connected — i.e. a {@link GoogleCredential} (with refresh token) exists.
+     * Plan 3 runs in degraded (Google-optional) mode and calls the other methods only when this is true.
+     */
+    boolean isConnected();
+
     /** Merged busy intervals across all read-for-busy calendars within [from, to). */
     List<BusyInterval> freeBusy(Instant from, Instant to);
 
-    /** Create an event on the write-target calendar with an auto-generated Google Meet link. */
+    /**
+     * Create an event on the write-target calendar, always with {@code sendUpdates=all} so Google
+     * emails the attendees the invite.
+     *
+     * @param createMeetLink when true, attach a Google Meet conference (returns a non-null meetLink);
+     *                       when false, no conference is created and {@code locationText} is set as the
+     *                       event location instead, and the returned meetLink is null
+     * @param locationText   per-type location text used when {@code createMeetLink} is false (may be null)
+     */
     CreatedEvent createEvent(String summary, String description,
                              Instant start, Instant end,
-                             List<String> attendeeEmails);
+                             List<String> attendeeEmails,
+                             boolean createMeetLink, String locationText);
 
-    /** Move an existing event to a new time window (reschedule). */
+    /** Move an existing event to a new time window (reschedule); {@code sendUpdates=all}. */
     void updateEvent(String eventId, Instant start, Instant end);
 
-    /** Remove an existing event (cancel). */
+    /** Remove an existing event (cancel); {@code sendUpdates=all}. */
     void deleteEvent(String eventId);
 }
 ```
@@ -1175,10 +1198,13 @@ git commit -m "feat: add GoogleCalendarClientFactory for authorized Calendar cli
 - Create: `src/main/java/com/calit/google/GoogleCalendarPort.java`
 
 > **Design:** `GoogleCalendarPort implements CalendarPort` and is `@ApplicationScoped`. It composes `GoogleTokenService`, `GoogleCalendarClientFactory`, the `GoogleCalendar` selection entity, and the pure `BusyIntervals.merge`. Because every Google call requires a valid access token + a built `Calendar` client (both of which need live Google or HTTP), this class is **not** unit-tested against Google; downstream plans mock the `CalendarPort` interface (Task 9 proves the seam). The mapping rules it implements:
+> - `isConnected`: returns `GoogleCredential.get() != null` — true iff the singleton credential (with refresh token) is present. Wrapped in `@Transactional` so it can read the row. This is the degraded-mode seam Plan 3 branches on; no Google call.
 > - `freeBusy`: build a `FreeBusyRequest` listing every `GoogleCalendar.readForBusy()` id; collect each calendar's `busy` ranges into `BusyInterval`s; return `BusyIntervals.merge(...)`.
-> - `createEvent`: build an `Event` on `GoogleCalendar.writeTarget()`; attach a `ConferenceData` `createRequest` with a random `requestId` and Hangouts-Meet solution; call `events().insert(...).setConferenceDataVersion(1)`; map `getHangoutLink()` (falling back to the conference entry point) → `meetLink`, `getId()` → `googleEventId`, `getHtmlLink()` → `htmlLink`; add attendees.
-> - `updateEvent`: patch only `start`/`end` on the write-target calendar.
-> - `deleteEvent`: delete by id on the write-target calendar.
+> - `createEvent`: build an `Event` on `GoogleCalendar.writeTarget()`; **when `createMeetLink` is true** attach a `ConferenceData` `createRequest` with a random `requestId` and Hangouts-Meet solution and call `events().insert(...).setConferenceDataVersion(1)`; **when false** set the event `location` to `locationText` (when non-null) and insert without conference data (no `meetLink`). Always set `setSendUpdates("all")` on the insert so Google emails the attendees. Map `getHangoutLink()` (falling back to the conference entry point) → `meetLink`, `getId()` → `googleEventId`, `getHtmlLink()` → `htmlLink`; add attendees.
+> - `updateEvent`: patch only `start`/`end` on the write-target calendar, with `setSendUpdates("all")` so Google emails the change.
+> - `deleteEvent`: delete by id on the write-target calendar, with `setSendUpdates("all")` so Google emails the cancellation.
+>
+> **Invitee-notification policy:** `sendUpdates="all"` on insert/patch/delete is the **chosen path** for notifying invitees when Google is connected — Google sends the invite/change/cancel emails. The app only emails invitees itself as a fallback when `isConnected()` is false (Plan 4). Owner-side emails are always sent by the app (Plan 4, opt-out-able).
 
 - [ ] **Step 1: Write the implementation (no Google-touching test — see Task 9 for the seam test)**
 
@@ -1202,6 +1228,7 @@ import com.google.api.services.calendar.model.FreeBusyResponse;
 import com.google.api.services.calendar.model.TimePeriod;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -1229,6 +1256,13 @@ public class GoogleCalendarPort implements CalendarPort {
 
     private Calendar client() {
         return clientFactory.build(tokens.validAccessToken(Instant.now()));
+    }
+
+    @Override
+    @Transactional
+    public boolean isConnected() {
+        // Connected iff the singleton OAuth credential (with refresh token) exists. No Google call.
+        return GoogleCredential.get() != null;
     }
 
     @Override
@@ -1268,7 +1302,8 @@ public class GoogleCalendarPort implements CalendarPort {
     @Override
     public CreatedEvent createEvent(String summary, String description,
                                     Instant start, Instant end,
-                                    List<String> attendeeEmails) {
+                                    List<String> attendeeEmails,
+                                    boolean createMeetLink, String locationText) {
         GoogleCalendar target = requireWriteTarget();
         Event event = new Event()
                 .setSummary(summary)
@@ -1282,19 +1317,28 @@ public class GoogleCalendarPort implements CalendarPort {
                     .toList());
         }
 
-        // Request a fresh Google Meet conference for this event only.
-        event.setConferenceData(new ConferenceData().setCreateRequest(
-                new CreateConferenceRequest()
-                        .setRequestId(UUID.randomUUID().toString())
-                        .setConferenceSolutionKey(
-                                new ConferenceSolutionKey().setType("hangoutsMeet"))));
+        if (createMeetLink) {
+            // GOOGLE_MEET type: request a fresh Google Meet conference for this event only.
+            event.setConferenceData(new ConferenceData().setCreateRequest(
+                    new CreateConferenceRequest()
+                            .setRequestId(UUID.randomUUID().toString())
+                            .setConferenceSolutionKey(
+                                    new ConferenceSolutionKey().setType("hangoutsMeet"))));
+        } else if (locationText != null) {
+            // PHONE/IN_PERSON/CUSTOM type: no conference; carry the per-type location text instead.
+            event.setLocation(locationText);
+        }
 
         try {
+            // setConferenceDataVersion(1) is required so Google honors the createRequest; harmless when absent.
+            // setSendUpdates("all") makes Google email the attendees the invite (chosen invitee path).
             Event created = client().events()
                     .insert(target.googleCalendarId, event)
-                    .setConferenceDataVersion(1)
+                    .setConferenceDataVersion(createMeetLink ? 1 : 0)
+                    .setSendUpdates("all")
                     .execute();
-            return new CreatedEvent(created.getId(), extractMeetLink(created), created.getHtmlLink());
+            String meetLink = createMeetLink ? extractMeetLink(created) : null;
+            return new CreatedEvent(created.getId(), meetLink, created.getHtmlLink());
         } catch (IOException e) {
             throw new UncheckedIOException("createEvent failed", e);
         }
@@ -1307,7 +1351,10 @@ public class GoogleCalendarPort implements CalendarPort {
                 .setStart(eventTime(start))
                 .setEnd(eventTime(end));
         try {
-            client().events().patch(target.googleCalendarId, eventId, patch).execute();
+            // sendUpdates=all so Google emails the attendees the rescheduled time.
+            client().events().patch(target.googleCalendarId, eventId, patch)
+                    .setSendUpdates("all")
+                    .execute();
         } catch (IOException e) {
             throw new UncheckedIOException("updateEvent failed", e);
         }
@@ -1317,7 +1364,10 @@ public class GoogleCalendarPort implements CalendarPort {
     public void deleteEvent(String eventId) {
         GoogleCalendar target = requireWriteTarget();
         try {
-            client().events().delete(target.googleCalendarId, eventId).execute();
+            // sendUpdates=all so Google emails the attendees the cancellation.
+            client().events().delete(target.googleCalendarId, eventId)
+                    .setSendUpdates("all")
+                    .execute();
         } catch (IOException e) {
             throw new UncheckedIOException("deleteEvent failed", e);
         }
@@ -1376,6 +1426,8 @@ git commit -m "feat: add GoogleCalendarPort (freeBusy merge, Meet-link event cre
 - Test: `src/test/java/com/calit/google/CalendarPortMockSeamTest.java`
 
 > **Why:** Plans 3 & 4 consume `CalendarPort` and replace `GoogleCalendarPort` with `@InjectMock`. This task adds a tiny CDI bean that injects `CalendarPort` and a test that mocks it with canned `BusyInterval`s — proving the seam works end-to-end (CDI resolves the mock over the real `@ApplicationScoped` bean, no Google contacted). `BusySummaryService` is a trivial, real consumer (counts merged busy minutes) so downstream plans have a worked example.
+>
+> **Downstream note (Plan 3 `BookingService`):** `BookingService` injects `CalendarPort` the same way and runs in **degraded (Google-optional) mode** — it calls `freeBusy`/`createEvent`/`updateEvent`/`deleteEvent` **only when `calendarPort.isConnected()` is true**. When creating an event it derives `createMeetLink = (meetingType.locationType == LocationType.GOOGLE_MEET)` and passes `meetingType.locationDetail` as `locationText` for the non-Meet types (PHONE/IN_PERSON/CUSTOM). Because Google is invoked with `sendUpdates="all"`, invitees are notified by Google when connected; Plan 4 only emails invitees as a fallback when `isConnected()` is false.
 
 - [ ] **Step 1: Write the failing seam test**
 
@@ -1897,7 +1949,7 @@ git commit -m "feat: add Google calendar list + read/write selection endpoints"
 - [ ] **Step 1: Run the entire suite**
 
 Run: `mvn test`
-Expected: PASS — Plan 1 tests (Health, OwnerSettings, MeetingType, AvailabilityRule, SlotService, MeetingTypeResource) plus Plan 2 tests (GoogleCredential, GoogleCalendar, BusyIntervals, GoogleTokenService, CalendarPortMockSeam, GoogleOAuthResource, GoogleCalendarResource). No test contacts Google; Dev Services Postgres + Flyway V1→V2 boot cleanly.
+Expected: PASS — Plan 1 tests (Health, OwnerSettings, MeetingType, AvailabilityRule, SlotService, MeetingTypeResource) plus Plan 2 tests (GoogleCredential, GoogleCalendar, BusyIntervals, GoogleTokenService, CalendarPortMockSeam, GoogleOAuthResource, GoogleCalendarResource). No test contacts Google; Dev Services Postgres + Flyway V1 → V2 (Plan 1b) → V3 (this plan) boot cleanly.
 
 - [ ] **Step 2: Tag the milestone (optional) and confirm clean tree**
 
@@ -1917,19 +1969,21 @@ Expected: clean working tree (everything already committed task-by-task).
 | OAuth2 offline refresh token, stored once (feat 2) | Task 3 (`GoogleCredential` singleton), Task 6 (`GoogleTokenService.exchangeCode` persists refresh token; `validAccessToken` refreshes and writes back to the shared row; stateless signed `state` via `issueState`/`validateState`), Task 10 (`/connect` access_type=offline + prompt=consent, `/callback` validates state then exchanges) |
 | Read FREE/BUSY from N configured calendars (feat 2) | Task 4 (`GoogleCalendar.readForBusy()`), Task 5 (`BusyIntervals.merge`), Task 8 (`GoogleCalendarPort.freeBusy` → freebusy.query across all readers → merge), Task 11 (select which calendars are read) |
 | Write events to ONE configured calendar (feat 2) | Task 2 (partial unique index: one write target), Task 4 (`GoogleCalendar.writeTarget()`), Task 8 (`createEvent`/`updateEvent`/`deleteEvent` target the write calendar), Task 11 (select + enforce single write target) |
-| Auto-create a Google Meet link on each created event (feat 3) | Task 8 (`conferenceData.createRequest` + random `requestId` + `setConferenceDataVersion(1)`; `extractMeetLink` maps hangoutLink/entryPoint → `CreatedEvent.meetLink`) |
-| Reschedule / cancel hooks for Plan 3 (supports feat 5) | Task 5 (contract), Task 8 (`updateEvent`, `deleteEvent`) |
+| Connection-state seam for degraded mode (feat 2 — Google-optional) | Task 5 (`isConnected()` in contract), Task 8 (`isConnected` = `GoogleCredential.get() != null`), Task 9 (downstream note: Plan 3 calls Google methods only when `isConnected()`) |
+| Auto-create a Google Meet link **only for GOOGLE_MEET** (feat 3 + feat 13) | Task 5 (`createEvent(..., boolean createMeetLink, String locationText)`), Task 8 (`createMeetLink` → `conferenceData.createRequest` + random `requestId` + `setConferenceDataVersion(1)`, `extractMeetLink` → `CreatedEvent.meetLink`; else `meetLink` null + `setLocation(locationText)` for PHONE/IN_PERSON/CUSTOM). Plan 3 derives `createMeetLink` from `MeetingType.locationType == GOOGLE_MEET` |
+| Invitee notifications via Google (feat 4 path) | Task 5/Task 8 (`createEvent`/`updateEvent`/`deleteEvent` all set `sendUpdates="all"` so Google emails invite/change/cancel; app-side invitee email is the fallback when disconnected — Plan 4) |
+| Reschedule / cancel hooks for Plan 3 (supports feat 5) | Task 5 (contract), Task 8 (`updateEvent`, `deleteEvent`, both `sendUpdates="all"`) |
 
 Out of scope here (later plans): bookable-slot subtraction of busy/buffers (Plan 3), booking persistence (Plan 3), emails (Plan 4), admin/invitee UI for connecting Google and choosing calendars (Plan 5 renders over these endpoints).
 
-**2. Placeholder scan:** No TBD/TODO/"handle errors"/"similar to"/"etc." placeholders. Every step shows complete code and an exact `mvn test -Dtest=...` command with an expected FAIL/PASS. No live Google credentials are required by any test: the merge helper is pure JUnit; token logic uses a `StubTokenService` overriding the single `requestToken` seam; resources/consumers mock `CalendarPort`, `CalendarListPort`, and `GoogleTokenService` via `@InjectMock`.
+**2. Placeholder scan:** No TBD/TODO/"handle errors"/"similar to"/"etc." placeholders. Every step shows complete code and an exact `mvn test -Dtest=...` command with an expected FAIL/PASS. No live Google credentials are required by any test: the merge helper is pure JUnit; token logic uses a `StubTokenService` overriding the single `requestToken` seam; resources/consumers mock `CalendarPort`, `CalendarListPort`, and `GoogleTokenService` via `@InjectMock`. The new `CalendarPort` members (`isConnected()`, the `createEvent(..., boolean createMeetLink, String locationText)` overload) need no Google in tests either — `isConnected()` is a single `GoogleCredential.get()` read and the mock-seam test (Task 9) only stubs `freeBusy`, with the other methods auto-mocked.
 
 **3. Type-consistency check (the exposed contract Plans 3 & 4 consume):** Package `com.calit.google`.
 
 - `public record BusyInterval(java.time.Instant start, java.time.Instant end) {}` — Task 5. ✔ matches the cross-plan contract verbatim.
 - `public record CreatedEvent(String googleEventId, String meetLink, String htmlLink) {}` — Task 5. ✔ verbatim.
-- `public interface CalendarPort { List<BusyInterval> freeBusy(Instant, Instant); CreatedEvent createEvent(String summary, String description, Instant start, Instant end, List<String> attendeeEmails); void updateEvent(String eventId, Instant start, Instant end); void deleteEvent(String eventId); }` — Task 5. ✔ all four signatures match verbatim.
-- `GoogleCalendarPort implements CalendarPort`, `@ApplicationScoped` — Task 8. ✔ replaceable by `@io.quarkus.test.junit.mockito.InjectMock CalendarPort` (proven in Task 9).
+- `public interface CalendarPort { boolean isConnected(); List<BusyInterval> freeBusy(Instant, Instant); CreatedEvent createEvent(String summary, String description, Instant start, Instant end, List<String> attendeeEmails, boolean createMeetLink, String locationText); void updateEvent(String eventId, Instant start, Instant end); void deleteEvent(String eventId); }` — Task 5. ✔ all five signatures match the overview's "Defined in Plan 2" bullet **verbatim** (including the new `isConnected()` and the `createEvent` `boolean createMeetLink, String locationText` parameters).
+- `GoogleCalendarPort implements CalendarPort`, `@ApplicationScoped` — Task 8. ✔ replaceable by `@io.quarkus.test.junit.mockito.InjectMock CalendarPort` (proven in Task 9). `isConnected()` reads the singleton `GoogleCredential` (degraded-mode seam); `createEvent` honors `createMeetLink`/`locationText` per the per-type-location requirement; all three mutating methods set `sendUpdates="all"`.
 
 These are the only types downstream plans bind to; entities (`GoogleCredential`, `GoogleCalendar`), services (`GoogleTokenService`, factory, `*ListPort`), and resources are internal to Plan 2.
 
