@@ -1,0 +1,60 @@
+{@java.util.List<com.calit.domain.DateOverride> overrides}
+{@java.util.List<com.calit.domain.MeetingType> types}
+{@java.lang.String css}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin — Date overrides</title>
+  <style>{css}</style>
+</head>
+<body>
+  <nav>
+    <a href="/admin">Dashboard</a>
+    <a href="/admin/pending">Pending</a>
+    <a href="/admin/meeting-types">Meeting types</a>
+    <a href="/admin/availability">Availability</a>
+    <a href="/admin/date-overrides">Date overrides</a>
+    <a href="/admin/booking-fields">Booking fields</a>
+    <a href="/admin/settings">Settings</a>
+    <a href="/admin/google">Google</a>
+  </nav>
+  <h1>Date-specific overrides</h1>
+  <p>An override REPLACES that date's normal work hours. Adding windows sets the only bookable times;
+     leaving the windows empty marks the whole date as a day off.</p>
+
+  {#for o in overrides}
+    <div class="card">
+      <p><strong>{o.overrideDate}</strong> &middot; {#if o.meetingTypeId}type #{o.meetingTypeId}{#else}global{/if}</p>
+      {#if o.windows.isEmpty()}
+        <p><span class="badge">day off</span> (blocked)</p>
+      {#else}
+        <ul>{#for w in o.windows}<li>{w.startTime} &ndash; {w.endTime}</li>{/for}</ul>
+      {/if}
+      <form method="post" action="/admin/date-overrides/{o.id}/delete">
+        <button type="submit">Delete</button>
+      </form>
+    </div>
+  {/for}
+
+  <h2>Add an override</h2>
+  <form method="post" action="/admin/date-overrides">
+    <label>Date <input type="date" name="date" required></label>
+    <label>Applies to
+      <select name="meetingTypeId">
+        <option value="">All (global)</option>
+        {#for t in types}<option value="{t.id}">{t.name}</option>{/for}
+      </select>
+    </label>
+    {! Up to three window rows; leave all blank for a day off. Repeated names → parallel arrays. !}
+    <fieldset>
+      <legend>Bookable windows (leave all blank = day off)</legend>
+      <label>Window 1 <input type="time" name="windowStart"> to <input type="time" name="windowEnd"></label>
+      <label>Window 2 <input type="time" name="windowStart"> to <input type="time" name="windowEnd"></label>
+      <label>Window 3 <input type="time" name="windowStart"> to <input type="time" name="windowEnd"></label>
+    </fieldset>
+    <button type="submit">Save override</button>
+  </form>
+</body>
+</html>

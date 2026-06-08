@@ -4,6 +4,8 @@ import com.calit.booking.Booking;
 import com.calit.domain.AvailabilityRule;
 import com.calit.domain.BookingField;
 import com.calit.domain.BookingField.FieldType;
+import com.calit.domain.DateOverride;
+import com.calit.domain.DateOverrideWindow;
 import com.calit.domain.MeetingType;
 import com.calit.domain.MeetingType.LocationType;
 import com.calit.domain.OwnerSettings;
@@ -18,10 +20,12 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.MultivaluedMap;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.resteasy.reactive.RestForm;
 
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 
@@ -46,6 +50,9 @@ public class AdminResource {
 
         public static native TemplateInstance bookingFields(
                 List<BookingField> fields, List<MeetingType> types, String css);
+
+        public static native TemplateInstance dateOverrides(
+                List<DateOverride> overrides, List<MeetingType> types, String css);
     }
 
     @ConfigProperty(name = "calit.reminder.lead-minutes", defaultValue = "120")
@@ -244,5 +251,67 @@ public class AdminResource {
         return Templates.bookingFields(
                 BookingField.<BookingField>listAll(),
                 MeetingType.listAll(), Layout.CSS);
+    }
+
+    /**
+     * All overrides with their (transient) {@code windows} loaded for display.
+     * {@link DateOverride#windows} is @Transient (not cascade-mapped), so listAll()
+     * leaves it empty; we populate each from {@link DateOverrideWindow} by id.
+     */
+    private List<DateOverride> overridesWithWindows() {
+        List<DateOverride> all = DateOverride.listAll();
+        for (DateOverride o : all) {
+            o.windows = DateOverrideWindow.list("dateOverrideId = ?1 order by startTime asc", o.id);
+        }
+        return all;
+    }
+
+    @GET
+    @Path("/date-overrides")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance dateOverrides() {
+        return Templates.dateOverrides(
+                overridesWithWindows(),
+                MeetingType.listAll(), Layout.CSS);
+    }
+
+    @POST
+    @Path("/date-overrides")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    @Transactional
+    public TemplateInstance createOverride(@RestForm String date,
+                                           @RestForm String meetingTypeId,
+                                           MultivaluedMap<String, String> form) {
+        DateOverride o = new DateOverride();
+        o.overrideDate = LocalDate.parse(date);
+        o.meetingTypeId = (meetingTypeId == null || meetingTypeId.isBlank())
+                ? null : Long.valueOf(meetingTypeId); // empty = global
+        o.persist(); // need the generated id before persisting child windows
+        // Zip parallel windowStart[]/windowEnd[] into windows; none → zero windows = day off.
+        List<String> starts = form.getOrDefault("windowStart", List.of());
+        List<String> ends = form.getOrDefault("windowEnd", List.of());
+        for (int i = 0; i < starts.size() && i < ends.size(); i++) {
+            if (starts.get(i).isBlank() || ends.get(i).isBlank()) { continue; }
+            DateOverrideWindow w = new DateOverrideWindow();
+            w.dateOverrideId = o.id;
+            w.startTime = LocalTime.parse(starts.get(i));
+            w.endTime = LocalTime.parse(ends.get(i));
+            w.persist();
+        }
+        return Templates.dateOverrides(
+                overridesWithWindows(), MeetingType.listAll(), Layout.CSS);
+    }
+
+    @POST
+    @Path("/date-overrides/{id}/delete")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    @Transactional
+    public TemplateInstance deleteOverride(@PathParam("id") Long id) {
+        DateOverrideWindow.delete("dateOverrideId = ?1", id);
+        DateOverride.deleteById(id);
+        return Templates.dateOverrides(
+                overridesWithWindows(), MeetingType.listAll(), Layout.CSS);
     }
 }

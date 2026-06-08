@@ -69,4 +69,10 @@ public class DateOverride extends PanacheEntityBase {
         }
         return global;
     }
+
+    /** Explicit accessor: {@link #windows} is @Transient, so Panache does not synthesize
+     *  a getter for it. Qute (CheckedTemplate) resolves {@code o.windows} via this method. */
+    public List<DateOverrideWindow> getWindows() {
+        return windows;
+    }
 }
