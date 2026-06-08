@@ -1,0 +1,93 @@
+package com.calit.booking;
+
+import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+
+@Entity
+@Table(name = "booking")
+public class Booking extends PanacheEntityBase {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    public Long id;
+
+    @Column(name = "meeting_type_id", nullable = false)
+    public Long meetingTypeId;
+
+    @Column(name = "invitee_name", nullable = false)
+    public String inviteeName;
+
+    @Column(name = "invitee_email", nullable = false)
+    public String inviteeEmail;
+
+    @Column(name = "start_utc", nullable = false)
+    public Instant startUtc;
+
+    @Column(name = "end_utc", nullable = false)
+    public Instant endUtc;
+
+    @Column(name = "google_event_id")
+    public String googleEventId;
+
+    @Column(name = "meet_link", length = 512)
+    public String meetLink;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 16)
+    public BookingStatus status;
+
+    @Column(name = "created_at", nullable = false)
+    public Instant createdAt;
+
+    /**
+     * Invitee manage/reschedule/cancel key: a random UUID set at creation. Unique.
+     * Plan 4 emails a tokenized link; Plan 5 routes /manage/{manageToken}.
+     */
+    @Column(name = "manage_token", nullable = false, length = 36, unique = true)
+    public String manageToken;
+
+    /**
+     * Feature 10: submitted values for the owner-defined custom BookingFields
+     * (fieldKey -> value). Built-in full-name/email are NOT stored here — they
+     * live in {@link #inviteeName}/{@link #inviteeEmail}. Stored as a JSONB
+     * column; defaults to an empty map at the DB level.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "answers", columnDefinition = "jsonb")
+    public Map<String, String> answers = new java.util.HashMap<>();
+
+    /**
+     * All HELD (PENDING or CONFIRMED) bookings whose [startUtc, endUtc) overlaps the
+     * window [from, to). These are the bookings that block the calendar (a pending
+     * approval request holds its slot too — feature 14). CANCELLED/DECLINED are excluded.
+     * Overlap predicate: startUtc < to AND from < endUtc.
+     */
+    public static List<Booking> heldOverlapping(Instant from, Instant to) {
+        return list("status in ?1 and startUtc < ?2 and ?3 < endUtc",
+                List.of(BookingStatus.PENDING, BookingStatus.CONFIRMED), to, from);
+    }
+
+    /** Loads a booking by its invitee manage-token (reschedule/cancel key), or null. */
+    public static Booking findByManageToken(String manageToken) {
+        return find("manageToken", manageToken).firstResult();
+    }
+
+    /** Feature 16: how many bookings this invitee email created in [dayStart, dayEnd). */
+    public static long countByEmailCreatedBetween(String email, Instant dayStart, Instant dayEnd) {
+        return count("inviteeEmail = ?1 and createdAt >= ?2 and createdAt < ?3",
+                email, dayStart, dayEnd);
+    }
+}
