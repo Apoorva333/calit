@@ -56,14 +56,14 @@ public class PublicResource {
         public static native TemplateInstance confirmation(
                 com.calit.booking.Booking booking, com.calit.domain.MeetingType type,
                 boolean pending, String location, String whenLabel, String startUtcIso,
-                String css, String tzBar, String tzScript);
+                String tzBar, String tzScript);
 
         public static native TemplateInstance manage(
                 com.calit.booking.Booking booking, String currentLabel, String currentUtcIso,
                 Map<String, java.util.List<PublicResource.SlotView>> slotsByDate, String css,
                 String tzBar, String tzScript);
 
-        public static native TemplateInstance cancelled(String css);
+        public static native TemplateInstance cancelled();
     }
 
     @Inject
@@ -173,7 +173,7 @@ public class PublicResource {
         String location = (type.locationType == MeetingType.LocationType.GOOGLE_MEET)
                 ? booking.meetLink : type.locationDetail;
         return Templates.confirmation(booking, type, pending, location, when, startUtcIso,
-                                      Layout.CSS, Layout.TZ_BAR, Layout.TZ_SCRIPT);
+                                      Layout.TZ_BAR, Layout.TZ_SCRIPT);
     }
 
     @GET
@@ -214,7 +214,7 @@ public class PublicResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance cancelBooking(@PathParam("manageToken") String manageToken) {
         bookingService.cancel(manageToken); // keyed by the token
-        return Templates.cancelled(Layout.CSS);
+        return Templates.cancelled();
     }
 
     /** Group available slots by owner-tz date label, preserving chronological order. */
