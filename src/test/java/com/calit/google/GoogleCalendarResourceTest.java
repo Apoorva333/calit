@@ -2,6 +2,8 @@ package com.calit.google;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.InjectMock;
+import jakarta.transaction.Transactional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -16,6 +18,12 @@ class GoogleCalendarResourceTest {
 
     @InjectMock
     CalendarListPort calendarListPort;
+
+    @BeforeEach
+    @Transactional
+    void cleanUp() {
+        GoogleCalendar.deleteAll();
+    }
 
     @Test
     void listsGoogleCalendars() {
