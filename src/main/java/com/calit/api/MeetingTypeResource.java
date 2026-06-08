@@ -4,7 +4,6 @@ import com.calit.availability.SlotService;
 import com.calit.availability.TimeSlot;
 import com.calit.domain.BookingField;
 import com.calit.domain.MeetingType;
-import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.Consumes;
@@ -44,7 +43,7 @@ public class MeetingTypeResource {
     @GET
     @Path("/all")
     public List<MeetingType> listAllAdmin() {
-        return PanacheEntityBase.listAll();
+        return MeetingType.listAll();
     }
 
     @POST
