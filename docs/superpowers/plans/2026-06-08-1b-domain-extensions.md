@@ -443,21 +443,21 @@ public class DateOverrideWindow extends PanacheEntityBase {
 
 `src/main/java/com/calit/domain/DateOverride.java`:
 
+> **Implementation note (deviation from original plan):** The original plan used `@OneToMany @JoinColumn(name="date_override_id")` for `windows`. Two compounding issues required a different approach:
+> 1. **Repeated-column mapping boot error** — `date_override_id` is mapped both on `DateOverride.@JoinColumn` and on `DateOverrideWindow.dateOverrideId @Column`; adding `insertable=false, updatable=false` to `@JoinColumn` fixes the boot error but does not fix issue 2.
+> 2. **L1-cache stale collection** — when windows are persisted in the same `@TestTransaction` via `DateOverrideWindow.dateOverrideId` (the owning side), Hibernate's L1 cache returns the parent entity with its still-empty `windows` ArrayList even after a `JOIN FETCH` query or `EntityManager.refresh()`. The fix is to mark `windows` as `@Transient` and populate it explicitly in `resolve()` via a separate `DateOverrideWindow.list(...)` query — this always reads current rows regardless of L1 cache state.
+
 ```java
 package com.calit.domain;
 
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -468,6 +468,13 @@ import java.util.List;
  * An empty {@link #windows} list means the day is OFF (blocked).
  * Resolution order: per-type override, else global override, else null
  * (null => fall through to weekly {@link AvailabilityRule}).
+ *
+ * <p>The {@link #windows} collection is {@link Transient}: it is populated by
+ * {@link #resolve} via an explicit {@link DateOverrideWindow} query, which avoids
+ * both the Hibernate "repeated column in mapping" boot error (date_override_id mapped
+ * on both parent @OneToMany and child @Column) and the L1-cache stale-collection
+ * problem that arises when windows are persisted in the same transaction via the
+ * child's {@code dateOverrideId} field rather than through the parent collection.
  */
 @Entity
 @Table(name = "date_override")
@@ -484,27 +491,38 @@ public class DateOverride extends PanacheEntityBase {
     @Column(name = "override_date", nullable = false)
     public LocalDate date;
 
-    /** Bookable windows for this date. Empty = day off (caller emits no slots). */
-    @OneToMany(fetch = FetchType.EAGER, cascade = CascadeType.ALL, orphanRemoval = true)
-    @JoinColumn(name = "date_override_id")
-    @OrderBy("startTime")
+    /**
+     * Bookable windows for this date. Empty = day off (caller emits no slots).
+     * Populated by {@link #resolve}; not persisted by this entity.
+     */
+    @Transient
     public List<DateOverrideWindow> windows = new ArrayList<>();
 
     /**
      * Per-type override for (meetingTypeId, date) if present; else the global
      * (meeting_type_id IS NULL) override for the date; else null.
+     *
+     * <p>Windows are loaded via a separate query ordered by start_time, so ordering
+     * is correct regardless of insert order.
      */
     public static DateOverride resolve(Long meetingTypeId, LocalDate date) {
         DateOverride typed = find("meetingTypeId = ?1 and date = ?2", meetingTypeId, date).firstResult();
         if (typed != null) {
+            typed.windows = DateOverrideWindow
+                    .list("dateOverrideId = ?1 order by startTime asc", typed.id);
             return typed;
         }
-        return find("meetingTypeId is null and date = ?1", date).firstResult();
+        DateOverride global = find("meetingTypeId is null and date = ?1", date).firstResult();
+        if (global != null) {
+            global.windows = DateOverrideWindow
+                    .list("dateOverrideId = ?1 order by startTime asc", global.id);
+        }
+        return global;
     }
 }
 ```
 
-> **Note on test/entity coupling:** the test helper persists each `DateOverrideWindow` directly (setting `dateOverrideId`) rather than adding to the parent's collection, then re-reads through `resolve`. This exercises the real DB join + `@OrderBy` load path. Because `@OneToMany` is `EAGER`, `resolved.windows` is populated when `resolve` returns.
+> **Note on test/entity coupling:** the test helper persists each `DateOverrideWindow` directly (setting `dateOverrideId`) rather than adding to the parent's collection, then re-reads through `resolve`. This exercises the real DB query load path. Because `windows` is populated inside `resolve` via a fresh `DateOverrideWindow.list(...)` query, it always reflects current DB state.
 
 - [ ] **Step 5: Run it to confirm it passes**
 
