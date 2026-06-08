@@ -1,0 +1,48 @@
+{@java.lang.String title}
+{@java.lang.Long pendingCount}
+{@java.lang.String active}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{title}</title>
+  <link rel="stylesheet" href="/webjars/picocss__pico/css/pico.indigo.min.css">
+  <link rel="stylesheet" href="/calit.css">
+</head>
+<body class="admin-canvas">
+  <div class="admin-shell">
+    <aside class="admin-side">
+      <div class="admin-brand"><span class="chip">c</span> calit</div>
+      <a class="admin-create" href="/admin/meeting-types">+ Create</a>
+      <nav class="admin-nav">
+        <a href="/admin" class="{#if active == 'dashboard'}active{/if}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
+        <a href="/admin/pending" class="{#if active == 'pending'}active{/if}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Pending{#if pendingCount && pendingCount > 0} <span class="badge">{pendingCount}</span>{/if}</a>
+        <a href="/admin/meeting-types" class="{#if active == 'meetingTypes'}active{/if}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h16M4 12h16M4 17h10"/></svg>Meeting types</a>
+        <a href="/admin/availability" class="{#if active == 'availability'}active{/if}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>Availability</a>
+        <a href="/admin/date-overrides" class="{#if active == 'dateOverrides'}active{/if}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M9 14l2 2 4-4"/></svg>Date overrides</a>
+        <a href="/admin/booking-fields" class="{#if active == 'bookingFields'}active{/if}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 3h14v18l-7-4-7 4z"/></svg>Booking fields</a>
+        <a href="/admin/settings" class="{#if active == 'settings'}active{/if}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.8 7.8 0 0 0 0-2l2-1.5-2-3.5-2.4 1a7.6 7.6 0 0 0-1.7-1L14.8 3H9.2l-.5 2.5a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.5 2 1.5a7.8 7.8 0 0 0 0 2l-2 1.5 2 3.5 2.4-1a7.6 7.6 0 0 0 1.7 1l.5 2.5h5.6l.5-2.5a7.6 7.6 0 0 0 1.7-1l2.4 1 2-3.5z"/></svg>Settings</a>
+        <a href="/admin/google" class="{#if active == 'google'}active{/if}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 8l9 6 9-6"/></svg>Google</a>
+      </nav>
+      <div class="admin-logout">
+        <a href="/logout">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>Log out</a>
+      </div>
+    </aside>
+    <div class="admin-main">
+      <main class="container">
+        {#insert}{/insert}
+      </main>
+    </div>
+  </div>
+</body>
+</html>
