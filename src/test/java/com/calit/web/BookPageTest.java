@@ -207,4 +207,20 @@ class BookPageTest {
             .when().get("/book/does-not-exist")
             .then().statusCode(404);
     }
+
+    @Test
+    void bookPageRendersLeftInfoPanelWithHostAndDuration() {
+        when(calendarPort.isConnected()).thenReturn(true);
+        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        seed();
+
+        given()
+            .when().get("/book/book-page")
+            .then()
+                .statusCode(200)
+                .body(containsString("class=\"book-info\""))   // left info panel
+                .body(containsString("Owner"))                  // host name from OwnerSettings
+                .body(containsString("60 min"))                 // clock-icon duration line
+                .body(containsString("id=\"calendar\""));       // picker still present
+    }
 }
