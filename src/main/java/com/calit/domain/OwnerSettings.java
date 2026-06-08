@@ -24,6 +24,10 @@ public class OwnerSettings extends PanacheEntityBase {
     @Column(nullable = false, length = 64)
     public String timezone;
 
+    /** When false, the owner suppresses their own notification emails (Plan 4 gates on this). */
+    @Column(name = "owner_notifications_enabled", nullable = false)
+    public boolean ownerNotificationsEnabled = true;
+
     /** Returns the single settings row, or null if not yet configured. */
     public static OwnerSettings get() {
         return findById(SINGLETON_ID);
