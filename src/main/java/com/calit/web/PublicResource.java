@@ -60,8 +60,8 @@ public class PublicResource {
 
         public static native TemplateInstance manage(
                 com.calit.booking.Booking booking, String currentLabel, String currentUtcIso,
-                Map<String, java.util.List<PublicResource.SlotView>> slotsByDate, String css,
-                String tzBar, String tzScript);
+                java.util.List<PublicResource.DaySlots> days,
+                String tzBar, String tzScript, String calScript);
 
         public static native TemplateInstance cancelled();
     }
@@ -189,12 +189,12 @@ public class PublicResource {
         }
         MeetingType type = MeetingType.findById(booking.meetingTypeId);
         ZoneId zone = ZoneId.of(OwnerSettings.get().timezone);
-        Map<String, java.util.List<SlotView>> byDate = slotsByDate(type);
+        List<DaySlots> byDate = daySlots(type);
         String current = booking.startUtc.atZone(zone)
                 .format(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy 'at' HH:mm (z)"));
         String currentUtcIso = booking.startUtc.toString(); // absolute instant for data-utc
-        return Templates.manage(booking, current, currentUtcIso, byDate, Layout.CSS,
-                                Layout.TZ_BAR, Layout.TZ_SCRIPT);
+        return Templates.manage(booking, current, currentUtcIso, byDate,
+                                Layout.TZ_BAR, Layout.TZ_SCRIPT, Layout.CALENDAR_SCRIPT);
     }
 
     @POST
@@ -218,21 +218,6 @@ public class PublicResource {
     public TemplateInstance cancelBooking(@PathParam("manageToken") String manageToken) {
         bookingService.cancel(manageToken); // keyed by the token
         return Templates.cancelled();
-    }
-
-    /** Group available slots by owner-tz date label, preserving chronological order. */
-    private Map<String, java.util.List<SlotView>> slotsByDate(MeetingType type) {
-        ZoneId zone = ZoneId.of(OwnerSettings.get().timezone);
-        LocalDate from = LocalDate.now(zone);
-        LocalDate to = from.plusDays(BOOK_WINDOW_DAYS);
-        Map<String, java.util.List<SlotView>> byDate = new LinkedHashMap<>();
-        for (TimeSlot slot : bookingService.availableSlots(type, from, to)) {
-            String dateLabel = slot.start().format(DATE_FMT);
-            byDate.computeIfAbsent(dateLabel, k -> new java.util.ArrayList<>())
-                  .add(new SlotView(slot.start().format(TIME_FMT),
-                                    slot.start().toInstant().toString()));
-        }
-        return byDate;
     }
 
     /** Available slots as an ordered per-day list (ISO date + label), chronological. */
