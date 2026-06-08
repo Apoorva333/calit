@@ -1,24 +1,36 @@
 package com.calit.web;
 
 import com.calit.availability.TimeSlot;
+import com.calit.booking.AbuseException;
+import com.calit.booking.Booking;
+import com.calit.booking.BookingConflictException;
 import com.calit.booking.BookingService;
+import com.calit.booking.BookingStatus;
+import com.calit.booking.BookingValidationException;
+import com.calit.booking.RateLimitException;
 import com.calit.domain.BookingField;
 import com.calit.domain.MeetingType;
 import com.calit.domain.OwnerSettings;
 import io.quarkus.qute.CheckedTemplate;
 import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
+import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.MultivaluedMap;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.resteasy.reactive.RestForm;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +52,11 @@ public class PublicResource {
                 String tzScript,
                 boolean turnstileEnabled,
                 String turnstileSiteKey);
+
+        public static native TemplateInstance confirmation(
+                com.calit.booking.Booking booking, com.calit.domain.MeetingType type,
+                boolean pending, String location, String whenLabel, String startUtcIso,
+                String css, String tzBar, String tzScript);
     }
 
     @Inject
@@ -88,6 +105,68 @@ public class PublicResource {
 
     private String turnstileSiteKey() {
         return turnstileSiteKeyConfig.orElse("");
+    }
+
+    @POST
+    @Path("/book/{slug}")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance submitBooking(@PathParam("slug") String slug,
+                                          @RestForm String startUtc,
+                                          @RestForm String inviteeName,
+                                          @RestForm String inviteeEmail,
+                                          @RestForm String website,                 // honeypot
+                                          @RestForm("cf-turnstile-response") String turnstileToken,
+                                          MultivaluedMap<String, String> form) {
+        MeetingType type = MeetingType.findBySlug(slug);
+        if (type == null) {
+            throw new NotFoundException("No meeting type with slug " + slug);
+        }
+
+        // Collect every "answers.<fieldKey>" form param into the answers map (strip the prefix).
+        Map<String, String> answers = new HashMap<>();
+        for (Map.Entry<String, java.util.List<String>> e : form.entrySet()) {
+            if (e.getKey().startsWith("answers.")) {
+                answers.put(e.getKey().substring("answers.".length()),
+                            e.getValue().isEmpty() ? "" : e.getValue().get(0));
+            }
+        }
+
+        Booking booking;
+        try {
+            // book(...) enforces required fields AND the abuse guards (Turnstile + honeypot +
+            // per-email/day cap) server-side; the handler just forwards the two raw inputs.
+            booking = bookingService.book(
+                    slug, Instant.parse(startUtc), inviteeName, inviteeEmail, answers,
+                    turnstileToken, website);
+        } catch (BookingValidationException | AbuseException | RateLimitException
+                 | BookingConflictException be) {
+            // Required-field 422 OR an abuse-guard rejection (filled honeypot / failed Turnstile /
+            // per-email cap) / slot conflict. Re-render the form inline with the message; do NOT
+            // 500, NOT confirm. (Plan 3 has no common BookingException superclass, so catch each.)
+            return Templates.book(type, slotsByDate(type), BookingField.formFor(type.id),
+                                  be.getMessage(), Layout.CSS,
+                                  Layout.TZ_BAR, Layout.TZ_SCRIPT,
+                                  turnstileEnabled, turnstileSiteKey());
+        }
+        return confirmationPage(booking, type);
+    }
+
+    /** Renders the confirmation/request-sent page for a freshly created/rescheduled booking. */
+    private TemplateInstance confirmationPage(Booking booking, MeetingType type) {
+        // Server fallback label is owner-tz; the page also carries the booked instant as a
+        // data-utc attribute so the shared script can relabel it to the viewer's zone.
+        ZoneId zone = ZoneId.of(OwnerSettings.get().timezone);
+        String when = booking.startUtc.atZone(zone)
+                .format(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy 'at' HH:mm (z)"));
+        String startUtcIso = booking.startUtc.toString(); // absolute instant for data-utc
+        // Approval types come back PENDING → "request sent" page (no Meet link yet); auto types
+        // come back CONFIRMED → location/Meet confirmation.
+        boolean pending = booking.status == BookingStatus.PENDING;
+        String location = (type.locationType == MeetingType.LocationType.GOOGLE_MEET)
+                ? booking.meetLink : type.locationDetail;
+        return Templates.confirmation(booking, type, pending, location, when, startUtcIso,
+                                      Layout.CSS, Layout.TZ_BAR, Layout.TZ_SCRIPT);
     }
 
     /** Group available slots by owner-tz date label, preserving chronological order. */
