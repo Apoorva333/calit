@@ -13,7 +13,7 @@
 **Cross-plan contract conformance (authoritative — from the overview's "Added in Plan 1b"):**
 - `MeetingType` gains: `minNoticeMinutes` (int, default 0), `horizonDays` (int, default 60), `locationType` (`LocationType` enum: GOOGLE_MEET[default]/PHONE/IN_PERSON/CUSTOM), `locationDetail` (String, nullable), `requiresApproval` (boolean, default false).
 - `OwnerSettings` gains: `ownerNotificationsEnabled` (boolean, default true).
-- `DateOverride` — fields: `meetingTypeId` (null = global), `date` (LocalDate, column `override_date`), list of windows (`DateOverrideWindow`: startTime/endTime). **Empty windows = day off.** `DateOverride.resolve(meetingTypeId, date)` → per-type override if present, else global, else `null`.
+- `DateOverride` — fields: `meetingTypeId` (null = global), `overrideDate` (LocalDate, column `override_date`; named `overrideDate` to avoid the JPQL reserved word `date`), list of windows (`DateOverrideWindow`: startTime/endTime). **Empty windows = day off.** `DateOverride.resolve(meetingTypeId, date)` → per-type override if present, else global, else `null`.
 - `SlotService.generateRawSlots` uses resolved `DateOverride` windows per date when one exists (REPLACING weekly hours), else weekly rules. (min-notice/horizon are NOT applied here.)
 
 ---
@@ -384,7 +384,7 @@ class DateOverrideTest {
     private DateOverride override(Long meetingTypeId, LocalDate date) {
         DateOverride o = new DateOverride();
         o.meetingTypeId = meetingTypeId;
-        o.date = date;
+        o.overrideDate = date;
         return o;
     }
 
@@ -489,7 +489,7 @@ public class DateOverride extends PanacheEntityBase {
     public Long meetingTypeId;
 
     @Column(name = "override_date", nullable = false)
-    public LocalDate date;
+    public LocalDate overrideDate; // named overrideDate (not date) to avoid the JPQL reserved word
 
     /**
      * Bookable windows for this date. Empty = day off (caller emits no slots).
@@ -506,13 +506,13 @@ public class DateOverride extends PanacheEntityBase {
      * is correct regardless of insert order.
      */
     public static DateOverride resolve(Long meetingTypeId, LocalDate date) {
-        DateOverride typed = find("meetingTypeId = ?1 and date = ?2", meetingTypeId, date).firstResult();
+        DateOverride typed = find("meetingTypeId = ?1 and overrideDate = ?2", meetingTypeId, date).firstResult();
         if (typed != null) {
             typed.windows = DateOverrideWindow
                     .list("dateOverrideId = ?1 order by startTime asc", typed.id);
             return typed;
         }
-        DateOverride global = find("meetingTypeId is null and date = ?1", date).firstResult();
+        DateOverride global = find("meetingTypeId is null and overrideDate = ?1", date).firstResult();
         if (global != null) {
             global.windows = DateOverrideWindow
                     .list("dateOverrideId = ?1 order by startTime asc", global.id);
@@ -666,7 +666,7 @@ class SlotServiceOverrideTest {
     private DateOverride override(Long meetingTypeId, LocalDate date) {
         DateOverride o = new DateOverride();
         o.meetingTypeId = meetingTypeId;
-        o.date = date;
+        o.overrideDate = date;
         return o;
     }
 
@@ -792,7 +792,7 @@ Out of scope here (later plans): min-notice/horizon enforcement (Plan 3), approv
 **3. Type consistency (against the overview's "Added in Plan 1b" contract):**
 - `MeetingType` gains exactly: `int minNoticeMinutes = 0`, `int horizonDays = 60`, `@Enumerated(STRING) LocationType locationType = LocationType.GOOGLE_MEET`, `String locationDetail` (nullable), `boolean requiresApproval = false`; inner enum `LocationType { GOOGLE_MEET, PHONE, IN_PERSON, CUSTOM }` (GOOGLE_MEET default). Column names/defaults match V2 (`min_notice_minutes` 0, `horizon_days` 60, `location_type` 'GOOGLE_MEET', `location_detail` nullable TEXT, `requires_approval` FALSE).
 - `OwnerSettings` gains exactly: `boolean ownerNotificationsEnabled = true` (column `owner_notifications_enabled` DEFAULT TRUE).
-- `DateOverride`: `Long meetingTypeId` (null = global), `LocalDate date` (column `override_date`), `List<DateOverrideWindow> windows` (empty = day off); `DateOverrideWindow`: `Long dateOverrideId`, `LocalTime startTime`, `LocalTime endTime`. Static `resolve(Long meetingTypeId, LocalDate date)` → per-type, else global, else `null` — exactly the contract shape.
+- `DateOverride`: `Long meetingTypeId` (null = global), `LocalDate overrideDate` (column `override_date`; named `overrideDate` to avoid the JPQL reserved word `date`), `List<DateOverrideWindow> windows` (empty = day off); `DateOverrideWindow`: `Long dateOverrideId`, `LocalTime startTime`, `LocalTime endTime`. Static `resolve(Long meetingTypeId, LocalDate date)` → per-type, else global, else `null` — exactly the contract shape.
 - `SlotService.generateRawSlots(MeetingType, LocalDate, LocalDate)` signature unchanged; behavior now: resolved override windows REPLACE weekly hours per date (empty = day off), else weekly `rulesFor`. Min-notice/horizon are columns only here and are filtered in Plan 3 — consistent with the overview.
 
 **Migration ordering:** This plan's migration is **V2**; Plan 2 is **V3** and Plan 3 is **V4** (renumbered so Plan 1b applies first). Stated at the top of this file and honored by `V2__domain_extensions.sql`.

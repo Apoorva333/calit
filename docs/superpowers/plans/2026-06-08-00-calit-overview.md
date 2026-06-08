@@ -59,7 +59,7 @@ The app must run as N identical stateless replicas behind a load balancer. Enfor
 *Added in Plan 1b (additive migrations on the built schema):*
 - `MeetingType` gains: `minNoticeMinutes` (int, default 0), `horizonDays` (int, default 60), `locationType` (`LocationType` enum: GOOGLE_MEET[default]/PHONE/IN_PERSON/CUSTOM), `locationDetail` (String, nullable), `requiresApproval` (boolean, default false).
 - `OwnerSettings` gains: `ownerNotificationsEnabled` (boolean, default true).
-- `DateOverride` — replace-semantics override for one date. Fields: meetingTypeId (null = global), date (LocalDate), and a list of windows (`DateOverrideWindow`: startTime/endTime). **Empty windows = day off.** Resolver `DateOverride.resolve(meetingTypeId, date)` → per-type override if present, else global, else `null` (meaning: fall through to weekly `AvailabilityRule`). When an override exists it REPLACES that day's weekly hours.
+- `DateOverride` — replace-semantics override for one date. Fields: meetingTypeId (null = global), `overrideDate` (LocalDate, column `override_date`; named `overrideDate` to avoid the JPQL reserved word `date`), and a list of windows (`DateOverrideWindow`: startTime/endTime). **Empty windows = day off.** Resolver `DateOverride.resolve(meetingTypeId, date)` → per-type override if present, else global, else `null` (meaning: fall through to weekly `AvailabilityRule`). When an override exists it REPLACES that day's weekly hours.
 - `SlotService.generateRawSlots` is updated so that, per date, it uses the resolved `DateOverride` windows when one exists, else the weekly rules. (min-notice/horizon are NOT applied here — they are Plan 3 slot filters relative to "now".)
 
 *Defined in Plan 3:*

@@ -92,7 +92,7 @@ class DateOverrideTest {
     private DateOverride override(Long meetingTypeId, LocalDate date) {
         DateOverride o = new DateOverride();
         o.meetingTypeId = meetingTypeId;
-        o.date = date;
+        o.overrideDate = date;
         return o;
     }
 

@@ -63,6 +63,7 @@ public class MeetingTypeResource {
 
     @GET
     @Path("/{slug}/slots")
+    @Transactional
     public List<TimeSlot> slots(@PathParam("slug") String slug,
                                 @QueryParam("from") String from,
                                 @QueryParam("to") String to) {

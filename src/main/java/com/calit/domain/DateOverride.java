@@ -39,7 +39,7 @@ public class DateOverride extends PanacheEntityBase {
     public Long meetingTypeId;
 
     @Column(name = "override_date", nullable = false)
-    public LocalDate date;
+    public LocalDate overrideDate;
 
     /**
      * Bookable windows for this date. Empty = day off (caller emits no slots).
@@ -56,13 +56,13 @@ public class DateOverride extends PanacheEntityBase {
      * is correct regardless of insert order.
      */
     public static DateOverride resolve(Long meetingTypeId, LocalDate date) {
-        DateOverride typed = find("meetingTypeId = ?1 and date = ?2", meetingTypeId, date).firstResult();
+        DateOverride typed = find("meetingTypeId = ?1 and overrideDate = ?2", meetingTypeId, date).firstResult();
         if (typed != null) {
             typed.windows = DateOverrideWindow
                     .list("dateOverrideId = ?1 order by startTime asc", typed.id);
             return typed;
         }
-        DateOverride global = find("meetingTypeId is null and date = ?1", date).firstResult();
+        DateOverride global = find("meetingTypeId is null and overrideDate = ?1", date).firstResult();
         if (global != null) {
             global.windows = DateOverrideWindow
                     .list("dateOverrideId = ?1 order by startTime asc", global.id);
