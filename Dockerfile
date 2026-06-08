@@ -15,8 +15,10 @@ RUN ./mvnw -B -q -DskipTests dependency:go-offline
 COPY src/ src/
 RUN ./mvnw -B -q -DskipTests clean package
 
-# --- Runtime stage: slim Liberica JRE 25 ---
-FROM bellsoft/liberica-openjre-debian:25 AS runtime
+# --- Runtime stage: BellSoft minimal musl runtime container (production) ---
+# JRE 26 runs the JDK-25-compiled fast-jar fine (forward-compatible); pure-bytecode app, so the
+# musl libc is a non-issue. The runtime-container image is purpose-built minimal for production.
+FROM bellsoft/liberica-runtime-container:jre-26-musl AS runtime
 WORKDIR /app
 
 # Quarkus fast-jar layout: copy the four pieces in cache-friendly order.
