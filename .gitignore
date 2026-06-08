@@ -5,3 +5,6 @@ target/
 
 # Quarkus build cache
 .quarkus/
+
+# Visual brainstorm companion
+.superpowers/
