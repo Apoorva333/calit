@@ -1,0 +1,26 @@
+<html>
+<body>
+<p>Hi {inviteeName},</p>
+<p>Your booking has been <strong>rescheduled</strong>.</p>
+<ul>
+  <li><strong>Meeting:</strong> {meetingTypeName}</li>
+  <li><strong>Previous time:</strong> {oldStartTime}</li>
+  <li><strong>New time:</strong> {startTime}</li>
+  <li><strong>Duration:</strong> {durationMinutes} minutes</li>
+  {#if location}
+    {#if isMeetLink}<li><strong>Google Meet:</strong> <a href="{location}">{location}</a></li>
+    {#else}<li><strong>Location:</strong> {location}</li>{/if}
+  {/if}
+</ul>
+{#if answers}
+<p><strong>Your answers:</strong></p>
+<ul>
+  {#for line in answers}
+  <li><strong>{line.label}:</strong> {line.value}</li>
+  {/for}
+</ul>
+{/if}
+<p>Manage this booking: <a href="{manageUrl}">{manageUrl}</a></p>
+<p>This message was sent to the {recipientRole}.</p>
+</body>
+</html>

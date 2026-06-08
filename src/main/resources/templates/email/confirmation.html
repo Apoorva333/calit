@@ -1,0 +1,25 @@
+<html>
+<body>
+<p>Hi {inviteeName},</p>
+<p>Your booking is <strong>confirmed</strong>.</p>
+<ul>
+  <li><strong>Meeting:</strong> {meetingTypeName}</li>
+  <li><strong>When:</strong> {startTime}</li>
+  <li><strong>Duration:</strong> {durationMinutes} minutes</li>
+  {#if location}
+    {#if isMeetLink}<li><strong>Google Meet:</strong> <a href="{location}">{location}</a></li>
+    {#else}<li><strong>Location:</strong> {location}</li>{/if}
+  {/if}
+</ul>
+{#if answers}
+<p><strong>Your answers:</strong></p>
+<ul>
+  {#for line in answers}
+  <li><strong>{line.label}:</strong> {line.value}</li>
+  {/for}
+</ul>
+{/if}
+<p>Need to change it? <a href="{manageUrl}">Manage your booking</a>.</p>
+<p>This message was sent to the {recipientRole}.</p>
+</body>
+</html>
