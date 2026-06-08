@@ -1,8 +1,7 @@
 {@java.util.List<com.calit.domain.BookingField> fields}
 {@java.util.List<com.calit.domain.MeetingType> types}
 {@java.lang.Long pendingCount}
-{#include base title="Admin — Booking fields"}
-  {#include adminNav pendingCount=pendingCount /}
+{#include adminBase title="Admin — Booking fields" pendingCount=pendingCount active="bookingFields"}
   <h1>Custom booking fields</h1>
   <p>Full name and email are always asked. These are the extra fields shown on the booking form.</p>
 

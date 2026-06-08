@@ -2,8 +2,7 @@
 {@java.lang.Integer reminderLeadMinutes}
 {@java.lang.Long pendingCount}
 {@java.util.List<java.lang.String> zones}
-{#include base title="Admin — Settings"}
-  {#include adminNav pendingCount=pendingCount /}
+{#include adminBase title="Admin — Settings" pendingCount=pendingCount active="settings"}
   <h1>Owner settings</h1>
   <form method="post" action="/admin/settings">
     <label>Name
