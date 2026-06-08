@@ -1,0 +1,64 @@
+package com.calit.booking;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Optional;
+
+/**
+ * Feature 16: server-side Cloudflare Turnstile verification. When the flag is off, {@link #verify}
+ * is a no-op success (so local dev/tests never call Cloudflare). When on, it POSTs the token to the
+ * siteverify endpoint and throws {@link AbuseException} (HTTP 400) on a non-success response.
+ */
+@ApplicationScoped
+public class TurnstileVerifier {
+
+    @ConfigProperty(name = "calit.abuse.turnstile.enabled", defaultValue = "false")
+    boolean enabled;
+
+    // Quarkus 3.35 SmallRye treats an empty-string config value as null for the String converter,
+    // which would fail a plain `String` @ConfigProperty at startup. Optional<String> tolerates the
+    // empty/unset secret (the off-by-default local/test case) and is only present when configured.
+    @ConfigProperty(name = "calit.abuse.turnstile.secret")
+    Optional<String> secret;
+
+    @ConfigProperty(name = "calit.abuse.turnstile.verify-url",
+            defaultValue = "https://challenges.cloudflare.com/turnstile/v0/siteverify")
+    String verifyUrl;
+
+    private final HttpClient http = HttpClient.newHttpClient();
+
+    /** Throws AbuseException (400) if Turnstile is enabled and the token does not verify. */
+    public void verify(String token) {
+        if (!enabled) {
+            return;
+        }
+        if (token == null || token.isBlank()) {
+            throw new AbuseException("Missing Turnstile token");
+        }
+        try {
+            String body = "secret=" + URLEncoder.encode(secret.orElse(""), StandardCharsets.UTF_8)
+                    + "&response=" + URLEncoder.encode(token, StandardCharsets.UTF_8);
+            HttpRequest req = HttpRequest.newBuilder(URI.create(verifyUrl))
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .build();
+            HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
+            // Cloudflare returns JSON {"success": true|false, ...}. A naive contains-check is
+            // sufficient for the boolean flag and avoids pulling a JSON dep into this guard.
+            if (resp.statusCode() != 200 || !resp.body().contains("\"success\":true")) {
+                throw new AbuseException("Turnstile verification failed");
+            }
+        } catch (AbuseException ae) {
+            throw ae;
+        } catch (Exception e) {
+            throw new AbuseException("Turnstile verification error: " + e.getMessage());
+        }
+    }
+}
