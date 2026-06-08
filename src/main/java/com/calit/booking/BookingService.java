@@ -16,8 +16,12 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.calit.booking.events.BookingApproved;
+import com.calit.booking.events.BookingCancelled;
 import com.calit.booking.events.BookingConfirmed;
+import com.calit.booking.events.BookingDeclined;
 import com.calit.booking.events.BookingRequested;
+import com.calit.booking.events.BookingRescheduled;
 import com.calit.domain.BookingField;
 import com.calit.domain.MeetingType.LocationType;
 import com.calit.google.CreatedEvent;
@@ -47,6 +51,18 @@ public class BookingService {
 
     @Inject
     Event<BookingConfirmed> bookingConfirmedEvent;
+
+    @Inject
+    Event<BookingApproved> bookingApprovedEvent;
+
+    @Inject
+    Event<BookingDeclined> bookingDeclinedEvent;
+
+    @Inject
+    Event<BookingRescheduled> bookingRescheduledEvent;
+
+    @Inject
+    Event<BookingCancelled> bookingCancelledEvent;
 
     @ConfigProperty(name = "calit.abuse.per-email-daily-cap", defaultValue = "10")
     long perEmailDailyCap;
@@ -257,5 +273,98 @@ public class BookingService {
             throw new BookingConflictException(
                     "Slot " + startUtc + " is not available for " + type.slug);
         }
+    }
+
+    @Transactional
+    public void approve(Long bookingId) {
+        Booking booking = Booking.findById(bookingId);
+        if (booking == null) {
+            throw new NotFoundException("No booking " + bookingId);
+        }
+        booking.status = BookingStatus.CONFIRMED;
+        MeetingType type = MeetingType.findById(booking.meetingTypeId);
+        // Feature 14 + degraded mode: create the Google event now, only when connected.
+        if (calendarPort.isConnected()) {
+            createGoogleEvent(type, booking);
+        }
+        bookingApprovedEvent.fire(new BookingApproved(bookingId));
+    }
+
+    @Transactional
+    public void decline(Long bookingId) {
+        Booking booking = Booking.findById(bookingId);
+        if (booking == null) {
+            throw new NotFoundException("No booking " + bookingId);
+        }
+        // DECLINED leaves the PENDING|CONFIRMED partial constraint -> frees the slot.
+        // A PENDING request has no Google event, so nothing to delete.
+        booking.status = BookingStatus.DECLINED;
+        bookingDeclinedEvent.fire(new BookingDeclined(bookingId));
+    }
+
+    @Transactional
+    public Booking reschedule(String manageToken, Instant newStartUtc) {
+        Booking booking = Booking.findByManageToken(manageToken);
+        if (booking == null
+                || booking.status == BookingStatus.CANCELLED
+                || booking.status == BookingStatus.DECLINED) {
+            throw new NotFoundException("No active booking for token " + manageToken);
+        }
+        MeetingType type = MeetingType.findById(booking.meetingTypeId);
+        Instant newEnd = newStartUtc.plusSeconds(60L * type.durationMinutes);
+
+        // Exclude this booking so it may move freely within its own window.
+        assertSlotAvailable(type, newStartUtc, booking.id);
+
+        Instant oldStart = booking.startUtc;
+        booking.startUtc = newStartUtc;
+        booking.endUtc = newEnd;
+
+        boolean reApproval = type.requiresApproval;
+        String priorEventId = booking.googleEventId;
+        if (reApproval) {
+            // Feature 14: return to the approval queue; drop any existing event.
+            booking.status = BookingStatus.PENDING;
+            booking.googleEventId = null;
+            booking.meetLink = null;
+        }
+
+        // NFR cross-node guard: flush so the no-overlap exclusion constraint is checked against
+        // the new range; a concurrent overlap is surfaced as the same 409 as a double-book.
+        try {
+            booking.persistAndFlush();
+        } catch (PersistenceException ex) {
+            if (isNoOverlapViolation(ex)) {
+                throw new BookingConflictException(
+                        "Slot " + newStartUtc + " is not available for token " + manageToken);
+            }
+            throw ex;
+        }
+
+        if (reApproval) {
+            if (calendarPort.isConnected() && priorEventId != null) {
+                calendarPort.deleteEvent(priorEventId);
+            }
+            bookingRequestedEvent.fire(new BookingRequested(booking.id)); // re-approval request
+        } else {
+            if (calendarPort.isConnected() && booking.googleEventId != null) {
+                calendarPort.updateEvent(booking.googleEventId, newStartUtc, newEnd);
+            }
+            bookingRescheduledEvent.fire(new BookingRescheduled(booking.id, oldStart));
+        }
+        return booking;
+    }
+
+    @Transactional
+    public void cancel(String manageToken) {
+        Booking booking = Booking.findByManageToken(manageToken);
+        if (booking == null) {
+            throw new NotFoundException("No booking for token " + manageToken);
+        }
+        booking.status = BookingStatus.CANCELLED;
+        if (calendarPort.isConnected() && booking.googleEventId != null) {
+            calendarPort.deleteEvent(booking.googleEventId);
+        }
+        bookingCancelledEvent.fire(new BookingCancelled(booking.id));
     }
 }
