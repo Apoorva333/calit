@@ -60,7 +60,7 @@ public class AdminResource {
     @jakarta.inject.Inject
     com.calit.booking.BookingService bookingService;
 
-    @ConfigProperty(name = "calit.reminder.lead-minutes", defaultValue = "120")
+    @ConfigProperty(name = "calit.reminder.lead-minutes", defaultValue = "1440")
     int reminderLeadMinutes;
 
     @GET

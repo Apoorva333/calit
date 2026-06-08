@@ -5,6 +5,7 @@ import com.calit.booking.events.BookingApproved;
 import com.calit.booking.events.BookingCancelled;
 import com.calit.booking.events.BookingConfirmed;
 import com.calit.booking.events.BookingDeclined;
+import com.calit.booking.events.BookingRequested;
 import com.calit.booking.events.BookingRescheduled;
 import com.calit.booking.events.ReminderDue;
 import io.quarkus.narayana.jta.QuarkusTransaction;
@@ -25,7 +26,7 @@ import java.util.List;
 @ApplicationScoped
 public class ReminderScheduler {
 
-    @ConfigProperty(name = "calit.reminders.lead-minutes", defaultValue = "1440")
+    @ConfigProperty(name = "calit.reminder.lead-minutes", defaultValue = "1440")
     int leadMinutes;
 
     @Inject
@@ -48,6 +49,16 @@ public class ReminderScheduler {
 
     /** Cancelled by invitee. */
     void onCancelled(@Observes(during = TransactionPhase.AFTER_SUCCESS) BookingCancelled e) {
+        onCancelledOrDeclined(e.bookingId());
+    }
+
+    /**
+     * A booking (re-)entered the approval queue as PENDING — either a fresh approval-type request or
+     * an approval-type reschedule (Plan 3 re-fires BookingRequested, NOT BookingRescheduled). A PENDING
+     * booking must hold no reminder, so drop any unsent one left over from a prior CONFIRMED state;
+     * the eventual BookingApproved reschedules it at the new time.
+     */
+    void onRequested(@Observes(during = TransactionPhase.AFTER_SUCCESS) BookingRequested e) {
         onCancelledOrDeclined(e.bookingId());
     }
 
