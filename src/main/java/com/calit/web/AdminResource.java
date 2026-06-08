@@ -2,6 +2,8 @@ package com.calit.web;
 
 import com.calit.booking.Booking;
 import com.calit.domain.AvailabilityRule;
+import com.calit.domain.BookingField;
+import com.calit.domain.BookingField.FieldType;
 import com.calit.domain.MeetingType;
 import com.calit.domain.MeetingType.LocationType;
 import com.calit.domain.OwnerSettings;
@@ -41,6 +43,9 @@ public class AdminResource {
                 OwnerSettings settings, int reminderLeadMinutes, String css);
 
         public static native TemplateInstance google(String css);
+
+        public static native TemplateInstance bookingFields(
+                List<BookingField> fields, List<MeetingType> types, String css);
     }
 
     @ConfigProperty(name = "calit.reminder.lead-minutes", defaultValue = "120")
@@ -193,5 +198,51 @@ public class AdminResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance google() {
         return Templates.google(Layout.CSS);
+    }
+
+    @GET
+    @Path("/booking-fields")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance bookingFields() {
+        return Templates.bookingFields(
+                BookingField.<BookingField>listAll(),
+                MeetingType.listAll(), Layout.CSS);
+    }
+
+    @POST
+    @Path("/booking-fields")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    @Transactional
+    public TemplateInstance createBookingField(@RestForm String label,
+                                               @RestForm String fieldKey,
+                                               @RestForm String type,
+                                               @RestForm String required,
+                                               @RestForm int position,
+                                               @RestForm String meetingTypeId) {
+        BookingField f = new BookingField();
+        f.label = label;
+        f.fieldKey = fieldKey;
+        f.type = FieldType.valueOf(type);
+        f.required = "on".equals(required); // unchecked checkbox sends no value
+        f.position = position;
+        f.meetingTypeId = (meetingTypeId == null || meetingTypeId.isBlank())
+                ? null : Long.valueOf(meetingTypeId); // empty = global
+        f.persist();
+        return Templates.bookingFields(
+                BookingField.<BookingField>listAll(),
+                MeetingType.listAll(), Layout.CSS);
+    }
+
+    @POST
+    @Path("/booking-fields/{id}/delete")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    @Transactional
+    public TemplateInstance deleteBookingField(@PathParam("id") Long id) {
+        BookingField.deleteById(id);
+        return Templates.bookingFields(
+                BookingField.<BookingField>listAll(),
+                MeetingType.listAll(), Layout.CSS);
     }
 }

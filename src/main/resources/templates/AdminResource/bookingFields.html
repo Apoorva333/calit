@@ -1,0 +1,60 @@
+{@java.util.List<com.calit.domain.BookingField> fields}
+{@java.util.List<com.calit.domain.MeetingType> types}
+{@java.lang.String css}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin — Booking fields</title>
+  <style>{css}</style>
+</head>
+<body>
+  <nav>
+    <a href="/admin">Dashboard</a>
+    <a href="/admin/pending">Pending</a>
+    <a href="/admin/meeting-types">Meeting types</a>
+    <a href="/admin/availability">Availability</a>
+    <a href="/admin/date-overrides">Date overrides</a>
+    <a href="/admin/booking-fields">Booking fields</a>
+    <a href="/admin/settings">Settings</a>
+    <a href="/admin/google">Google</a>
+  </nav>
+  <h1>Custom booking fields</h1>
+  <p>Full name and email are always asked. These are the extra fields shown on the booking form.</p>
+
+  {#for f in fields}
+    <div class="card">
+      <h3>{f.label}
+        {#if f.required}<span class="badge">required</span>{/if}
+      </h3>
+      <p><code>{f.fieldKey}</code> &middot; {f.type} &middot; position {f.position}
+        &middot; {#if f.meetingTypeId}type #{f.meetingTypeId}{#else}global{/if}</p>
+      <form method="post" action="/admin/booking-fields/{f.id}/delete" style="display:inline">
+        <button type="submit">Delete</button>
+      </form>
+    </div>
+  {/for}
+
+  <h2>Add a field</h2>
+  <form method="post" action="/admin/booking-fields">
+    <label>Label <input type="text" name="label" required></label>
+    <label>Field key <input type="text" name="fieldKey" required></label>
+    <label>Type
+      <select name="type">
+        <option>SHORT_TEXT</option><option>LONG_TEXT</option><option>EMAIL</option>
+        <option>PHONE</option><option>NUMBER</option>
+      </select>
+    </label>
+    <label><input type="checkbox" name="required"> Required</label>
+    <label>Position <input type="number" name="position" value="0" required></label>
+    <label>Applies to
+      <select name="meetingTypeId">
+        <option value="">All (global)</option>
+        {#for t in types}<option value="{t.id}">{t.name}</option>{/for}
+      </select>
+    </label>
+    <button type="submit">Add field</button>
+  </form>
+</body>
+</html>

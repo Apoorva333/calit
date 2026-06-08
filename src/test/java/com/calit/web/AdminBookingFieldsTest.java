@@ -1,0 +1,60 @@
+package com.calit.web;
+
+import com.calit.domain.BookingField;
+import com.calit.domain.BookingField.FieldType;
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.transaction.Transactional;
+import org.junit.jupiter.api.Test;
+
+import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.containsString;
+
+@QuarkusTest
+class AdminBookingFieldsTest {
+
+    @Transactional
+    void seedField() {
+        BookingField f = new BookingField();
+        f.meetingTypeId = null; f.fieldKey = "linkedin"; f.label = "LinkedIn URL";
+        f.type = FieldType.SHORT_TEXT; f.required = false; f.position = 5;
+        f.persist();
+    }
+
+    @Test
+    void pageRendersExistingFieldsAndCreateForm() {
+        seedField();
+        given()
+            .auth().preemptive().basic("admin", "testpass")
+            .when().get("/admin/booking-fields")
+            .then()
+                .statusCode(200)
+                .body(containsString("LinkedIn URL"))        // existing field listed
+                .body(containsString("name=\"fieldKey\""))   // create form present
+                .body(containsString("name=\"type\""))        // type dropdown
+                .body(containsString("name=\"required\""));   // required checkbox
+    }
+
+    @Test
+    void createFieldViaForm() {
+        String key = "field-" + System.nanoTime();
+        given()
+            .auth().preemptive().basic("admin", "testpass")
+            .contentType("application/x-www-form-urlencoded")
+            .formParam("label", "Dietary Needs")
+            .formParam("fieldKey", key)
+            .formParam("type", "LONG_TEXT")
+            .formParam("required", "on")
+            .formParam("position", "10")
+            .formParam("meetingTypeId", "") // empty = global
+            .when().post("/admin/booking-fields")
+            .then()
+                .statusCode(200)
+                .body(containsString("Dietary Needs"))
+                .body(containsString(key));
+    }
+
+    @Test
+    void bookingFieldsPageRequiresAuth() {
+        given().when().get("/admin/booking-fields").then().statusCode(401);
+    }
+}
