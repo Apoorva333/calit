@@ -97,8 +97,11 @@ class SlotServiceTest {
     // --- helpers ---
 
     private void seedSettings(String zone) {
-        OwnerSettings s = new OwnerSettings();
-        s.id = OwnerSettings.SINGLETON_ID;
+        OwnerSettings s = OwnerSettings.get();
+        if (s == null) {
+            s = new OwnerSettings();
+            s.id = OwnerSettings.SINGLETON_ID;
+        }
         s.ownerName = "Owner";
         s.ownerEmail = "owner@example.com";
         s.timezone = zone;

@@ -12,8 +12,11 @@ class OwnerSettingsTest {
     @Test
     @TestTransaction
     void persistsAndReadsSingleton() {
-        OwnerSettings s = new OwnerSettings();
-        s.id = OwnerSettings.SINGLETON_ID;
+        OwnerSettings s = OwnerSettings.get();
+        if (s == null) {
+            s = new OwnerSettings();
+            s.id = OwnerSettings.SINGLETON_ID;
+        }
         s.ownerName = "Pavel";
         s.ownerEmail = "p@example.com";
         s.timezone = "Europe/Amsterdam";
