@@ -46,15 +46,15 @@ public class AdminResource {
                 List<AvailabilityRule> rules, List<MeetingType> types, Long pendingCount);
 
         public static native TemplateInstance settings(
-                OwnerSettings settings, int reminderLeadMinutes, String css);
+                OwnerSettings settings, int reminderLeadMinutes, Long pendingCount);
 
         public static native TemplateInstance google(Long pendingCount);
 
         public static native TemplateInstance bookingFields(
-                List<BookingField> fields, List<MeetingType> types, String css);
+                List<BookingField> fields, List<MeetingType> types, Long pendingCount);
 
         public static native TemplateInstance dateOverrides(
-                List<DateOverride> overrides, List<MeetingType> types, String css);
+                List<DateOverride> overrides, List<MeetingType> types, Long pendingCount);
 
         public static native TemplateInstance pending(List<Booking> pending);
     }
@@ -189,7 +189,7 @@ public class AdminResource {
     @Path("/settings")
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance settings() {
-        return Templates.settings(OwnerSettings.get(), reminderLeadMinutes, Layout.CSS);
+        return Templates.settings(OwnerSettings.get(), reminderLeadMinutes, pendingCount());
     }
 
     @POST
@@ -209,7 +209,7 @@ public class AdminResource {
         // Unchecked checkbox sends no value → notifications OFF (owner opt-out).
         s.ownerNotificationsEnabled = "on".equals(ownerNotificationsEnabled);
         s.persist();
-        return Templates.settings(s, reminderLeadMinutes, Layout.CSS);
+        return Templates.settings(s, reminderLeadMinutes, pendingCount());
     }
 
     @GET
@@ -226,7 +226,7 @@ public class AdminResource {
     public TemplateInstance bookingFields() {
         return Templates.bookingFields(
                 BookingField.<BookingField>listAll(),
-                MeetingType.listAll(), Layout.CSS);
+                MeetingType.listAll(), pendingCount());
     }
 
     @POST
@@ -251,7 +251,7 @@ public class AdminResource {
         f.persist();
         return Templates.bookingFields(
                 BookingField.<BookingField>listAll(),
-                MeetingType.listAll(), Layout.CSS);
+                MeetingType.listAll(), pendingCount());
     }
 
     @POST
@@ -263,7 +263,7 @@ public class AdminResource {
         BookingField.deleteById(id);
         return Templates.bookingFields(
                 BookingField.<BookingField>listAll(),
-                MeetingType.listAll(), Layout.CSS);
+                MeetingType.listAll(), pendingCount());
     }
 
     /**
@@ -285,7 +285,7 @@ public class AdminResource {
     public TemplateInstance dateOverrides() {
         return Templates.dateOverrides(
                 overridesWithWindows(),
-                MeetingType.listAll(), Layout.CSS);
+                MeetingType.listAll(), pendingCount());
     }
 
     @POST
@@ -313,7 +313,7 @@ public class AdminResource {
             w.persist();
         }
         return Templates.dateOverrides(
-                overridesWithWindows(), MeetingType.listAll(), Layout.CSS);
+                overridesWithWindows(), MeetingType.listAll(), pendingCount());
     }
 
     @POST
@@ -325,7 +325,7 @@ public class AdminResource {
         DateOverrideWindow.delete("dateOverrideId = ?1", id);
         DateOverride.deleteById(id);
         return Templates.dateOverrides(
-                overridesWithWindows(), MeetingType.listAll(), Layout.CSS);
+                overridesWithWindows(), MeetingType.listAll(), pendingCount());
     }
 
     @GET

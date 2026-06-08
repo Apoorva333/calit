@@ -1,30 +1,13 @@
 {@java.util.List<com.calit.domain.BookingField> fields}
 {@java.util.List<com.calit.domain.MeetingType> types}
-{@java.lang.String css}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Admin — Booking fields</title>
-  <style>{css}</style>
-</head>
-<body>
-  <nav>
-    <a href="/admin">Dashboard</a>
-    <a href="/admin/pending">Pending</a>
-    <a href="/admin/meeting-types">Meeting types</a>
-    <a href="/admin/availability">Availability</a>
-    <a href="/admin/date-overrides">Date overrides</a>
-    <a href="/admin/booking-fields">Booking fields</a>
-    <a href="/admin/settings">Settings</a>
-    <a href="/admin/google">Google</a>
-  </nav>
+{@java.lang.Long pendingCount}
+{#include base title="Admin — Booking fields"}
+  {#include adminNav pendingCount=pendingCount /}
   <h1>Custom booking fields</h1>
   <p>Full name and email are always asked. These are the extra fields shown on the booking form.</p>
 
   {#for f in fields}
-    <div class="card">
+    <article>
       <h3>{f.label}
         {#if f.required}<span class="badge">required</span>{/if}
       </h3>
@@ -33,7 +16,7 @@
       <form method="post" action="/admin/booking-fields/{f.id}/delete" style="display:inline">
         <button type="submit">Delete</button>
       </form>
-    </div>
+    </article>
   {/for}
 
   <h2>Add a field</h2>
@@ -56,5 +39,4 @@
     </label>
     <button type="submit">Add field</button>
   </form>
-</body>
-</html>
+{/include}
