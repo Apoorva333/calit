@@ -37,14 +37,24 @@ import java.util.UUID;
 @ApplicationScoped
 public class BookingService {
 
-    @Inject
-    SlotService slotService;
+    // Collaborators + config are constructor-injected (immutable, fail-fast, plain-unit testable,
+    // consistent with the Plan 2 google package). The six CDI Event<> emitters below stay as @Inject
+    // fields: they are framework plumbing and would otherwise bloat the constructor to ten args.
+    private final SlotService slotService;
+    private final CalendarPort calendarPort;
+    private final TurnstileVerifier turnstileVerifier;
+    private final long perEmailDailyCap;
 
     @Inject
-    CalendarPort calendarPort;
-
-    @Inject
-    TurnstileVerifier turnstileVerifier;
+    public BookingService(SlotService slotService, CalendarPort calendarPort,
+                          TurnstileVerifier turnstileVerifier,
+                          @ConfigProperty(name = "calit.abuse.per-email-daily-cap", defaultValue = "10")
+                          long perEmailDailyCap) {
+        this.slotService = slotService;
+        this.calendarPort = calendarPort;
+        this.turnstileVerifier = turnstileVerifier;
+        this.perEmailDailyCap = perEmailDailyCap;
+    }
 
     @Inject
     Event<BookingRequested> bookingRequestedEvent;
@@ -63,9 +73,6 @@ public class BookingService {
 
     @Inject
     Event<BookingCancelled> bookingCancelledEvent;
-
-    @ConfigProperty(name = "calit.abuse.per-email-daily-cap", defaultValue = "10")
-    long perEmailDailyCap;
 
     public List<TimeSlot> availableSlots(MeetingType type, LocalDate from, LocalDate to) {
         return availableSlots(type, from, to, null);
