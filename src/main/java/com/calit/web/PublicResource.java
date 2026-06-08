@@ -64,6 +64,8 @@ public class PublicResource {
                 String tzBar, String tzScript, String calScript);
 
         public static native TemplateInstance cancelled();
+
+        public static native TemplateInstance notReady();
     }
 
     @Inject
@@ -102,6 +104,9 @@ public class PublicResource {
         if (type == null) {
             throw new NotFoundException("No meeting type with slug " + slug);
         }
+        if (OwnerSettings.get() == null) {
+            return Templates.notReady();
+        }
         List<DaySlots> byDate = daySlots(type);
         // Resolved EXTRA fields (per-type-else-global), already ordered by position.
         List<BookingField> fields = BookingField.formFor(type.id);
@@ -131,6 +136,9 @@ public class PublicResource {
         MeetingType type = MeetingType.findBySlug(slug);
         if (type == null) {
             throw new NotFoundException("No meeting type with slug " + slug);
+        }
+        if (OwnerSettings.get() == null) {
+            return Templates.notReady();
         }
 
         // Collect every "answers.<fieldKey>" form param into the answers map (strip the prefix).
@@ -186,6 +194,9 @@ public class PublicResource {
         Booking booking = Booking.findByManageToken(manageToken); // unguessable key, not id
         if (booking == null) {
             throw new NotFoundException("No booking for token " + manageToken); // unknown token → 404
+        }
+        if (OwnerSettings.get() == null) {
+            return Templates.notReady();
         }
         MeetingType type = MeetingType.findById(booking.meetingTypeId);
         ZoneId zone = ZoneId.of(OwnerSettings.get().timezone);

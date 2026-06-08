@@ -46,7 +46,7 @@ public class AdminResource {
                 List<AvailabilityRule> rules, List<MeetingType> types, Long pendingCount);
 
         public static native TemplateInstance settings(
-                OwnerSettings settings, int reminderLeadMinutes, Long pendingCount);
+                OwnerSettings settings, int reminderLeadMinutes, Long pendingCount, java.util.List<String> zones);
 
         public static native TemplateInstance google(Long pendingCount);
 
@@ -185,11 +185,16 @@ public class AdminResource {
                 MeetingType.listAll(), pendingCount());
     }
 
+    /** All IANA zone ids, sorted — for the Settings timezone combobox. */
+    private static java.util.List<String> zoneIds() {
+        return java.time.ZoneId.getAvailableZoneIds().stream().sorted().toList();
+    }
+
     @GET
     @Path("/settings")
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance settings() {
-        return Templates.settings(OwnerSettings.get(), reminderLeadMinutes, pendingCount());
+        return Templates.settings(OwnerSettings.get(), reminderLeadMinutes, pendingCount(), zoneIds());
     }
 
     @POST
@@ -209,7 +214,7 @@ public class AdminResource {
         // Unchecked checkbox sends no value → notifications OFF (owner opt-out).
         s.ownerNotificationsEnabled = "on".equals(ownerNotificationsEnabled);
         s.persist();
-        return Templates.settings(s, reminderLeadMinutes, pendingCount());
+        return Templates.settings(s, reminderLeadMinutes, pendingCount(), zoneIds());
     }
 
     @GET

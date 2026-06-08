@@ -1,6 +1,7 @@
 {@com.calit.domain.OwnerSettings settings}
 {@java.lang.Integer reminderLeadMinutes}
 {@java.lang.Long pendingCount}
+{@java.util.List<java.lang.String> zones}
 {#include base title="Admin — Settings"}
   {#include adminNav pendingCount=pendingCount /}
   <h1>Owner settings</h1>
@@ -11,9 +12,17 @@
     <label>Email
       <input type="email" name="ownerEmail" required
              value="{#if settings}{settings.ownerEmail}{/if}"></label>
-    <label>Timezone (IANA id)
-      <input type="text" name="timezone" required
-             value="{#if settings}{settings.timezone}{#else}Europe/Amsterdam{/if}"></label>
+    <label>Timezone
+      <select name="timezone" required>
+        {#for z in zones}
+          {#if settings}
+          <option value="{z}"{#if settings.timezone == z} selected{/if}>{z}</option>
+          {#else}
+          <option value="{z}"{#if z == 'Europe/Amsterdam'} selected{/if}>{z}</option>
+          {/if}
+        {/for}
+      </select>
+    </label>
     <label><input type="checkbox" name="ownerNotificationsEnabled"
              {#if settings && settings.ownerNotificationsEnabled}checked{/if}>
       Send me (the owner) email notifications for bookings</label>
