@@ -191,6 +191,17 @@ class BookPageTest {
     }
 
     @Test
+    void bookPageHidesMeetHintWhenGoogleNotConnected() {
+        when(calendarPort.isConnected()).thenReturn(false);
+        when(calendarPort.freeBusy(any(), any())).thenReturn(java.util.List.of());
+        seed();
+        given()
+            .when().get("/book/book-page")
+            .then().statusCode(200)
+                .body(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("link sent after booking")));
+    }
+
+    @Test
     void bookPageReturns404ForMissingSlug() {
         given()
             .when().get("/book/does-not-exist")

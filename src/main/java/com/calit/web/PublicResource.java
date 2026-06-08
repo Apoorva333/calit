@@ -51,7 +51,8 @@ public class PublicResource {
                 String tzScript,
                 String calScript,
                 boolean turnstileEnabled,
-                String turnstileSiteKey);
+                String turnstileSiteKey,
+                boolean googleConnected);
 
         public static native TemplateInstance confirmation(
                 com.calit.booking.Booking booking, com.calit.domain.MeetingType type,
@@ -70,6 +71,9 @@ public class PublicResource {
 
     @Inject
     BookingService bookingService;
+
+    @jakarta.inject.Inject
+    com.calit.google.CalendarPort calendarPort;
 
     // Owner-configurable Turnstile (feature 16). When disabled, the template skips the widget.
     @ConfigProperty(name = "calit.turnstile.enabled", defaultValue = "false")
@@ -115,7 +119,7 @@ public class PublicResource {
         // directly in the template for the button wording + location line.
         return Templates.book(type, byDate, fields, null,
                               Layout.TZ_BAR, Layout.TZ_SCRIPT, Layout.CALENDAR_SCRIPT,
-                              turnstileEnabled, turnstileSiteKey());
+                              turnstileEnabled, turnstileSiteKey(), calendarPort.isConnected());
     }
 
     private String turnstileSiteKey() {
@@ -165,7 +169,7 @@ public class PublicResource {
             return Templates.book(type, daySlots(type), BookingField.formFor(type.id),
                                   be.getMessage(),
                                   Layout.TZ_BAR, Layout.TZ_SCRIPT, Layout.CALENDAR_SCRIPT,
-                                  turnstileEnabled, turnstileSiteKey());
+                                  turnstileEnabled, turnstileSiteKey(), calendarPort.isConnected());
         }
         return confirmationPage(booking, type);
     }

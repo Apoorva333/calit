@@ -7,6 +7,7 @@
 {@java.lang.String calScript}
 {@java.lang.Boolean turnstileEnabled}
 {@java.lang.String turnstileSiteKey}
+{@java.lang.Boolean googleConnected}
 {#include base title="Book — {type.name}"}
   {#head}
     {#if turnstileEnabled}
@@ -21,7 +22,7 @@
   </hgroup>
 
   {#if type.locationType.name == 'GOOGLE_MEET'}
-    <p><strong>Location:</strong> Google Meet — link sent after booking</p>
+    {#if googleConnected}<p><strong>Location:</strong> Google Meet — link sent after booking</p>{/if}
   {#else}
     <p><strong>Location:</strong> {type.locationDetail}</p>
   {/if}
