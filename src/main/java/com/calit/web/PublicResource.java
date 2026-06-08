@@ -44,12 +44,12 @@ public class PublicResource {
 
         public static native TemplateInstance book(
                 MeetingType type,
-                Map<String, java.util.List<PublicResource.SlotView>> slotsByDate,
+                java.util.List<PublicResource.DaySlots> days,
                 java.util.List<com.calit.domain.BookingField> fields,
                 String error,
-                String css,
                 String tzBar,
                 String tzScript,
+                String calScript,
                 boolean turnstileEnabled,
                 String turnstileSiteKey);
 
@@ -102,14 +102,14 @@ public class PublicResource {
         if (type == null) {
             throw new NotFoundException("No meeting type with slug " + slug);
         }
-        Map<String, java.util.List<SlotView>> byDate = slotsByDate(type);
+        List<DaySlots> byDate = daySlots(type);
         // Resolved EXTRA fields (per-type-else-global), already ordered by position.
         List<BookingField> fields = BookingField.formFor(type.id);
         // turnstileEnabled drives the widget; site key is public (rendered). The approval
         // flag (type.requiresApproval) + locationType/locationDetail are read off `type`
         // directly in the template for the button wording + location line.
-        return Templates.book(type, byDate, fields, null, Layout.CSS,
-                              Layout.TZ_BAR, Layout.TZ_SCRIPT,
+        return Templates.book(type, byDate, fields, null,
+                              Layout.TZ_BAR, Layout.TZ_SCRIPT, Layout.CALENDAR_SCRIPT,
                               turnstileEnabled, turnstileSiteKey());
     }
 
@@ -154,9 +154,9 @@ public class PublicResource {
             // Required-field 422 OR an abuse-guard rejection (filled honeypot / failed Turnstile /
             // per-email cap) / slot conflict. Re-render the form inline with the message; do NOT
             // 500, NOT confirm. (Plan 3 has no common BookingException superclass, so catch each.)
-            return Templates.book(type, slotsByDate(type), BookingField.formFor(type.id),
-                                  be.getMessage(), Layout.CSS,
-                                  Layout.TZ_BAR, Layout.TZ_SCRIPT,
+            return Templates.book(type, daySlots(type), BookingField.formFor(type.id),
+                                  be.getMessage(),
+                                  Layout.TZ_BAR, Layout.TZ_SCRIPT, Layout.CALENDAR_SCRIPT,
                                   turnstileEnabled, turnstileSiteKey());
         }
         return confirmationPage(booking, type);

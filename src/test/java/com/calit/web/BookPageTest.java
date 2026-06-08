@@ -175,6 +175,22 @@ class BookPageTest {
     }
 
     @Test
+    void bookPageRendersCalendarPickerAndDaySections() {
+        when(calendarPort.isConnected()).thenReturn(true);
+        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        seed();
+
+        given()
+            .when().get("/book/book-page")
+            .then()
+                .statusCode(200)
+                .body(containsString("CALIT_CALENDAR"))      // enhancement script present
+                .body(containsString("id=\"calendar\""))     // calendar mount point
+                .body(containsString("class=\"day-slots\""))  // per-day section
+                .body(containsString("name=\"startUtc\""));   // radios still posted
+    }
+
+    @Test
     void bookPageReturns404ForMissingSlug() {
         given()
             .when().get("/book/does-not-exist")
