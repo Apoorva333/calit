@@ -40,7 +40,7 @@ public class PublicResource {
 
     @CheckedTemplate
     public static class Templates {
-        public static native TemplateInstance landing(List<MeetingType> types, String css);
+        public static native TemplateInstance landing(List<MeetingType> types);
 
         public static native TemplateInstance book(
                 MeetingType type,
@@ -88,7 +88,7 @@ public class PublicResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance landing() {
         // listPublic() = active && !secret — secret types never reach this page.
-        return Templates.landing(MeetingType.listPublic(), Layout.CSS);
+        return Templates.landing(MeetingType.listPublic());
     }
 
     @GET
