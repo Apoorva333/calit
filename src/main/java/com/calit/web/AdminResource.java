@@ -39,6 +39,8 @@ public class AdminResource {
 
         public static native TemplateInstance settings(
                 OwnerSettings settings, int reminderLeadMinutes, String css);
+
+        public static native TemplateInstance google(String css);
     }
 
     @ConfigProperty(name = "calit.reminder.lead-minutes", defaultValue = "120")
@@ -184,5 +186,12 @@ public class AdminResource {
         s.ownerNotificationsEnabled = "on".equals(ownerNotificationsEnabled);
         s.persist();
         return Templates.settings(s, reminderLeadMinutes, Layout.CSS);
+    }
+
+    @GET
+    @Path("/google")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance google() {
+        return Templates.google(Layout.CSS);
     }
 }
