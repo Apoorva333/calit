@@ -43,7 +43,8 @@ public class AdminResource {
                 List<MeetingType> types, LocationType[] locationTypes, Long pendingCount);
 
         public static native TemplateInstance availability(
-                List<AvailabilityRule> rules, List<MeetingType> types, Long pendingCount);
+                List<AvailabilityRule> rules, List<MeetingType> types,
+                DayOfWeek[] daysOfWeek, Long pendingCount);
 
         public static native TemplateInstance settings(
                 OwnerSettings settings, int reminderLeadMinutes, Long pendingCount, java.util.List<String> zones);
@@ -51,7 +52,7 @@ public class AdminResource {
         public static native TemplateInstance google(Long pendingCount);
 
         public static native TemplateInstance bookingFields(
-                List<BookingField> fields, List<MeetingType> types, Long pendingCount);
+                List<BookingField> fields, BookingField.FieldType[] fieldTypes, Long pendingCount);
 
         public static native TemplateInstance dateOverrides(
                 List<DateOverride> overrides, List<MeetingType> types, Long pendingCount);
@@ -149,7 +150,7 @@ public class AdminResource {
     public TemplateInstance availability() {
         return Templates.availability(
                 AvailabilityRule.listAll(),
-                MeetingType.listAll(), pendingCount());
+                MeetingType.listAll(), DayOfWeek.values(), pendingCount());
     }
 
     @POST
@@ -170,7 +171,7 @@ public class AdminResource {
         r.persist();
         return Templates.availability(
                 AvailabilityRule.<AvailabilityRule>listAll(),
-                MeetingType.listAll(), pendingCount());
+                MeetingType.listAll(), DayOfWeek.values(), pendingCount());
     }
 
     @POST
@@ -182,7 +183,7 @@ public class AdminResource {
         AvailabilityRule.deleteById(id);
         return Templates.availability(
                 AvailabilityRule.<AvailabilityRule>listAll(),
-                MeetingType.listAll(), pendingCount());
+                MeetingType.listAll(), DayOfWeek.values(), pendingCount());
     }
 
     /** All IANA zone ids, sorted — for the Settings timezone combobox. */
@@ -231,7 +232,7 @@ public class AdminResource {
     public TemplateInstance bookingFields() {
         return Templates.bookingFields(
                 BookingField.<BookingField>listAll(),
-                MeetingType.listAll(), pendingCount());
+                FieldType.values(), pendingCount());
     }
 
     @POST
@@ -256,7 +257,7 @@ public class AdminResource {
         f.persist();
         return Templates.bookingFields(
                 BookingField.<BookingField>listAll(),
-                MeetingType.listAll(), pendingCount());
+                FieldType.values(), pendingCount());
     }
 
     @POST
@@ -268,7 +269,7 @@ public class AdminResource {
         BookingField.deleteById(id);
         return Templates.bookingFields(
                 BookingField.<BookingField>listAll(),
-                MeetingType.listAll(), pendingCount());
+                FieldType.values(), pendingCount());
     }
 
     /**
