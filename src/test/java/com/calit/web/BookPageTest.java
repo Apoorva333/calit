@@ -209,6 +209,33 @@ class BookPageTest {
     }
 
     @Test
+    void bookPageWindowFollowsTypeHorizonNotA14DayCap() {
+        // seed() gives every weekday a 9-12 rule and a type with the default horizonDays = 60.
+        // The booking page must offer days well beyond two weeks (the old hardcoded 14-day cap).
+        when(calendarPort.isConnected()).thenReturn(true);
+        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        seed();
+
+        String html = given().when().get("/book/book-page")
+                .then().statusCode(200).extract().asString();
+
+        // Collect every rendered day section's ISO date and find the furthest one.
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("data-date=\"(\\d{4}-\\d{2}-\\d{2})\"").matcher(html);
+        java.time.LocalDate furthest = null;
+        while (m.find()) {
+            java.time.LocalDate d = java.time.LocalDate.parse(m.group(1));
+            if (furthest == null || d.isAfter(furthest)) { furthest = d; }
+        }
+        org.junit.jupiter.api.Assertions.assertNotNull(furthest, "expected at least one bookable day");
+        // With the old 14-day cap the furthest day would be ~today+14. horizonDays=60 must extend it.
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Europe/Amsterdam"));
+        org.junit.jupiter.api.Assertions.assertTrue(
+                furthest.isAfter(today.plusDays(20)),
+                "booking window should follow type.horizonDays (60), not a 14-day cap; furthest day was " + furthest);
+    }
+
+    @Test
     void bookPageRendersLeftInfoPanelWithHostAndDuration() {
         when(calendarPort.isConnected()).thenReturn(true);
         when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());

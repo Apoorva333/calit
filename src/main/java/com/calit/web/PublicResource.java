@@ -84,7 +84,6 @@ public class PublicResource {
     @ConfigProperty(name = "calit.turnstile.site-key")
     java.util.Optional<String> turnstileSiteKeyConfig;
 
-    private static final int BOOK_WINDOW_DAYS = 14;
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy");
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -242,7 +241,9 @@ public class PublicResource {
     private List<DaySlots> daySlots(MeetingType type) {
         ZoneId zone = ZoneId.of(OwnerSettings.get().timezone);
         LocalDate from = LocalDate.now(zone);
-        LocalDate to = from.plusDays(BOOK_WINDOW_DAYS);
+        // Show the full configured booking horizon; availableSlots(...) also clamps to the same
+        // horizon (now + horizonDays) and to min-notice, so this only sets the candidate range.
+        LocalDate to = from.plusDays(type.horizonDays);
         Map<String, DaySlots> byIso = new LinkedHashMap<>();
         for (TimeSlot slot : bookingService.availableSlots(type, from, to)) {
             String isoDate = slot.start().toLocalDate().toString();
