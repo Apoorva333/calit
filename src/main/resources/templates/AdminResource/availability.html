@@ -1,8 +1,7 @@
 {@java.util.List<com.calit.domain.AvailabilityRule> rules}
 {@java.util.List<com.calit.domain.MeetingType> types}
 {@java.lang.Long pendingCount}
-{#include base title="Admin — Availability"}
-  {#include adminNav pendingCount=pendingCount /}
+{#include adminBase title="Admin — Availability" pendingCount=pendingCount active="availability"}
   <h1>Availability (work hours)</h1>
 
   {#for r in rules}
