@@ -46,7 +46,7 @@
       <h2>Select a Date &amp; Time</h2>
       {#if error}<p class="err">{error}</p>{/if}
       {#if days.isEmpty()}
-        <p>No available times in the next two weeks.</p>
+        <p>No available times right now. Please check back later.</p>
       {#else}
         {tzBar.raw}
         <form method="post" action="/book/{type.slug}">
