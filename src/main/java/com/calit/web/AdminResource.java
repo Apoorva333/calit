@@ -16,6 +16,7 @@ import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
@@ -99,6 +100,8 @@ public class AdminResource {
     public TemplateInstance createMeetingType(@RestForm String name,
                                               @RestForm String slug,
                                               @RestForm int durationMinutes,
+                                              @RestForm @DefaultValue("0") int bufferBeforeMinutes,
+                                              @RestForm @DefaultValue("0") int bufferAfterMinutes,
                                               @RestForm String secret,
                                               @RestForm int minNoticeMinutes,
                                               @RestForm int horizonDays,
@@ -110,6 +113,8 @@ public class AdminResource {
         t.name = name;
         t.slug = slug;
         t.durationMinutes = durationMinutes;
+        t.bufferBeforeMinutes = bufferBeforeMinutes;
+        t.bufferAfterMinutes = bufferAfterMinutes;
         t.secret = "on".equals(secret); // unchecked checkbox sends no value
         t.minNoticeMinutes = minNoticeMinutes;
         t.horizonDays = horizonDays;
