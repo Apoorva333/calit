@@ -165,4 +165,28 @@ class AdminMeetingTypeDetailTest {
         long count = DateOverride.count("meetingTypeId = ?1", id);
         assertEquals(1, count);
     }
+
+    @Test
+    void editingUnknownTypeReturns404() {
+        given()
+            .cookie("quarkus-credential", FormAuth.login())
+            .contentType("application/x-www-form-urlencoded")
+            .formParam("name", "Nope").formParam("slug", "")
+            .formParam("durationMinutes", "30").formParam("minNoticeMinutes", "0")
+            .formParam("horizonDays", "60").formParam("locationType", "GOOGLE_MEET")
+            .formParam("locationDetail", "").formParam("slotIntervalMinutes", "")
+            .when().post("/admin/meeting-types/99999999/edit")
+            .then().statusCode(404);
+    }
+
+    @Test
+    void addingFieldToUnknownTypeReturns404() {
+        given()
+            .cookie("quarkus-credential", FormAuth.login())
+            .contentType("application/x-www-form-urlencoded")
+            .formParam("label", "X").formParam("fieldKey", "x").formParam("type", "SHORT_TEXT")
+            .formParam("position", "0")
+            .when().post("/admin/meeting-types/99999999/booking-fields")
+            .then().statusCode(404);
+    }
 }

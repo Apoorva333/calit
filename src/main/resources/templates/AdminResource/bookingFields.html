@@ -11,8 +11,7 @@
       <h3>{f.label}
         {#if f.required}<span class="badge">required</span>{/if}
       </h3>
-      <p><code>{f.fieldKey}</code> &middot; {f.type.display} &middot; position {f.position}
-        &middot; {#if f.meetingTypeId}type #{f.meetingTypeId}{#else}global{/if}</p>
+      <p><code>{f.fieldKey}</code> &middot; {f.type.display} &middot; position {f.position}</p>
       <form method="post" action="/admin/booking-fields/{f.id}/delete" style="display:inline">
         <button type="submit">Delete</button>
       </form>

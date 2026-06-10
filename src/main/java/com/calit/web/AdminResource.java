@@ -170,6 +170,15 @@ public class AdminResource {
         return all;
     }
 
+    /** Load a meeting type or 404 — shared guard for detail-scoped GET/POST handlers. */
+    private MeetingType requireType(Long id) {
+        MeetingType t = MeetingType.findById(id);
+        if (t == null) {
+            throw new jakarta.ws.rs.NotFoundException("No meeting type " + id);
+        }
+        return t;
+    }
+
     /** Re-render the detail page for one meeting type (shared by every detail-scoped handler). */
     private TemplateInstance detailInstance(Long id) {
         MeetingType t = MeetingType.findById(id);
@@ -186,10 +195,7 @@ public class AdminResource {
     @Produces(MediaType.TEXT_HTML)
     @Transactional
     public TemplateInstance meetingTypeDetail(@PathParam("id") Long id) {
-        MeetingType t = MeetingType.findById(id);
-        if (t == null) {
-            throw new jakarta.ws.rs.NotFoundException("No meeting type " + id);
-        }
+        requireType(id);
         return detailInstance(id);
     }
 
@@ -211,7 +217,7 @@ public class AdminResource {
                                             @RestForm String locationDetail,
                                             @RestForm String slotIntervalMinutes,
                                             @RestForm String requiresApproval) {
-        MeetingType t = MeetingType.findById(id);
+        MeetingType t = requireType(id);
         t.name = name;
         String slugBase = (slug == null || slug.isBlank()) ? Slugs.slugify(name) : Slugs.slugify(slug);
         t.slug = Slugs.uniqueMeetingTypeSlug(slugBase, id);
@@ -240,6 +246,7 @@ public class AdminResource {
                                          @RestForm String type,
                                          @RestForm String required,
                                          @RestForm @DefaultValue("0") int position) {
+        requireType(id);
         BookingField f = new BookingField();
         f.meetingTypeId = id;
         f.label = label;
@@ -270,6 +277,7 @@ public class AdminResource {
                                         @RestForm String dayOfWeek,
                                         @RestForm String startTime,
                                         @RestForm String endTime) {
+        requireType(id);
         AvailabilityRule r = new AvailabilityRule();
         r.meetingTypeId = id;
         r.dayOfWeek = DayOfWeek.valueOf(dayOfWeek);
@@ -297,6 +305,7 @@ public class AdminResource {
     public TemplateInstance addTypeOverride(@PathParam("id") Long id,
                                             @RestForm String date,
                                             MultivaluedMap<String, String> form) {
+        requireType(id);
         DateOverride o = new DateOverride();
         o.meetingTypeId = id;
         o.overrideDate = LocalDate.parse(date);
