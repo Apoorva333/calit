@@ -101,6 +101,22 @@ class AdminMeetingTypesTest {
     }
 
     @Test
+    void locationTilesHaveEqualFixedHeight() {
+        String css = given()
+            .when().get("/calit.css")
+            .then().statusCode(200)
+            .extract().asString();
+        // Assert the .loc-tiles .tile rule block itself sizes the tiles equally
+        // (scoped to the block so it can't be satisfied by unrelated rules elsewhere).
+        org.junit.jupiter.api.Assertions.assertTrue(
+            css.matches("(?s).*\\.loc-tiles \\.tile \\{[^}]*min-height[^}]*\\}.*"),
+            "min-height must be set inside the .loc-tiles .tile rule");
+        org.junit.jupiter.api.Assertions.assertTrue(
+            css.matches("(?s).*\\.loc-tiles \\.tile \\{[^}]*justify-content: center[^}]*\\}.*"),
+            "justify-content: center must be set inside the .loc-tiles .tile rule");
+    }
+
+    @Test
     void blankSlotIntervalPersistsAsNull() {
         String slug = "admin-blank-interval-" + System.nanoTime();
         given()

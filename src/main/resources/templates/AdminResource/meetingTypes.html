@@ -11,8 +11,10 @@
         {#if !t.active}<span class="badge">inactive</span>{/if}
         {#if t.requiresApproval}<span class="badge">approval</span>{/if}
       </h3>
-      <p>/{t.slug} &middot; {t.durationMinutes} min &middot; {t.locationType}{#if t.locationDetail} ({t.locationDetail}){/if}</p>
-      <p>min notice {t.minNoticeMinutes} min &middot; horizon {t.horizonDays} days{#if t.slotIntervalMinutes} &middot; slot interval {t.slotIntervalMinutes} min{/if}</p>
+      <p>/{t.slug} &middot; {t.durationMinutes} min &middot; {t.locationType.display}{#if t.locationDetail} ({t.locationDetail}){/if}</p>
+      <p>min notice {t.minNoticeMinutes} min &middot; horizon {t.horizonDays} days{#if t.slotIntervalMinutes} &middot; slot interval {t.slotIntervalMinutes} min{/if}
+        &middot; buffer {t.bufferBeforeMinutes}/{t.bufferAfterMinutes} min</p>
+      <a href="/admin/meeting-types/{t.id}" role="button" class="secondary" style="display:inline">Edit</a>
       <form method="post" action="/admin/meeting-types/{t.id}/toggle" style="display:inline">
         <button type="submit" class="secondary">{#if t.active}Deactivate{#else}Activate{/if}</button>
       </form>
@@ -30,8 +32,9 @@
         Basics
       </summary>
       <div class="sec-body">
-        <label>Name <input type="text" name="name" required></label>
-        <label>Slug <input type="text" name="slug" required></label>
+        <label>Name <input type="text" name="name" data-slug-name required></label>
+        <label>Slug <small>(leave blank to auto-generate from the name)</small>
+          <input type="text" name="slug" data-slug-autofill></label>
         <label><input type="checkbox" name="secret"> Secret (hidden from public landing)</label>
         <label><input type="checkbox" name="requiresApproval"> Requires owner approval (hold as pending)</label>
       </div>
@@ -46,6 +49,8 @@
         <label>Duration (minutes) <input type="number" name="durationMinutes" value="30" required></label>
         <label>Slot interval (minutes, blank = back-to-back)
           <input type="number" name="slotIntervalMinutes"></label>
+        <label>Buffer before (minutes) <input type="number" name="bufferBeforeMinutes" value="0" min="0"></label>
+        <label>Buffer after (minutes) <input type="number" name="bufferAfterMinutes" value="0" min="0"></label>
       </div>
     </details>
 
@@ -72,7 +77,7 @@
                 {! CUSTOM — pencil/note !}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16M4 12h10M4 18h7"/></svg>
               {/if}
-              {lt}
+              {display:of(lt)}
             </label>
           {/for}
         </div>
@@ -96,6 +101,22 @@
       </div>
     </details>
 
+    <script>
+    (function () {
+      var form = document.currentScript.closest('form');
+      var name = form.querySelector('[data-slug-name]');
+      var slug = form.querySelector('[data-slug-autofill]');
+      var edited = false;
+      slug.addEventListener('input', function () { edited = true; });
+      name.addEventListener('input', function () {
+        if (edited) { return; }
+        slug.value = name.value.toLowerCase().normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+      });
+    })();
+    </script>
     <button type="submit">Create</button>
   </form>
 {/include}

@@ -9,6 +9,7 @@ import com.calit.domain.DateOverride;
 import com.calit.domain.DateOverrideWindow;
 import com.calit.domain.MeetingType;
 import com.calit.domain.MeetingType.LocationType;
+import com.calit.domain.Slugs;
 import com.calit.domain.OwnerSettings;
 import io.quarkus.qute.CheckedTemplate;
 import io.quarkus.qute.TemplateInstance;
@@ -16,6 +17,7 @@ import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
@@ -42,8 +44,19 @@ public class AdminResource {
         public static native TemplateInstance meetingTypes(
                 List<MeetingType> types, LocationType[] locationTypes, Long pendingCount);
 
+        public static native TemplateInstance meetingTypeDetail(
+                MeetingType type,
+                List<BookingField> fields,
+                List<AvailabilityRule> rules,
+                List<DateOverride> overrides,
+                LocationType[] locationTypes,
+                BookingField.FieldType[] fieldTypes,
+                DayOfWeek[] daysOfWeek,
+                Long pendingCount);
+
         public static native TemplateInstance availability(
-                List<AvailabilityRule> rules, List<MeetingType> types, Long pendingCount);
+                List<AvailabilityRule> rules, List<MeetingType> types,
+                DayOfWeek[] daysOfWeek, Long pendingCount);
 
         public static native TemplateInstance settings(
                 OwnerSettings settings, int reminderLeadMinutes, Long pendingCount, java.util.List<String> zones);
@@ -51,7 +64,7 @@ public class AdminResource {
         public static native TemplateInstance google(Long pendingCount);
 
         public static native TemplateInstance bookingFields(
-                List<BookingField> fields, List<MeetingType> types, Long pendingCount);
+                List<BookingField> fields, BookingField.FieldType[] fieldTypes, Long pendingCount);
 
         public static native TemplateInstance dateOverrides(
                 List<DateOverride> overrides, List<MeetingType> types, Long pendingCount);
@@ -98,6 +111,8 @@ public class AdminResource {
     public TemplateInstance createMeetingType(@RestForm String name,
                                               @RestForm String slug,
                                               @RestForm int durationMinutes,
+                                              @RestForm @DefaultValue("0") int bufferBeforeMinutes,
+                                              @RestForm @DefaultValue("0") int bufferAfterMinutes,
                                               @RestForm String secret,
                                               @RestForm int minNoticeMinutes,
                                               @RestForm int horizonDays,
@@ -107,8 +122,11 @@ public class AdminResource {
                                               @RestForm String requiresApproval) {
         MeetingType t = new MeetingType();
         t.name = name;
-        t.slug = slug;
+        String slugBase = (slug == null || slug.isBlank()) ? Slugs.slugify(name) : Slugs.slugify(slug);
+        t.slug = Slugs.uniqueMeetingTypeSlug(slugBase, null);
         t.durationMinutes = durationMinutes;
+        t.bufferBeforeMinutes = bufferBeforeMinutes;
+        t.bufferAfterMinutes = bufferAfterMinutes;
         t.secret = "on".equals(secret); // unchecked checkbox sends no value
         t.minNoticeMinutes = minNoticeMinutes;
         t.horizonDays = horizonDays;
@@ -143,13 +161,186 @@ public class AdminResource {
         return Templates.meetingTypes(MeetingType.listAll(), LocationType.values(), pendingCount());
     }
 
+    /** Date overrides scoped to one meeting type, each with its (transient) windows loaded. */
+    private List<DateOverride> overridesForType(Long typeId) {
+        List<DateOverride> all = DateOverride.list("meetingTypeId = ?1 order by overrideDate", typeId);
+        for (DateOverride o : all) {
+            o.windows = DateOverrideWindow.list("dateOverrideId = ?1 order by startTime asc", o.id);
+        }
+        return all;
+    }
+
+    /** Load a meeting type or 404 — shared guard for detail-scoped GET/POST handlers. */
+    private MeetingType requireType(Long id) {
+        MeetingType t = MeetingType.findById(id);
+        if (t == null) {
+            throw new jakarta.ws.rs.NotFoundException("No meeting type " + id);
+        }
+        return t;
+    }
+
+    /** Re-render the detail page for one meeting type (shared by every detail-scoped handler). */
+    private TemplateInstance detailInstance(Long id) {
+        MeetingType t = MeetingType.findById(id);
+        List<BookingField> fields = BookingField.list("meetingTypeId = ?1 order by position", id);
+        List<AvailabilityRule> rules = AvailabilityRule.list("meetingTypeId = ?1 order by dayOfWeek", id);
+        List<DateOverride> overrides = overridesForType(id);
+        return Templates.meetingTypeDetail(t, fields, rules, overrides,
+                LocationType.values(), BookingField.FieldType.values(),
+                DayOfWeek.values(), pendingCount());
+    }
+
+    @GET
+    @Path("/meeting-types/{id}")
+    @Produces(MediaType.TEXT_HTML)
+    @Transactional
+    public TemplateInstance meetingTypeDetail(@PathParam("id") Long id) {
+        requireType(id);
+        return detailInstance(id);
+    }
+
+    @POST
+    @Path("/meeting-types/{id}/edit")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    @Transactional
+    public TemplateInstance editMeetingType(@PathParam("id") Long id,
+                                            @RestForm String name,
+                                            @RestForm String slug,
+                                            @RestForm int durationMinutes,
+                                            @RestForm @DefaultValue("0") int bufferBeforeMinutes,
+                                            @RestForm @DefaultValue("0") int bufferAfterMinutes,
+                                            @RestForm String secret,
+                                            @RestForm int minNoticeMinutes,
+                                            @RestForm int horizonDays,
+                                            @RestForm String locationType,
+                                            @RestForm String locationDetail,
+                                            @RestForm String slotIntervalMinutes,
+                                            @RestForm String requiresApproval) {
+        MeetingType t = requireType(id);
+        t.name = name;
+        String slugBase = (slug == null || slug.isBlank()) ? Slugs.slugify(name) : Slugs.slugify(slug);
+        t.slug = Slugs.uniqueMeetingTypeSlug(slugBase, id);
+        t.durationMinutes = durationMinutes;
+        t.bufferBeforeMinutes = bufferBeforeMinutes;
+        t.bufferAfterMinutes = bufferAfterMinutes;
+        t.secret = "on".equals(secret);
+        t.minNoticeMinutes = minNoticeMinutes;
+        t.horizonDays = horizonDays;
+        t.locationType = LocationType.valueOf(locationType);
+        t.locationDetail = (locationDetail == null || locationDetail.isBlank()) ? null : locationDetail;
+        t.slotIntervalMinutes = (slotIntervalMinutes == null || slotIntervalMinutes.isBlank())
+                ? null : Integer.valueOf(slotIntervalMinutes);
+        t.requiresApproval = "on".equals(requiresApproval);
+        return detailInstance(id); // managed entity flushes on commit
+    }
+
+    @POST
+    @Path("/meeting-types/{id}/booking-fields")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    @Transactional
+    public TemplateInstance addTypeField(@PathParam("id") Long id,
+                                         @RestForm String label,
+                                         @RestForm String fieldKey,
+                                         @RestForm String type,
+                                         @RestForm String required,
+                                         @RestForm @DefaultValue("0") int position) {
+        requireType(id);
+        BookingField f = new BookingField();
+        f.meetingTypeId = id;
+        f.label = label;
+        f.fieldKey = fieldKey;
+        f.type = FieldType.valueOf(type);
+        f.required = "on".equals(required);
+        f.position = position;
+        f.persist();
+        return detailInstance(id);
+    }
+
+    @POST
+    @Path("/meeting-types/{id}/booking-fields/{fid}/delete")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    @Transactional
+    public TemplateInstance deleteTypeField(@PathParam("id") Long id, @PathParam("fid") Long fid) {
+        BookingField.deleteById(fid);
+        return detailInstance(id);
+    }
+
+    @POST
+    @Path("/meeting-types/{id}/availability")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    @Transactional
+    public TemplateInstance addTypeRule(@PathParam("id") Long id,
+                                        @RestForm String dayOfWeek,
+                                        @RestForm String startTime,
+                                        @RestForm String endTime) {
+        requireType(id);
+        AvailabilityRule r = new AvailabilityRule();
+        r.meetingTypeId = id;
+        r.dayOfWeek = DayOfWeek.valueOf(dayOfWeek);
+        r.startTime = LocalTime.parse(startTime);
+        r.endTime = LocalTime.parse(endTime);
+        r.persist();
+        return detailInstance(id);
+    }
+
+    @POST
+    @Path("/meeting-types/{id}/availability/{rid}/delete")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    @Transactional
+    public TemplateInstance deleteTypeRule(@PathParam("id") Long id, @PathParam("rid") Long rid) {
+        AvailabilityRule.deleteById(rid);
+        return detailInstance(id);
+    }
+
+    @POST
+    @Path("/meeting-types/{id}/date-overrides")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    @Transactional
+    public TemplateInstance addTypeOverride(@PathParam("id") Long id,
+                                            @RestForm String date,
+                                            MultivaluedMap<String, String> form) {
+        requireType(id);
+        DateOverride o = new DateOverride();
+        o.meetingTypeId = id;
+        o.overrideDate = LocalDate.parse(date);
+        o.persist(); // need the generated id before persisting child windows
+        List<String> starts = form.getOrDefault("windowStart", List.of());
+        List<String> ends = form.getOrDefault("windowEnd", List.of());
+        for (int i = 0; i < starts.size() && i < ends.size(); i++) {
+            if (starts.get(i).isBlank() || ends.get(i).isBlank()) { continue; }
+            DateOverrideWindow w = new DateOverrideWindow();
+            w.dateOverrideId = o.id;
+            w.startTime = LocalTime.parse(starts.get(i));
+            w.endTime = LocalTime.parse(ends.get(i));
+            w.persist();
+        }
+        return detailInstance(id);
+    }
+
+    @POST
+    @Path("/meeting-types/{id}/date-overrides/{oid}/delete")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    @Transactional
+    public TemplateInstance deleteTypeOverride(@PathParam("id") Long id, @PathParam("oid") Long oid) {
+        DateOverrideWindow.delete("dateOverrideId = ?1", oid);
+        DateOverride.deleteById(oid);
+        return detailInstance(id);
+    }
+
     @GET
     @Path("/availability")
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance availability() {
         return Templates.availability(
                 AvailabilityRule.listAll(),
-                MeetingType.listAll(), pendingCount());
+                MeetingType.listAll(), DayOfWeek.values(), pendingCount());
     }
 
     @POST
@@ -170,7 +361,7 @@ public class AdminResource {
         r.persist();
         return Templates.availability(
                 AvailabilityRule.<AvailabilityRule>listAll(),
-                MeetingType.listAll(), pendingCount());
+                MeetingType.listAll(), DayOfWeek.values(), pendingCount());
     }
 
     @POST
@@ -182,7 +373,7 @@ public class AdminResource {
         AvailabilityRule.deleteById(id);
         return Templates.availability(
                 AvailabilityRule.<AvailabilityRule>listAll(),
-                MeetingType.listAll(), pendingCount());
+                MeetingType.listAll(), DayOfWeek.values(), pendingCount());
     }
 
     /** All IANA zone ids, sorted — for the Settings timezone combobox. */
@@ -230,8 +421,8 @@ public class AdminResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance bookingFields() {
         return Templates.bookingFields(
-                BookingField.<BookingField>listAll(),
-                MeetingType.listAll(), pendingCount());
+                BookingField.list("meetingTypeId is null order by position"),
+                FieldType.values(), pendingCount());
     }
 
     @POST
@@ -243,20 +434,18 @@ public class AdminResource {
                                                @RestForm String fieldKey,
                                                @RestForm String type,
                                                @RestForm String required,
-                                               @RestForm int position,
-                                               @RestForm String meetingTypeId) {
+                                               @RestForm int position) {
         BookingField f = new BookingField();
         f.label = label;
         f.fieldKey = fieldKey;
         f.type = FieldType.valueOf(type);
         f.required = "on".equals(required); // unchecked checkbox sends no value
         f.position = position;
-        f.meetingTypeId = (meetingTypeId == null || meetingTypeId.isBlank())
-                ? null : Long.valueOf(meetingTypeId); // empty = global
+        f.meetingTypeId = null; // standalone page manages global defaults only
         f.persist();
         return Templates.bookingFields(
-                BookingField.<BookingField>listAll(),
-                MeetingType.listAll(), pendingCount());
+                BookingField.list("meetingTypeId is null order by position"),
+                FieldType.values(), pendingCount());
     }
 
     @POST
@@ -267,8 +456,8 @@ public class AdminResource {
     public TemplateInstance deleteBookingField(@PathParam("id") Long id) {
         BookingField.deleteById(id);
         return Templates.bookingFields(
-                BookingField.<BookingField>listAll(),
-                MeetingType.listAll(), pendingCount());
+                BookingField.list("meetingTypeId is null order by position"),
+                FieldType.values(), pendingCount());
     }
 
     /**

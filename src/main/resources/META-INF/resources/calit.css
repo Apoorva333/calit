@@ -215,11 +215,12 @@ body.admin-canvas { background: var(--calit-canvas); }
 .editor .sec-body > label { margin-top: .5rem; }
 
 /* Location picker tiles (radios styled via :has — Pico v2 targets modern browsers). */
-.loc-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: .6rem; margin-bottom: .6rem; }
+.loc-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: .6rem; margin-bottom: .6rem; align-items: stretch; }
 .loc-tiles .tile {
   border: 1px solid var(--pico-muted-border-color); border-radius: 10px; padding: .85rem .5rem;
   text-align: center; cursor: pointer; font-size: .85rem; font-weight: 600;
-  display: flex; flex-direction: column; align-items: center; gap: .4rem; margin: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .4rem; margin: 0;
+  min-height: 5.5rem;
 }
 .loc-tiles .tile svg { width: 1.4rem; height: 1.4rem; color: currentColor; }
 .loc-tiles .tile input { position: absolute; opacity: 0; width: 0; height: 0; }
