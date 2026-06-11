@@ -3,6 +3,7 @@ package com.calit.web;
 import com.calit.domain.MeetingType;
 import com.calit.domain.MeetingType.LocationType;
 import com.calit.domain.OwnerSettings;
+import com.calit.user.AppUser;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.AfterEach;
@@ -16,10 +17,15 @@ class BookingSettingsGuardTest {
 
     @Transactional
     void removeSettingsAndSeedType() {
-        OwnerSettings.delete("ownerId = ?1", 1L);
-        MeetingType.delete("slug", "guard-type");
+        AppUser owner = AppUser.findByUsername("bob");
+        if (owner == null) { owner = AppUser.create("bob", "x", false); owner.persistAndFlush(); } // create() builds but does not persist; flush to assign id
+        Long ownerId = owner.id;
+        // Drop bob's settings so the booking page hits the notReady() guard — but bob the
+        // AppUser must still exist so resolveOwner({user}) binds instead of 404ing first.
+        OwnerSettings.delete("ownerId = ?1", ownerId);
+        MeetingType.delete("ownerId = ?1 and slug = ?2", ownerId, "guard-type");
         MeetingType t = new MeetingType();
-        t.ownerId = 1L;
+        t.ownerId = ownerId;
         t.name = "Guard Type"; t.slug = "guard-type"; t.durationMinutes = 30;
         t.locationType = LocationType.GOOGLE_MEET;
         t.persist();
@@ -29,9 +35,10 @@ class BookingSettingsGuardTest {
     @AfterEach
     @Transactional
     void restoreSettings() {
-        if (OwnerSettings.forOwner(1L) == null) {
+        AppUser owner = AppUser.findByUsername("bob");
+        if (owner != null && OwnerSettings.forOwner(owner.id) == null) {
             OwnerSettings s = new OwnerSettings();
-            s.ownerId = 1L;
+            s.ownerId = owner.id;
             s.ownerName = "Owner"; s.ownerEmail = "owner@example.com"; s.timezone = "Europe/Amsterdam";
             s.persist();
         }
@@ -40,7 +47,7 @@ class BookingSettingsGuardTest {
     @Test
     void bookPageShowsFriendlyMessageWhenSettingsMissing() {
         removeSettingsAndSeedType();
-        given().when().get("/book/guard-type")
+        given().when().get("/bob/guard-type")
             .then().statusCode(200)
                 .body(containsString("isn't ready yet"));
     }

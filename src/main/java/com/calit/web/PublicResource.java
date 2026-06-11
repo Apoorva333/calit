@@ -48,6 +48,7 @@ public class PublicResource {
         public static native TemplateInstance landing(List<MeetingType> types, String user, String ownerName);
 
         public static native TemplateInstance book(
+                String user,
                 MeetingType type,
                 java.util.List<PublicResource.DaySlots> days,
                 java.util.List<com.calit.domain.BookingField> fields,
@@ -101,14 +102,6 @@ public class PublicResource {
     /** One day's worth of selectable slots: ISO date (for the JS calendar), a human label, and the slots. */
     public record DaySlots(String isoDate, String label, java.util.List<SlotView> slots) {}
 
-    /**
-     * Resolve a meeting type by slug, globally, regardless of owner.
-     * Phase 3 replaces this global lookup with /{user}/{slug} owner resolution.
-     */
-    private static MeetingType findBySlugGlobal(String slug) {
-        return MeetingType.find("slug", slug).firstResult();
-    }
-
     @GET
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance index() {
@@ -130,27 +123,27 @@ public class PublicResource {
     }
 
     @GET
-    @Path("/book/{slug}")
+    @Path("/{user}/{slug}")
     @Produces(MediaType.TEXT_HTML)
-    public TemplateInstance book(@PathParam("slug") String slug) {
-        // Phase 3 replaces this global lookup with /{user}/{slug} owner resolution.
-        MeetingType type = findBySlugGlobal(slug); // secret types reachable by direct link
+    public TemplateInstance book(@PathParam("user") String user, @PathParam("slug") String slug) {
+        AppUser owner = resolveOwner(user); // 404 if unknown; binds CurrentOwner
+        MeetingType type = MeetingType.findBySlug(owner.id, slug); // secret types reachable by direct link
         if (type == null) {
             throw new NotFoundException("No meeting type with slug " + slug);
         }
-        OwnerSettings settings = OwnerSettings.forOwner(type.ownerId);
+        OwnerSettings settings = OwnerSettings.forOwner(owner.id);
         if (settings == null) {
             return Templates.notReady();
         }
         List<DaySlots> byDate = daySlots(type);
         // Resolved EXTRA fields (per-type-else-global), already ordered by position.
-        List<BookingField> fields = BookingField.formFor(type.ownerId, type.id);
+        List<BookingField> fields = BookingField.formFor(owner.id, type.id);
         // turnstileEnabled drives the widget; site key is public (rendered). The approval
         // flag (type.requiresApproval) + locationType/locationDetail are read off `type`
         // directly in the template for the button wording + location line.
-        return Templates.book(type, byDate, fields, null,
+        return Templates.book(owner.username, type, byDate, fields, null,
                               Layout.TZ_BAR, Layout.TZ_SCRIPT, Layout.CALENDAR_SCRIPT,
-                              turnstileEnabled, turnstileSiteKey(), calendarPort.isConnected(type.ownerId),
+                              turnstileEnabled, turnstileSiteKey(), calendarPort.isConnected(owner.id),
                               settings.ownerName);
     }
 
@@ -159,22 +152,23 @@ public class PublicResource {
     }
 
     @POST
-    @Path("/book/{slug}")
+    @Path("/{user}/{slug}")
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Produces(MediaType.TEXT_HTML)
-    public TemplateInstance submitBooking(@PathParam("slug") String slug,
+    public TemplateInstance submitBooking(@PathParam("user") String user,
+                                          @PathParam("slug") String slug,
                                           @RestForm String startUtc,
                                           @RestForm String inviteeName,
                                           @RestForm String inviteeEmail,
                                           @RestForm String website,                 // honeypot
                                           @RestForm("cf-turnstile-response") String turnstileToken,
                                           MultivaluedMap<String, String> form) {
-        // Phase 3 replaces this global lookup with /{user}/{slug} owner resolution.
-        MeetingType type = findBySlugGlobal(slug);
+        AppUser owner = resolveOwner(user); // 404 if unknown; binds CurrentOwner
+        MeetingType type = MeetingType.findBySlug(owner.id, slug);
         if (type == null) {
             throw new NotFoundException("No meeting type with slug " + slug);
         }
-        OwnerSettings settings = OwnerSettings.forOwner(type.ownerId);
+        OwnerSettings settings = OwnerSettings.forOwner(owner.id);
         if (settings == null) {
             return Templates.notReady();
         }
@@ -193,17 +187,17 @@ public class PublicResource {
             // book(...) enforces required fields AND the abuse guards (Turnstile + honeypot +
             // per-email/day cap) server-side; the handler just forwards the two raw inputs.
             booking = bookingService.book(
-                    type.ownerId, slug, Instant.parse(startUtc), inviteeName, inviteeEmail, answers,
+                    owner.id, slug, Instant.parse(startUtc), inviteeName, inviteeEmail, answers,
                     turnstileToken, website);
         } catch (BookingValidationException | AbuseException | RateLimitException
                  | BookingConflictException be) {
             // Required-field 422 OR an abuse-guard rejection (filled honeypot / failed Turnstile /
             // per-email cap) / slot conflict. Re-render the form inline with the message; do NOT
             // 500, NOT confirm. (Plan 3 has no common BookingException superclass, so catch each.)
-            return Templates.book(type, daySlots(type), BookingField.formFor(type.ownerId, type.id),
+            return Templates.book(owner.username, type, daySlots(type), BookingField.formFor(owner.id, type.id),
                                   be.getMessage(),
                                   Layout.TZ_BAR, Layout.TZ_SCRIPT, Layout.CALENDAR_SCRIPT,
-                                  turnstileEnabled, turnstileSiteKey(), calendarPort.isConnected(type.ownerId),
+                                  turnstileEnabled, turnstileSiteKey(), calendarPort.isConnected(owner.id),
                                   settings.ownerName);
         }
         return confirmationPage(booking, type);

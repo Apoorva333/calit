@@ -5,6 +5,7 @@ import com.calit.domain.AvailabilityRule;
 import com.calit.domain.MeetingType;
 import com.calit.domain.MeetingType.LocationType;
 import com.calit.domain.OwnerSettings;
+import com.calit.user.AppUser;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
@@ -41,18 +42,22 @@ class BookPageTurnstileEnabledTest {
 
     @Transactional
     void seed() {
-        OwnerSettings s = OwnerSettings.forOwner(1L);
-        if (s == null) { s = new OwnerSettings(); s.ownerId = 1L; }
+        AppUser owner = AppUser.findByUsername("bob");
+        if (owner == null) { owner = AppUser.create("bob", "x", false); owner.persistAndFlush(); } // create() builds but does not persist; flush to assign id
+        Long ownerId = owner.id;
+        MeetingType.delete("ownerId = ?1 and slug = ?2", ownerId, "turnstile-type");
+        OwnerSettings s = OwnerSettings.forOwner(ownerId);
+        if (s == null) { s = new OwnerSettings(); s.ownerId = ownerId; }
         s.ownerName = "Owner"; s.ownerEmail = "owner@example.com"; s.timezone = "Europe/Amsterdam";
         s.persist();
         MeetingType t = new MeetingType();
-        t.ownerId = 1L;
+        t.ownerId = ownerId;
         t.name = "Turnstile Type"; t.slug = "turnstile-type"; t.durationMinutes = 60;
         t.locationType = LocationType.GOOGLE_MEET;
         t.persist();
         for (DayOfWeek dow : DayOfWeek.values()) {
             AvailabilityRule r = new AvailabilityRule();
-            r.ownerId = 1L;
+            r.ownerId = ownerId;
             r.dayOfWeek = dow; r.startTime = LocalTime.of(9, 0); r.endTime = LocalTime.of(12, 0);
             r.meetingTypeId = null;
             r.persist();
@@ -66,7 +71,7 @@ class BookPageTurnstileEnabledTest {
         seed();
 
         given()
-            .when().get("/book/turnstile-type")
+            .when().get("/bob/turnstile-type")
             .then()
                 .statusCode(200)
                 // The Turnstile widget div carries the public site key ...

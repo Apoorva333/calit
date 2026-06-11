@@ -1,4 +1,5 @@
 {@com.calit.domain.MeetingType type}
+{@java.lang.String user}
 {@java.util.List<com.calit.web.PublicResource$DaySlots> days}
 {@java.util.List<com.calit.domain.BookingField> fields}
 {@java.lang.String error}
@@ -16,7 +17,7 @@
     {/if}
   {/head}
 
-  <p class="mb-3"><a class="link link-hover text-sm" href="/">&larr; All meeting types</a></p>
+  <p class="mb-3"><a class="link link-hover text-sm" href="/{user}">&larr; All meeting types</a></p>
 
   <div class="card bg-base-100 border border-base-300 shadow-sm">
     <div class="card-body">
@@ -49,7 +50,7 @@
             <p>No available times right now. Please check back later.</p>
           {#else}
             {tzBar.raw}
-            <form method="post" action="/book/{type.slug}" class="space-y-4">
+            <form method="post" action="/{user}/{type.slug}" class="space-y-4">
               <div class="booking-grid">
                 <div id="calendar" class="calendar"></div>
                 <div class="time-column">
