@@ -6,7 +6,7 @@
       <p class="text-base-content/70">Pick a meeting type to see available times.</p>
     </header>
     {#if types.isEmpty()}
-      <div role="alert" class="alert">No meeting types are currently available.</div>
+      <div class="alert">No meeting types are currently available.</div>
     {#else}
       <div class="grid gap-4 sm:grid-cols-2">
         {#for t in types}
