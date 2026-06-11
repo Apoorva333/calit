@@ -1,5 +1,6 @@
 {@java.util.List<com.calit.domain.MeetingType> types}
 {@com.calit.domain.MeetingType.LocationType[] locationTypes}
+{@java.time.DayOfWeek[] daysOfWeek}
 {@java.lang.Long pendingCount}
 {#include adminBase title="Admin — Meeting types" pendingCount=pendingCount active="meetingTypes"}
   <h1>Meeting types</h1>
@@ -97,7 +98,39 @@
           <input type="number" name="minNoticeMinutes" value="0" required></label>
         <label>Booking horizon (days)
           <input type="number" name="horizonDays" value="60" required></label>
-        <p><a href="/admin/availability">Edit weekly work hours &rarr;</a></p>
+      </div>
+    </details>
+
+    <details>
+      <summary>
+        <svg class="sec-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        Working hours
+      </summary>
+      <div class="sec-body">
+        <small class="loc-note">Weekly hours for this meeting type. Leave a day blank to use the global default; fill a day to override it for this type.</small>
+        {#for d in daysOfWeek}
+          <label>{display:of(d)}
+            <input type="hidden" name="ruleDay" value="{d}">
+            <input type="time" name="ruleStart"> to <input type="time" name="ruleEnd">
+          </label>
+        {/for}
+      </div>
+    </details>
+
+    <details>
+      <summary>
+        <svg class="sec-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M9 14l2 2 4-4"/></svg>
+        Date override
+      </summary>
+      <div class="sec-body">
+        <small class="loc-note">Optional. An override REPLACES this date's normal hours for this type. Set a date and leave the windows blank to mark it a day off; add windows to set the only bookable times. (Add more overrides later from the type's Edit page.)</small>
+        <label>Date <input type="date" name="overrideDate"></label>
+        <fieldset>
+          <legend>Bookable windows (leave all blank = day off)</legend>
+          <label>Window 1 <input type="time" name="windowStart"> to <input type="time" name="windowEnd"></label>
+          <label>Window 2 <input type="time" name="windowStart"> to <input type="time" name="windowEnd"></label>
+          <label>Window 3 <input type="time" name="windowStart"> to <input type="time" name="windowEnd"></label>
+        </fieldset>
       </div>
     </details>
 
