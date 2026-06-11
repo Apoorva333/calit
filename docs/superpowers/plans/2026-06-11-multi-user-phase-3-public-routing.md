@@ -10,6 +10,11 @@
 
 > **Docker required:** the tests use Quarkus Dev Services, which start an ephemeral Postgres container. Docker (or Podman) must be running before `./mvnw test`.
 
+> **⚠ Phase-2 carry-forward (MUST address in this phase):**
+> - **I1 — `CalendarPort` is request-scoped-owner-bound and broken off the `/me` plane.** `GoogleCalendarPort` resolves the owner from the request-scoped `CurrentOwner`, which is set ONLY by `MeOwnerFilter` for `/me/*` + `/api/google/*`. On the PUBLIC booking path (and in `EmailService` observers / schedulers) `CurrentOwner` is unset → `GoogleCredential.forOwner(null)` → `isConnected()` is always false → **public bookings never create a Google event / Meet link even when the owner connected Google.** Fix as part of this phase: change `CalendarPort` to take an explicit owner — `isConnected(Long ownerId)`, `freeBusy(Long ownerId, …)`, `createEvent(Long ownerId, …)`, `deleteEvent(Long ownerId, …)` — and have `BookingService` pass `type.ownerId` and `EmailService` pass the loaded owner id. The new `/{user}/{slug}` public booking resolves the owner from the path, so thread THAT owner through, not `CurrentOwner`. Update the `@InjectMock CalendarPort` tests accordingly.
+> - **M1 — interim global slug bridge.** `PublicResource` and `BookingResource` currently resolve the meeting type via a TEMPORARY global `MeetingType.find("slug", slug).firstResult()` (returns an arbitrary owner's type when slugs collide). The `/{user}/{slug}` rework (and `BookingResource`'s `create`) MUST replace this with owner-scoped `MeetingType.findBySlug(owner.id, slug)`. These are the only two `find("slug", …)` call sites.
+> - Minor: `MeOwnerFilter` leaves `CurrentOwner` unset (no 401) if an authenticated principal has no `AppUser`; the public `/{user}` resolver must 404 on unknown user (already planned).
+
 ---
 
 ## Assumed-present contracts (Phases 1 & 2 — DO NOT redefine)
