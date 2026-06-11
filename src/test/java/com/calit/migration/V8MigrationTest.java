@@ -59,6 +59,20 @@ class V8MigrationTest {
 
     @Test
     @Transactional
+    void ownerIdIsNotNullOnAllOwnedTables() {
+        for (String t : new String[]{"owner_settings", "meeting_type", "booking", "booking_field",
+                "availability_rule", "date_override", "google_credential", "google_calendar"}) {
+            String nullable = (String) em.createNativeQuery(
+                    "select is_nullable from information_schema.columns " +
+                    "where table_name = :t and column_name = 'owner_id'")
+                    .setParameter("t", t)
+                    .getSingleResult();
+            assertEquals("NO", nullable, "owner_id must be NOT NULL on " + t);
+        }
+    }
+
+    @Test
+    @Transactional
     void slugUniqueIsPerOwnerNotGlobal() {
         // Global single-column unique on slug must be gone; the composite (owner_id, slug) takes its place.
         Long globalUnique = ((Number) em.createNativeQuery(

@@ -55,18 +55,8 @@ public class BookingResource {
         return Response.noContent().build();
     }
 
-    // Owner approval queue (feature 14): keyed by numeric id (owner action, not invitee self-service).
-    @POST
-    @Path("/bookings/{id}/approve")
-    public Response approve(@PathParam("id") Long id) {
-        bookingService.approve(id);
-        return Response.noContent().build();
-    }
-
-    @POST
-    @Path("/bookings/{id}/decline")
-    public Response decline(@PathParam("id") Long id) {
-        bookingService.decline(id);
-        return Response.noContent().build();
-    }
+    // NOTE: owner approve/decline are NOT exposed here. They are owner actions keyed by numeric id
+    // and live only behind the authenticated, owner-scoped /me/bookings/{id}/approve|decline handlers
+    // (AdminResource). A public /api/bookings/{id}/approve would be owner-blind (cross-owner) since
+    // bookingService.approve/decline look up by id alone.
 }
