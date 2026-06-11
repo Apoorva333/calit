@@ -43,7 +43,7 @@ public class PublicResource {
 
     @CheckedTemplate
     public static class Templates {
-        public static native TemplateInstance index();
+        public static native TemplateInstance index(boolean authenticated, String username);
 
         public static native TemplateInstance landing(List<MeetingType> types, String user, String ownerName);
 
@@ -85,6 +85,11 @@ public class PublicResource {
     @jakarta.inject.Inject
     com.calit.google.CalendarPort calendarPort;
 
+    // Root landing is public; with proactive auth this is the anonymous identity when logged out,
+    // or the logged-in user's identity (so the landing can show Logout/Settings instead of Sign in).
+    @jakarta.inject.Inject
+    io.quarkus.security.identity.SecurityIdentity identity;
+
     // Owner-configurable Turnstile (feature 16). When disabled, the template skips the widget.
     @ConfigProperty(name = "calit.turnstile.enabled", defaultValue = "false")
     boolean turnstileEnabled;
@@ -106,7 +111,10 @@ public class PublicResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance index() {
         // Root is a generic product page — NOT any owner's landing. Per-owner landings live at /{user}.
-        return Templates.index();
+        // Auth-aware: a logged-in visitor sees Settings/Log out + their dashboard, not "Sign in".
+        boolean authenticated = !identity.isAnonymous();
+        String username = authenticated ? identity.getPrincipal().getName() : null;
+        return Templates.index(authenticated, username);
     }
 
     @GET

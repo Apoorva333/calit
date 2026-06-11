@@ -1,3 +1,5 @@
+{@java.lang.Boolean authenticated}
+{@java.lang.String username}
 {#include base title="calit — scheduling you own" bodyClass="lp-body"}
 {#head}
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -60,6 +62,8 @@
   .lp-nav-right { display: flex; align-items: center; gap: clamp(14px, 2vw, 26px); }
   .lp-navlink { color: var(--ink-2); font-weight: 500; font-size: .95rem; text-decoration: none; transition: color .15s; }
   .lp-navlink:hover { color: var(--ink); }
+  .lp-user { font-family: "JetBrains Mono", monospace; font-size: .78rem; color: var(--ink-2); opacity: .7; }
+  .lp-user b { color: var(--indigo); font-weight: 600; }
 
   .lp-btn {
     --b: var(--indigo); display: inline-flex; align-items: center; gap: .5em; font-weight: 600; font-size: .95rem;
@@ -204,8 +208,15 @@
     <nav class="lp-nav-right">
       <a class="lp-navlink hide-sm" href="#gallery">Product</a>
       <a class="lp-navlink hide-sm" href="#features">Features</a>
-      <a class="lp-navlink" href="/login">Sign in</a>
-      <a class="lp-btn lp-btn-primary" href="/login">Open your instance <span class="arr">&rarr;</span></a>
+      {#if authenticated}
+        <span class="lp-user hide-sm">Signed in as <b>{username}</b></span>
+        <a class="lp-navlink" href="/me/settings">Settings</a>
+        <a class="lp-navlink" href="/logout">Log out</a>
+        <a class="lp-btn lp-btn-primary" href="/me">Your dashboard <span class="arr">&rarr;</span></a>
+      {#else}
+        <a class="lp-navlink" href="/login">Sign in</a>
+        <a class="lp-btn lp-btn-primary" href="/login">Open your instance <span class="arr">&rarr;</span></a>
+      {/if}
     </nav>
   </header>
 
@@ -215,7 +226,11 @@
     <p class="lp-sub lp-rise lp-d3">calit gives every user their own Calendly &mdash; a personal booking page, availability,
       and Google Calendar &mdash; running entirely on <strong>your</strong> server. No SaaS, no per-seat pricing, no lock-in.</p>
     <div class="lp-cta lp-rise lp-d3">
-      <a class="lp-btn lp-btn-primary" href="/login">Sign in <span class="arr">&rarr;</span></a>
+      {#if authenticated}
+        <a class="lp-btn lp-btn-primary" href="/me">Go to your dashboard <span class="arr">&rarr;</span></a>
+      {#else}
+        <a class="lp-btn lp-btn-primary" href="/login">Sign in <span class="arr">&rarr;</span></a>
+      {/if}
       <a class="lp-btn lp-btn-ghost" href="#gallery">See it in action</a>
     </div>
     <div class="lp-trust lp-rise lp-d4">
@@ -289,7 +304,11 @@
       <p>Point it at a Postgres database and open the site &mdash; the first visit creates your admin account. No license, no waitlist, no seat math.</p>
       <div class="codeline"><span class="p">$</span> docker compose up <span class="p">&middot;</span> visit <span style="color:var(--paper-on-dark)">/setup</span></div>
       <div class="lp-cta" style="justify-content:center;margin-top:28px">
-        <a class="lp-btn lp-btn-primary" href="/login">Sign in <span class="arr">&rarr;</span></a>
+        {#if authenticated}
+          <a class="lp-btn lp-btn-primary" href="/me">Open your dashboard <span class="arr">&rarr;</span></a>
+        {#else}
+          <a class="lp-btn lp-btn-primary" href="/login">Sign in <span class="arr">&rarr;</span></a>
+        {/if}
         <a class="lp-btn lp-btn-ghost" style="color:var(--paper-on-dark);border-color:rgba(255,255,255,.18)" href="#features">Explore features</a>
       </div>
     </div>
