@@ -74,4 +74,10 @@ public class AppUser extends PanacheEntityBase {
     public static boolean usernameTaken(String username) {
         return count("username", Usernames.normalize(username)) > 0;
     }
+
+    /** Toggle site-admin, keeping the roles string in sync (the augmentor/identity reads roles). */
+    public void setAdmin(boolean admin) {
+        this.isAdmin = admin;
+        this.roles = rolesFor(admin);
+    }
 }
