@@ -2,7 +2,8 @@
 {@java.lang.Integer reminderLeadMinutes}
 {@java.lang.Long pendingCount}
 {@java.util.List<java.lang.String> zones}
-{#include adminBase title="Admin — Settings" pendingCount=pendingCount active="settings"}
+{@java.lang.Boolean isAdmin}
+{#include adminBase title="Admin — Settings" pendingCount=pendingCount active="settings" isAdmin=isAdmin}
   <h1 class="text-2xl font-bold mb-4">Owner settings</h1>
   <form method="post" action="/me/settings" class="fieldset bg-base-100 border border-base-300 rounded-box p-4 max-w-md">
     <label class="label">Name</label>

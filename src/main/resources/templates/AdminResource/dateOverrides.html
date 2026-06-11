@@ -1,7 +1,8 @@
 {@java.util.List<com.calit.domain.DateOverride> overrides}
 {@java.util.List<com.calit.domain.MeetingType> types}
 {@java.lang.Long pendingCount}
-{#include adminBase title="Admin — Date overrides" pendingCount=pendingCount active="dateOverrides"}
+{@java.lang.Boolean isAdmin}
+{#include adminBase title="Admin — Date overrides" pendingCount=pendingCount active="dateOverrides" isAdmin=isAdmin}
   <h1 class="text-2xl font-bold mb-2">Date-specific overrides</h1>
   <p class="text-sm text-base-content/70 mb-4">An override REPLACES that date's normal work hours. Adding windows sets the only bookable times; leaving the windows empty marks the whole date as a day off.</p>
 

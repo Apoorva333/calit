@@ -1,7 +1,8 @@
 {@java.util.List<com.calit.booking.Booking> upcoming}
 {@java.lang.Long pendingCount}
 {@java.lang.String tzScript}
-{#include adminBase title="Admin — Dashboard" pendingCount=pendingCount active="dashboard"}
+{@java.lang.Boolean isAdmin}
+{#include adminBase title="Admin — Dashboard" pendingCount=pendingCount active="dashboard" isAdmin=isAdmin}
   <h1 class="text-2xl font-bold mb-4">Dashboard</h1>
 
   <div class="stats stats-vertical sm:stats-horizontal bg-base-100 border border-base-300 mb-6">

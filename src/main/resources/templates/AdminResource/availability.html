@@ -2,7 +2,8 @@
 {@java.util.List<com.calit.domain.MeetingType> types}
 {@java.time.DayOfWeek[] daysOfWeek}
 {@java.lang.Long pendingCount}
-{#include adminBase title="Admin — Availability" pendingCount=pendingCount active="availability"}
+{@java.lang.Boolean isAdmin}
+{#include adminBase title="Admin — Availability" pendingCount=pendingCount active="availability" isAdmin=isAdmin}
   <h1 class="text-2xl font-bold mb-4">Availability (work hours)</h1>
 
   <div class="space-y-2 mb-6">

@@ -1,6 +1,7 @@
 {@java.lang.String title}
 {@java.lang.Long pendingCount}
 {@java.lang.String active}
+{@java.lang.Boolean isAdmin}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -37,6 +38,10 @@
           <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.8 7.8 0 0 0 0-2l2-1.5-2-3.5-2.4 1a7.6 7.6 0 0 0-1.7-1L14.8 3H9.2l-.5 2.5a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.5 2 1.5a7.8 7.8 0 0 0 0 2l-2 1.5 2 3.5 2.4-1a7.6 7.6 0 0 0 1.7 1l.5 2.5h5.6l.5-2.5a7.6 7.6 0 0 0 1.7-1l2.4 1 2-3.5z"/></svg>Settings</a></li>
         <li><a href="/me/google" class="{#if active == 'google'}menu-active{/if}">
           <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 8l9 6 9-6"/></svg>Google</a></li>
+        {#if isAdmin}
+        <li><a href="/me/users" class="{#if active == 'users'}menu-active{/if}">
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Users</a></li>
+        {/if}
       </ul>
       </nav>
       <div class="mt-auto flex items-center gap-2 border-t border-base-300 pt-3">
