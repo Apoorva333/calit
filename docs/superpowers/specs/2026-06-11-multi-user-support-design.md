@@ -39,9 +39,14 @@ Added to **root** tenant tables (each references `app_user(id)`):
 `owner_settings`, `meeting_type`, `booking`, `google_credential`, `google_calendar`,
 `booking_field`.
 
-Child tables stay scoped through their parent FK (no own `owner_id`):
-`availability_rule` → `meeting_type`, `date_override` / `date_override_window` →
-`meeting_type`, `reminder` → `booking`.
+Also added to `availability_rule` and `date_override` — these support **global rows**
+(`meeting_type_id IS NULL`, meaning "applies to all of this owner's meeting types"), which have
+no parent to inherit ownership from, so they carry their own denormalized `owner_id` (the same
+reason `booking_field` does). The column is set on every rule/override at creation, not only the
+global ones, so all queries can filter uniformly by `owner_id`.
+
+Child tables that always have a parent stay scoped through their parent FK (no own `owner_id`):
+`date_override_window` → `date_override`, `reminder` → `booking`.
 
 ### Singletons removed
 
@@ -66,10 +71,11 @@ global-unique `google_calendar_id` also relaxes to unique per `(owner_id, google
 
 ### Migration
 
-Single fresh-start Flyway migration `V7__multi_user.sql`: create `app_user`, add `owner_id`
-columns + FKs + indexes, drop the old singleton/global-unique constraints and any seed rows
-(e.g. the V1 global `description` booking_field insert). **No backfill** — pre-production,
-dev DB is reset.
+Fresh start, no backfill — pre-production, dev DB is reset. Split across two Flyway migrations
+matching the implementation phases: `V7__app_user.sql` (Phase 1) creates `app_user`;
+`V8__owner_scoping.sql` (Phase 2) adds the `owner_id` columns + FKs + indexes, relaxes the
+old singleton/global-unique constraints to per-owner, and drops the seed rows that can no longer
+be owner-attributed (e.g. the V1 global `description` booking_field insert).
 
 ---
 
@@ -187,8 +193,13 @@ No Hibernate multi-tenancy machinery and no row-level security — just owner-sc
 - Fetching another owner's row by id returns **404** (or the row simply never appears in a
   scoped list). Affected: the 13 unscoped queries, the 10 `OwnerSettings` references, and the
   4 `GoogleCredential` references found in the codebase.
+- The availability busy-set is **owner-scoped**: `Booking.heldOverlapping(...)` gains an
+  `owner_id` filter so one owner's bookings never block another owner's calendar. Owners are
+  fully isolated (each connects their own Google account), so there is no shared physical
+  calendar to reason about — A's held slot is invisible to B.
 - Schedulers (`ReminderScheduler`, `PendingExpiryScheduler`) run instance-wide across all
-  owners — they iterate due rows directly and need no `CurrentOwner`.
+  owners — they iterate due rows directly and need no `CurrentOwner` (each row already carries
+  its owner, so per-owner emails/expiry resolve correctly).
 
 ---
 
