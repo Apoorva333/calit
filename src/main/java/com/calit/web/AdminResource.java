@@ -42,7 +42,8 @@ public class AdminResource {
         public static native TemplateInstance dashboard(List<Booking> upcoming, long pendingCount);
 
         public static native TemplateInstance meetingTypes(
-                List<MeetingType> types, LocationType[] locationTypes, Long pendingCount);
+                List<MeetingType> types, LocationType[] locationTypes,
+                DayOfWeek[] daysOfWeek, Long pendingCount);
 
         public static native TemplateInstance meetingTypeDetail(
                 MeetingType type,
@@ -100,7 +101,8 @@ public class AdminResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance meetingTypes() {
         // Pass LocationType.values() so the form can render the location dropdown options.
-        return Templates.meetingTypes(MeetingType.listAll(), LocationType.values(), pendingCount()); // includes secret
+        return Templates.meetingTypes(MeetingType.listAll(), LocationType.values(),
+                DayOfWeek.values(), pendingCount()); // includes secret
     }
 
     @POST
@@ -119,7 +121,8 @@ public class AdminResource {
                                               @RestForm String locationType,
                                               @RestForm String locationDetail,
                                               @RestForm String slotIntervalMinutes,
-                                              @RestForm String requiresApproval) {
+                                              @RestForm String requiresApproval,
+                                              MultivaluedMap<String, String> form) {
         MeetingType t = new MeetingType();
         t.name = name;
         String slugBase = (slug == null || slug.isBlank()) ? Slugs.slugify(name) : Slugs.slugify(slug);
@@ -136,8 +139,55 @@ public class AdminResource {
         t.slotIntervalMinutes = (slotIntervalMinutes == null || slotIntervalMinutes.isBlank())
                 ? null : Integer.valueOf(slotIntervalMinutes);
         t.requiresApproval = "on".equals(requiresApproval);
-        t.persist();
-        return Templates.meetingTypes(MeetingType.listAll(), LocationType.values(), pendingCount());
+        t.persist(); // need the generated id before scoping child rules/overrides to it
+        createInitialWorkingHours(t.id, form);
+        createInitialDateOverride(t.id, form);
+        return Templates.meetingTypes(MeetingType.listAll(), LocationType.values(),
+                DayOfWeek.values(), pendingCount());
+    }
+
+    /**
+     * Per-type weekly working hours captured on the create form. The form posts parallel
+     * arrays ruleDay[]/ruleStart[]/ruleEnd[] (one row per weekday); a row with a blank
+     * start or end is skipped.
+     */
+    private void createInitialWorkingHours(Long typeId, MultivaluedMap<String, String> form) {
+        List<String> days = form.getOrDefault("ruleDay", List.of());
+        List<String> starts = form.getOrDefault("ruleStart", List.of());
+        List<String> ends = form.getOrDefault("ruleEnd", List.of());
+        for (int i = 0; i < days.size() && i < starts.size() && i < ends.size(); i++) {
+            if (starts.get(i).isBlank() || ends.get(i).isBlank()) { continue; }
+            AvailabilityRule r = new AvailabilityRule();
+            r.meetingTypeId = typeId;
+            r.dayOfWeek = DayOfWeek.valueOf(days.get(i));
+            r.startTime = LocalTime.parse(starts.get(i));
+            r.endTime = LocalTime.parse(ends.get(i));
+            r.persist();
+        }
+    }
+
+    /**
+     * Optional per-type date override captured on the create form: a single overrideDate
+     * plus parallel windowStart[]/windowEnd[] arrays. Blank date → no override; a date with
+     * no (non-blank) windows → day off.
+     */
+    private void createInitialDateOverride(Long typeId, MultivaluedMap<String, String> form) {
+        String date = form.getFirst("overrideDate");
+        if (date == null || date.isBlank()) { return; }
+        DateOverride o = new DateOverride();
+        o.meetingTypeId = typeId;
+        o.overrideDate = LocalDate.parse(date);
+        o.persist(); // need the generated id before persisting child windows
+        List<String> starts = form.getOrDefault("windowStart", List.of());
+        List<String> ends = form.getOrDefault("windowEnd", List.of());
+        for (int i = 0; i < starts.size() && i < ends.size(); i++) {
+            if (starts.get(i).isBlank() || ends.get(i).isBlank()) { continue; }
+            DateOverrideWindow w = new DateOverrideWindow();
+            w.dateOverrideId = o.id;
+            w.startTime = LocalTime.parse(starts.get(i));
+            w.endTime = LocalTime.parse(ends.get(i));
+            w.persist();
+        }
     }
 
     @POST
@@ -148,7 +198,8 @@ public class AdminResource {
     public TemplateInstance toggleActive(@PathParam("id") Long id) {
         MeetingType t = MeetingType.findById(id);
         if (t != null) { t.active = !t.active; }
-        return Templates.meetingTypes(MeetingType.listAll(), LocationType.values(), pendingCount());
+        return Templates.meetingTypes(MeetingType.listAll(), LocationType.values(),
+                DayOfWeek.values(), pendingCount());
     }
 
     @POST
@@ -158,7 +209,8 @@ public class AdminResource {
     @Transactional
     public TemplateInstance deleteMeetingType(@PathParam("id") Long id) {
         MeetingType.deleteById(id);
-        return Templates.meetingTypes(MeetingType.listAll(), LocationType.values(), pendingCount());
+        return Templates.meetingTypes(MeetingType.listAll(), LocationType.values(),
+                DayOfWeek.values(), pendingCount());
     }
 
     /** Date overrides scoped to one meeting type, each with its (transient) windows loaded. */
