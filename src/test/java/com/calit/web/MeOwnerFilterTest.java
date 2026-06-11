@@ -23,10 +23,14 @@ class MeOwnerFilterTest {
     }
 
     @Test
-    void oldAdminPathIsGone() {
+    void oldAdminManagementPathIsGone() {
+        // The /admin/* management surface moved to /me/* in Phase 2. Bare /admin now resolves to the
+        // admin USER's public landing via /{user} (admin is a real account, id 1), but the old admin
+        // management pages no longer exist — /admin/meeting-types falls through to /{user}/{slug} and
+        // 404s (no meeting-type slug "meeting-types" for the admin owner).
         given()
             .cookie("quarkus-credential", FormAuth.login())
-            .when().get("/admin")
+            .when().get("/admin/meeting-types")
             .then().statusCode(404);
     }
 }
