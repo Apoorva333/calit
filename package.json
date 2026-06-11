@@ -1,0 +1,13 @@
+{
+  "name": "calit-css",
+  "private": true,
+  "scripts": {
+    "css:build": "tailwindcss -i src/main/css/input.css -o src/main/resources/META-INF/resources/calit.css --minify",
+    "css:watch": "tailwindcss -i src/main/css/input.css -o src/main/resources/META-INF/resources/calit.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.0",
+    "tailwindcss": "^4.1.0",
+    "daisyui": "^5.0.0"
+  }
+}

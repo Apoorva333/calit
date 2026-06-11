@@ -1,0 +1,123 @@
+@import "tailwindcss";
+@source "../resources/templates/**/*.html";
+@source "../resources/META-INF/resources/**/*.js";
+
+@plugin "daisyui";
+
+@plugin "daisyui/theme" {
+  name: "calit-light";
+  default: true;
+  prefersdark: false;
+  color-scheme: light;
+  --color-base-100: oklch(100% 0 0);
+  --color-base-200: oklch(97% 0.004 277);
+  --color-base-300: oklch(93% 0.007 277);
+  --color-base-content: oklch(25% 0.02 277);
+  --color-primary: oklch(58% 0.22 277);
+  --color-primary-content: oklch(98% 0.01 277);
+  --color-secondary: oklch(70% 0.1 277);
+  --color-secondary-content: oklch(22% 0.02 277);
+  --color-accent: oklch(66% 0.16 200);
+  --color-accent-content: oklch(98% 0.01 200);
+  --color-neutral: oklch(35% 0.02 277);
+  --color-neutral-content: oklch(96% 0.01 277);
+  --color-info: oklch(70% 0.14 230);
+  --color-info-content: oklch(98% 0.01 230);
+  --color-success: oklch(65% 0.16 150);
+  --color-success-content: oklch(98% 0.01 150);
+  --color-warning: oklch(80% 0.15 80);
+  --color-warning-content: oklch(26% 0.04 80);
+  --color-error: oklch(60% 0.22 25);
+  --color-error-content: oklch(98% 0.01 25);
+  --radius-selector: 1rem;
+  --radius-field: 0.5rem;
+  --radius-box: 1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+
+@plugin "daisyui/theme" {
+  name: "calit-dark";
+  default: false;
+  prefersdark: true;
+  color-scheme: dark;
+  --color-base-100: oklch(20% 0.02 277);
+  --color-base-200: oklch(17% 0.02 277);
+  --color-base-300: oklch(25% 0.02 277);
+  --color-base-content: oklch(92% 0.01 277);
+  --color-primary: oklch(68% 0.19 277);
+  --color-primary-content: oklch(18% 0.03 277);
+  --color-secondary: oklch(60% 0.09 277);
+  --color-secondary-content: oklch(96% 0.01 277);
+  --color-accent: oklch(70% 0.15 200);
+  --color-accent-content: oklch(18% 0.02 200);
+  --color-neutral: oklch(30% 0.02 277);
+  --color-neutral-content: oklch(92% 0.01 277);
+  --color-info: oklch(72% 0.14 230);
+  --color-info-content: oklch(18% 0.02 230);
+  --color-success: oklch(68% 0.16 150);
+  --color-success-content: oklch(18% 0.02 150);
+  --color-warning: oklch(80% 0.15 80);
+  --color-warning-content: oklch(26% 0.04 80);
+  --color-error: oklch(66% 0.2 25);
+  --color-error-content: oklch(18% 0.02 25);
+  --radius-selector: 1rem;
+  --radius-field: 0.5rem;
+  --radius-box: 1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+
+/* ============================================================
+   Custom widgets daisyUI can't express. Ported from the old
+   calit.css; colors now reference daisyUI theme CSS variables
+   so they flip with the active theme automatically.
+   ============================================================ */
+@layer components {
+  /* Reading column widths (kept from Pico-era layout). */
+  main.container { max-width: 48rem; margin-inline: auto; padding-inline: 1rem; }
+  body.book-page main.container { max-width: 58rem; }
+
+  /* Timezone bar (invitee pages). */
+  .tz-bar { font-size: .85rem; color: color-mix(in oklch, var(--color-base-content) 60%, transparent); margin: .5rem 0 1rem; }
+  .tz-bar select { display: inline; width: auto; margin: 0 0 0 .25rem; }
+
+  /* Two-pane booking grid: calendar left, times right. */
+  .booking-grid { display: grid; grid-template-columns: 1fr; gap: 1.5rem; align-items: start; }
+  @media (min-width: 48rem) {
+    .booking-grid { grid-template-columns: minmax(18rem, 1fr) minmax(12rem, 16rem); }
+  }
+
+  /* Calendar widget (DOM built by calScript). */
+  .calendar { border: 1px solid var(--color-base-300); border-radius: var(--radius-box); padding: 1rem; background: var(--color-base-100); }
+  .calendar__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: .75rem; }
+  .calendar__title { font-weight: 600; }
+  .calendar__nav { background: none; border: none; color: var(--color-primary); font-size: 1.2rem; padding: .2rem .6rem; width: auto; margin: 0; cursor: pointer; }
+  .calendar__nav[disabled] { color: color-mix(in oklch, var(--color-base-content) 40%, transparent); cursor: not-allowed; }
+  .calendar__grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: .25rem; text-align: center; }
+  .calendar__dow { font-size: .7rem; color: color-mix(in oklch, var(--color-base-content) 60%, transparent); padding: .25rem 0; }
+  .calendar__day { aspect-ratio: 1; border: none; border-radius: 50%; background: none; color: var(--color-base-content); padding: 0; margin: 0; width: 100%; font-size: .9rem; cursor: pointer; }
+  .calendar__day[disabled] { color: color-mix(in oklch, var(--color-base-content) 40%, transparent); opacity: .4; cursor: default; }
+  .calendar__day--available { font-weight: 600; background: color-mix(in oklch, var(--color-primary) 18%, transparent); color: var(--color-primary); }
+  .calendar__day--selected { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+  .calendar__day--empty { visibility: hidden; }
+
+  /* Time column: a day's slots as a vertical list of pill buttons. */
+  .time-column h3 { font-size: .95rem; margin: 0 0 .75rem; }
+  .day-slots { margin: 0; }
+  .day-slots[hidden] { display: none; }
+  .slot { display: block; margin: 0 0 .5rem; }
+  .slot input[type="radio"] { position: absolute; opacity: 0; }
+  .slot time { display: block; text-align: center; padding: .55rem .75rem; border: 1px solid var(--color-primary); border-radius: var(--radius-field); color: var(--color-primary); cursor: pointer; }
+  .slot input[type="radio"]:checked + time { background: var(--color-primary); color: var(--color-primary-content); }
+  .slot input[type="radio"]:focus-visible + time { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+  /* Honeypot stays invisible regardless of resets. */
+  input[name="website"] { display: none !important; }
+}
