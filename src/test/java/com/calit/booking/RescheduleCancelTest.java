@@ -26,6 +26,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -50,9 +52,9 @@ class RescheduleCancelTest {
     void rescheduleAutoTypeMovesBookingCallsUpdateAndFreesOldTime() {
         seedSettings();
         MeetingType t = meetingTypeWithMondayWindow("resched", false);
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
-        when(calendarPort.createEvent(anyString(), anyString(), any(), any(), any(), anyBoolean(), any()))
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
+        when(calendarPort.createEvent(anyLong(), anyString(), anyString(), any(), any(), any(), anyBoolean(), any()))
                 .thenReturn(new CreatedEvent("evt-r", "https://meet.google.com/r-r-r", "h"));
 
         Booking b = bookingService.book(1L, "resched", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "");
@@ -64,7 +66,7 @@ class RescheduleCancelTest {
         assertEquals(BookingStatus.CONFIRMED, loaded.status);
         assertEquals(SLOT_10, loaded.startUtc);
         assertEquals(SLOT_10.plusSeconds(3600), loaded.endUtc);
-        verify(calendarPort, times(1)).updateEvent("evt-r", SLOT_10, SLOT_10.plusSeconds(3600));
+        verify(calendarPort, times(1)).updateEvent(anyLong(), eq("evt-r"), eq(SLOT_10), eq(SLOT_10.plusSeconds(3600)));
 
         // Old 09:00 time is free again; new 10:00 time is now taken.
         List<TimeSlot> avail = bookingService.availableSlots(t, DAY, DAY);
@@ -79,11 +81,11 @@ class RescheduleCancelTest {
         // deletes any existing Google event, and fires a re-request (not updateEvent).
         seedSettings();
         MeetingType t = approvalType("resched-approval");
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
 
         // Book PENDING, then approve so it has a CONFIRMED Google event to delete on reschedule.
-        when(calendarPort.createEvent(anyString(), anyString(), any(), any(), any(), anyBoolean(), any()))
+        when(calendarPort.createEvent(anyLong(), anyString(), anyString(), any(), any(), any(), anyBoolean(), any()))
                 .thenReturn(new CreatedEvent("evt-ra", "https://meet.google.com/ra-1-2", "h"));
         Booking b = bookingService.book(1L, "resched-approval", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "");
         bookingService.approve(b.id);
@@ -95,8 +97,8 @@ class RescheduleCancelTest {
         assertEquals(SLOT_10, loaded.startUtc);
         assertNull(loaded.googleEventId, "the prior event is deleted on re-request");
         assertNull(loaded.meetLink);
-        verify(calendarPort, times(1)).deleteEvent("evt-ra");
-        verify(calendarPort, never()).updateEvent(any(), any(), any());
+        verify(calendarPort, times(1)).deleteEvent(anyLong(), eq("evt-ra"));
+        verify(calendarPort, never()).updateEvent(anyLong(), any(), any(), any());
     }
 
     @Test
@@ -104,9 +106,9 @@ class RescheduleCancelTest {
     void cancelFlipsStatusCallsDeleteAndFreesSlot() {
         seedSettings();
         MeetingType t = meetingTypeWithMondayWindow("cancel", false);
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
-        when(calendarPort.createEvent(anyString(), anyString(), any(), any(), any(), anyBoolean(), any()))
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
+        when(calendarPort.createEvent(anyLong(), anyString(), anyString(), any(), any(), any(), anyBoolean(), any()))
                 .thenReturn(new CreatedEvent("evt-c", "https://meet.google.com/c-c-c", "h"));
 
         Booking b = bookingService.book(1L, "cancel", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "");
@@ -118,7 +120,7 @@ class RescheduleCancelTest {
 
         Booking loaded = Booking.findById(b.id);
         assertEquals(BookingStatus.CANCELLED, loaded.status);
-        verify(calendarPort, times(1)).deleteEvent("evt-c");
+        verify(calendarPort, times(1)).deleteEvent(anyLong(), eq("evt-c"));
         // 09:00 slot is bookable again.
         assertTrue(bookingService.availableSlots(t, DAY, DAY).stream()
                 .anyMatch(s -> s.start().toLocalTime().equals(LocalTime.of(9, 0))));

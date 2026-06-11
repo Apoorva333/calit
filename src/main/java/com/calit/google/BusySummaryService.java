@@ -22,8 +22,8 @@ public class BusySummaryService {
     }
 
     /** Total busy minutes in [from, to), using the port's already-merged intervals. */
-    public long busyMinutes(Instant from, Instant to) {
-        List<BusyInterval> busy = calendarPort.freeBusy(from, to);
+    public long busyMinutes(Long ownerId, Instant from, Instant to) {
+        List<BusyInterval> busy = calendarPort.freeBusy(ownerId, from, to);
         long total = 0;
         for (BusyInterval b : busy) {
             total += Duration.between(b.start(), b.end()).toMinutes();

@@ -28,6 +28,7 @@ import static org.hamcrest.Matchers.notNullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
 @QuarkusTest
@@ -73,9 +74,9 @@ class BookingResourceTest {
     void bookingHappyPathReturns201WithMeetLinkAndManageToken() {
         String slug = "rest-book-" + System.nanoTime();
         seedType(slug);
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
-        when(calendarPort.createEvent(anyString(), anyString(), any(), any(), any(), anyBoolean(), any()))
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
+        when(calendarPort.createEvent(anyLong(), anyString(), anyString(), any(), any(), any(), anyBoolean(), any()))
                 .thenReturn(new CreatedEvent("evt-rest", "https://meet.google.com/rest-1234-xyz", "h"));
 
         given().contentType("application/json")
@@ -94,8 +95,8 @@ class BookingResourceTest {
     void missingRequiredCustomFieldReturns422() {
         String slug = "rest-422-" + System.nanoTime();
         seedTypeWithRequiredField(slug, "company");
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
 
         // Body omits the required "company" answer -> 422 (not 409: input is wrong, slot is fine).
         given().contentType("application/json")
@@ -114,9 +115,9 @@ class BookingResourceTest {
         // so booking it succeeds (a slot that was not available would yield 409 "not available").
         String slug = "rest-avail-" + System.nanoTime();
         seedType(slug);
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
-        when(calendarPort.createEvent(anyString(), anyString(), any(), any(), any(), anyBoolean(), any()))
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
+        when(calendarPort.createEvent(anyLong(), anyString(), anyString(), any(), any(), any(), anyBoolean(), any()))
                 .thenReturn(new CreatedEvent("evt-avail", "https://meet.google.com/av-1-2", "h"));
 
         given().contentType("application/json")
@@ -130,9 +131,9 @@ class BookingResourceTest {
     void doubleBookReturns409() {
         String slug = "rest-conflict-" + System.nanoTime();
         seedType(slug);
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
-        when(calendarPort.createEvent(anyString(), anyString(), any(), any(), any(), anyBoolean(), any()))
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
+        when(calendarPort.createEvent(anyLong(), anyString(), anyString(), any(), any(), any(), anyBoolean(), any()))
                 .thenReturn(new CreatedEvent("evt-x", "https://meet.google.com/a-b-c", "h"));
 
         String body = "{\"slug\":\"" + slug + "\",\"startUtc\":\"" + SLOT_09_UTC + "\","
@@ -150,9 +151,9 @@ class BookingResourceTest {
         // Feature 5: DELETE is keyed by the manage-token returned at booking time.
         String slug = "rest-cancel-" + System.nanoTime();
         seedType(slug);
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
-        when(calendarPort.createEvent(anyString(), anyString(), any(), any(), any(), anyBoolean(), any()))
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
+        when(calendarPort.createEvent(anyLong(), anyString(), anyString(), any(), any(), any(), anyBoolean(), any()))
                 .thenReturn(new CreatedEvent("evt-cancel", "https://meet.google.com/cn-1-2", "h"));
 
         String token = given().contentType("application/json")

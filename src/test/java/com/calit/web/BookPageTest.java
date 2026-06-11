@@ -20,6 +20,7 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
 @QuarkusTest
@@ -87,8 +88,8 @@ class BookPageTest {
     @Test
     void bookPageRendersSlotsBuiltInsCustomFieldHoneypotForExistingSlug() {
         // Connected, no busy → all raw slots survive.
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
         seed();
 
         given()
@@ -112,8 +113,8 @@ class BookPageTest {
 
     @Test
     void bookPageShowsRequestWordingAndLocationDetailForApprovalType() {
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
         seedApprovalPhoneType();
 
         given()
@@ -130,8 +131,8 @@ class BookPageTest {
     @Test
     void bookPageOmitsTurnstileWidgetWhenDisabled() {
         // Default test profile has calit.turnstile.enabled=false → no widget/script.
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
         seed();
 
         given()
@@ -149,8 +150,8 @@ class BookPageTest {
         // The server can't run JS in @QuarkusTest, so assert the SERVER-rendered HTML
         // carries the machinery the inline script needs: per-slot data-utc absolute
         // instants, the tz-picker select, the "Times shown in" label, and the reformat script.
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
         seed();
 
         String html = given().when().get("/book/book-page")
@@ -181,8 +182,8 @@ class BookPageTest {
 
     @Test
     void bookPageRendersCalendarPickerAndDaySections() {
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
         seed();
 
         given()
@@ -197,8 +198,8 @@ class BookPageTest {
 
     @Test
     void bookPageHidesMeetHintWhenGoogleNotConnected() {
-        when(calendarPort.isConnected()).thenReturn(false);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(java.util.List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(false);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(java.util.List.of());
         seed();
         given()
             .when().get("/book/book-page")
@@ -217,8 +218,8 @@ class BookPageTest {
     void bookPageWindowFollowsTypeHorizonNotA14DayCap() {
         // seed() gives every weekday a 9-12 rule and a type with the default horizonDays = 60.
         // The booking page must offer days well beyond two weeks (the old hardcoded 14-day cap).
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
         seed();
 
         String html = given().when().get("/book/book-page")
@@ -242,8 +243,8 @@ class BookPageTest {
 
     @Test
     void bookPageRendersLeftInfoPanelWithHostAndDuration() {
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
         seed();
 
         given()

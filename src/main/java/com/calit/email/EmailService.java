@@ -261,7 +261,7 @@ public class EmailService {
      */
     private void sendForKind(InviteeRule rule, String subject, Loaded l, String icsLocation,
                              Function<String, String> bodyForRole) {
-        boolean sendInvitee = rule == InviteeRule.ALWAYS || !calendarPort.isConnected();
+        boolean sendInvitee = rule == InviteeRule.ALWAYS || !calendarPort.isConnected(l.owner.ownerId);
         boolean sendOwner = l.owner.ownerNotificationsEnabled;
 
         byte[] ics = IcsBuilder.build(l.booking.manageToken, l.meetingType.name, icsLocation,

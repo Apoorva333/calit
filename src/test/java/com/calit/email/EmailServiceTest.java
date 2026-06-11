@@ -32,6 +32,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
 @QuarkusTest
@@ -64,7 +65,7 @@ class EmailServiceTest {
 
     @Test
     void confirmedWhenGoogleDisconnectedSendsToInviteeAndOwnerWithLocationManageLinkAnswersAndIcs() {
-        when(calendarPort.isConnected()).thenReturn(false);
+        when(calendarPort.isConnected(anyLong())).thenReturn(false);
         long bookingId = seed(b -> {
             b.status = BookingStatus.CONFIRMED;
             b.meetLink = "https://meet.google.com/abc-defg-hij";
@@ -101,7 +102,7 @@ class EmailServiceTest {
 
     @Test
     void confirmedWhenGoogleConnectedSuppressesInviteeButOwnerStillGetsMail() {
-        when(calendarPort.isConnected()).thenReturn(true);
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
         long bookingId = seed(b -> {
             b.status = BookingStatus.CONFIRMED;
             b.meetLink = "https://meet.google.com/xyz";
@@ -121,7 +122,7 @@ class EmailServiceTest {
 
     @Test
     void requestedAlwaysSendsToInviteeAndOwnerEvenWhenGoogleConnected() {
-        when(calendarPort.isConnected()).thenReturn(true); // connected, but no Google event exists yet
+        when(calendarPort.isConnected(anyLong())).thenReturn(true); // connected, but no Google event exists yet
         long bookingId = seed(b -> {
             b.status = BookingStatus.PENDING;
             b.meetLink = null;
@@ -144,7 +145,7 @@ class EmailServiceTest {
 
     @Test
     void declinedAlwaysSendsToInviteeEvenWhenGoogleConnected() {
-        when(calendarPort.isConnected()).thenReturn(true);
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
         long bookingId = seed(b -> {
             b.status = BookingStatus.DECLINED;
             b.meetLink = null;
@@ -163,7 +164,7 @@ class EmailServiceTest {
 
     @Test
     void ownerOptedOutGetsNothingInviteeStillFallbackWhenDisconnected() {
-        when(calendarPort.isConnected()).thenReturn(false);
+        when(calendarPort.isConnected(anyLong())).thenReturn(false);
         long bookingId = seed(b -> {
             b.status = BookingStatus.CONFIRMED;
             b.meetLink = "https://meet.google.com/opt-out";
@@ -179,7 +180,7 @@ class EmailServiceTest {
 
     @Test
     void ownerOptedOutAndGoogleConnectedSendsNothing() {
-        when(calendarPort.isConnected()).thenReturn(true);
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
         long bookingId = seed(b -> {
             b.status = BookingStatus.CONFIRMED;
             b.meetLink = "https://meet.google.com/none";
@@ -195,7 +196,7 @@ class EmailServiceTest {
 
     @Test
     void confirmedPhoneLocationRendersLocationDetail() {
-        when(calendarPort.isConnected()).thenReturn(false);
+        when(calendarPort.isConnected(anyLong())).thenReturn(false);
         long bookingId = seed(b -> {
             b.status = BookingStatus.CONFIRMED;
             b.meetLink = null;
@@ -212,7 +213,7 @@ class EmailServiceTest {
 
     @Test
     void rescheduleWhenConnectedSuppressesInviteeOwnerStillGets() {
-        when(calendarPort.isConnected()).thenReturn(true);
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
         Instant newStart = Instant.parse("2026-06-10T09:00:00Z");
         long bookingId = seedAt(newStart, b -> {
             b.status = BookingStatus.CONFIRMED;
@@ -232,7 +233,7 @@ class EmailServiceTest {
 
     @Test
     void cancellationWhenDisconnectedSendsToBothWithoutMeetLink() {
-        when(calendarPort.isConnected()).thenReturn(false);
+        when(calendarPort.isConnected(anyLong())).thenReturn(false);
         long bookingId = seed(b -> {
             b.status = BookingStatus.CANCELLED;
             b.meetLink = "https://meet.google.com/will-not-appear";
@@ -252,7 +253,7 @@ class EmailServiceTest {
 
     @Test
     void reminderWhenDisconnectedSendsToBoth() {
-        when(calendarPort.isConnected()).thenReturn(false);
+        when(calendarPort.isConnected(anyLong())).thenReturn(false);
         long bookingId = seed(b -> {
             b.status = BookingStatus.CONFIRMED;
             b.meetLink = "https://meet.google.com/rem";

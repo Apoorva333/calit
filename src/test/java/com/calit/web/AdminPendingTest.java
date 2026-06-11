@@ -23,6 +23,7 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
 @QuarkusTest
@@ -66,9 +67,9 @@ class AdminPendingTest {
 
     @Test
     void pendingQueueListsPendingBookingWithApproveDeclineForms() {
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
-        when(calendarPort.createEvent(any(), any(), any(), any(), any(), anyBoolean(), any()))
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
+        when(calendarPort.createEvent(anyLong(), any(), any(), any(), any(), any(), anyBoolean(), any()))
             .thenReturn(new CreatedEvent("evt-p", "https://meet.google.com/pending", "h"));
         Long id = seedPendingBooking();
 
@@ -86,9 +87,9 @@ class AdminPendingTest {
 
     @Test
     void approveConfirmsTheBooking() {
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
-        when(calendarPort.createEvent(any(), any(), any(), any(), any(), anyBoolean(), any()))
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
+        when(calendarPort.createEvent(anyLong(), any(), any(), any(), any(), any(), anyBoolean(), any()))
             .thenReturn(new CreatedEvent("evt-a", "https://meet.google.com/approved", "h"));
         Long id = seedPendingBooking();
 
@@ -104,8 +105,8 @@ class AdminPendingTest {
 
     @Test
     void declineMarksTheBookingDeclined() {
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
         Long id = seedPendingBooking();
 
         given()

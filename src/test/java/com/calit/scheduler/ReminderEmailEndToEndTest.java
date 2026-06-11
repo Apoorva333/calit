@@ -19,6 +19,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
 /**
@@ -46,7 +47,7 @@ class ReminderEmailEndToEndTest {
     @Test
     void dispatchTickDeliversReminderEmailToInviteeAndOwner() {
         // Google disconnected -> invitee fallback reminder fires.
-        when(calendarPort.isConnected()).thenReturn(false);
+        when(calendarPort.isConnected(anyLong())).thenReturn(false);
 
         Long bookingId = seedConfirmedBookingWithOwner();
         seedDueUnsentReminder(bookingId);

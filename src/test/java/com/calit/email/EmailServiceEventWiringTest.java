@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
 @QuarkusTest
@@ -47,7 +48,7 @@ class EmailServiceEventWiringTest {
 
     @Test
     void firingConfirmedInCommittedTxTriggersObserverAndSendsTwoMails() {
-        when(calendarPort.isConnected()).thenReturn(false); // disconnected -> invitee fallback fires
+        when(calendarPort.isConnected(anyLong())).thenReturn(false); // disconnected -> invitee fallback fires
 
         QuarkusTransaction.requiringNew().run(() -> {
             OwnerSettings s = OwnerSettings.forOwner(1L);

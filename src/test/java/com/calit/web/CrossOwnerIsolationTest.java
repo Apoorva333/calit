@@ -166,7 +166,7 @@ class CrossOwnerIsolationTest {
     @Test
     @TestTransaction
     void ownerBHeldBookingDoesNotBlockOwnerAsSlots() {
-        org.mockito.Mockito.when(calendarPort.isConnected()).thenReturn(false); // degraded: no Google
+        org.mockito.Mockito.when(calendarPort.isConnected(org.mockito.ArgumentMatchers.anyLong())).thenReturn(false); // degraded: no Google
         AppUser a = AppUser.create("ownera-busy", "x", false);
         a.enabled = true;
         a.createdAt = Instant.now(); a.persist();

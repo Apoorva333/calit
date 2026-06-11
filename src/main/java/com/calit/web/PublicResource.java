@@ -130,7 +130,7 @@ public class PublicResource {
         // directly in the template for the button wording + location line.
         return Templates.book(type, byDate, fields, null,
                               Layout.TZ_BAR, Layout.TZ_SCRIPT, Layout.CALENDAR_SCRIPT,
-                              turnstileEnabled, turnstileSiteKey(), calendarPort.isConnected(),
+                              turnstileEnabled, turnstileSiteKey(), calendarPort.isConnected(type.ownerId),
                               settings.ownerName);
     }
 
@@ -183,7 +183,7 @@ public class PublicResource {
             return Templates.book(type, daySlots(type), BookingField.formFor(type.ownerId, type.id),
                                   be.getMessage(),
                                   Layout.TZ_BAR, Layout.TZ_SCRIPT, Layout.CALENDAR_SCRIPT,
-                                  turnstileEnabled, turnstileSiteKey(), calendarPort.isConnected(),
+                                  turnstileEnabled, turnstileSiteKey(), calendarPort.isConnected(type.ownerId),
                                   settings.ownerName);
         }
         return confirmationPage(booking, type);

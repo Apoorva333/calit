@@ -22,6 +22,7 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
 @QuarkusTest
@@ -66,9 +67,9 @@ class ManageBookingTest {
 
     @Test
     void managePageRendersForValidToken() {
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
-        when(calendarPort.createEvent(any(), any(), any(), any(), any(), anyBoolean(), any()))
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
+        when(calendarPort.createEvent(anyLong(), any(), any(), any(), any(), any(), anyBoolean(), any()))
             .thenReturn(new CreatedEvent("evt-m", "https://meet.google.com/manage-link", "h"));
         String token = seedBooking();
 
@@ -97,9 +98,9 @@ class ManageBookingTest {
 
     @Test
     void rescheduleSubmitsAbsoluteInstantUnaffectedByDisplayZone() {
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
-        when(calendarPort.createEvent(any(), any(), any(), any(), any(), anyBoolean(), any()))
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
+        when(calendarPort.createEvent(anyLong(), any(), any(), any(), any(), any(), anyBoolean(), any()))
             .thenReturn(new CreatedEvent("evt-m3", "https://meet.google.com/manage-link3", "h"));
         String token = seedBooking();
 
@@ -123,9 +124,9 @@ class ManageBookingTest {
 
     @Test
     void cancelMarksBookingCancelled() {
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
-        when(calendarPort.createEvent(any(), any(), any(), any(), any(), anyBoolean(), any()))
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
+        when(calendarPort.createEvent(anyLong(), any(), any(), any(), any(), any(), anyBoolean(), any()))
             .thenReturn(new CreatedEvent("evt-m2", "https://meet.google.com/manage-link2", "h"));
         String token = seedBooking();
 

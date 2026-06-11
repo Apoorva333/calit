@@ -22,6 +22,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
 @QuarkusTest
@@ -99,10 +100,10 @@ class BookingPostTest {
 
     @Test
     void postCreatesBookingAndShowsMeetLinkAndManageToken() {
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
         // createEvent returns a known Meet link that BookingService stores on Booking.meetLink.
-        when(calendarPort.createEvent(any(), any(), any(), any(), any(), anyBoolean(), any()))
+        when(calendarPort.createEvent(anyLong(), any(), any(), any(), any(), any(), anyBoolean(), any()))
             .thenReturn(new CreatedEvent("evt-1", "https://meet.google.com/known-test-link",
                                          "https://calendar.google.com/evt-1"));
         seed();
@@ -135,8 +136,8 @@ class BookingPostTest {
 
     @Test
     void postForApprovalTypeShowsPendingWordingNotConfirmation() {
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
         seedApprovalType();
 
         String chosen = firstSlot("approval-confirm");
@@ -157,8 +158,8 @@ class BookingPostTest {
 
     @Test
     void postWithFilledHoneypotIsRejected() {
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
         seed();
 
         // A filled honeypot ("website") makes BookingService.book reject the submission
@@ -180,8 +181,8 @@ class BookingPostTest {
 
     @Test
     void postWithMissingRequiredAnswerReRendersFormWith422NotServerError() {
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
         seed();
 
         // Omit the required "answers.company" → BookingService.book throws the 422 validation

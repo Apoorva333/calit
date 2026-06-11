@@ -123,8 +123,8 @@ public class BookingService {
      */
     List<Interval> busyIntervals(Long ownerId, Instant from, Instant to, Long excludeBookingId) {
         List<Interval> busy = new ArrayList<>();
-        if (calendarPort.isConnected()) {
-            for (BusyInterval bi : calendarPort.freeBusy(from, to)) {
+        if (calendarPort.isConnected(ownerId)) {
+            for (BusyInterval bi : calendarPort.freeBusy(ownerId, from, to)) {
                 busy.add(new Interval(bi.start(), bi.end()));
             }
         }
@@ -203,7 +203,7 @@ public class BookingService {
         // If createEvent throws, the @Transactional boundary rolls back this booking (no orphan row).
         // `createGoogleEvent` (shared with `approve`, added in Task 7) applies the feature-13
         // location logic: createMeetLink=(locationType==GOOGLE_MEET), locationText=locationDetail.
-        if (calendarPort.isConnected()) {
+        if (calendarPort.isConnected(type.ownerId)) {
             createGoogleEvent(type, booking);
         }
 
@@ -220,6 +220,7 @@ public class BookingService {
     private void createGoogleEvent(MeetingType type, Booking booking) {
         OwnerSettings owner = OwnerSettings.forOwner(type.ownerId);
         CreatedEvent created = calendarPort.createEvent(
+                type.ownerId,
                 type.name + " with " + booking.inviteeName,
                 "Booked via calit.",
                 booking.startUtc, booking.endUtc,
@@ -293,7 +294,7 @@ public class BookingService {
         booking.status = BookingStatus.CONFIRMED;
         MeetingType type = MeetingType.findById(booking.meetingTypeId);
         // Feature 14 + degraded mode: create the Google event now, only when connected.
-        if (calendarPort.isConnected()) {
+        if (calendarPort.isConnected(type.ownerId)) {
             createGoogleEvent(type, booking);
         }
         bookingApprovedEvent.fire(new BookingApproved(bookingId));
@@ -351,13 +352,13 @@ public class BookingService {
         }
 
         if (reApproval) {
-            if (calendarPort.isConnected() && priorEventId != null) {
-                calendarPort.deleteEvent(priorEventId);
+            if (calendarPort.isConnected(type.ownerId) && priorEventId != null) {
+                calendarPort.deleteEvent(type.ownerId, priorEventId);
             }
             bookingRequestedEvent.fire(new BookingRequested(booking.id)); // re-approval request
         } else {
-            if (calendarPort.isConnected() && booking.googleEventId != null) {
-                calendarPort.updateEvent(booking.googleEventId, newStartUtc, newEnd);
+            if (calendarPort.isConnected(type.ownerId) && booking.googleEventId != null) {
+                calendarPort.updateEvent(type.ownerId, booking.googleEventId, newStartUtc, newEnd);
             }
             bookingRescheduledEvent.fire(new BookingRescheduled(booking.id, oldStart));
         }
@@ -371,8 +372,8 @@ public class BookingService {
             throw new NotFoundException("No booking for token " + manageToken);
         }
         booking.status = BookingStatus.CANCELLED;
-        if (calendarPort.isConnected() && booking.googleEventId != null) {
-            calendarPort.deleteEvent(booking.googleEventId);
+        if (calendarPort.isConnected(booking.ownerId) && booking.googleEventId != null) {
+            calendarPort.deleteEvent(booking.ownerId, booking.googleEventId);
         }
         bookingCancelledEvent.fire(new BookingCancelled(booking.id));
     }
