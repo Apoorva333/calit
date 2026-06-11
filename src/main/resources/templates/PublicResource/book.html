@@ -16,92 +16,96 @@
     {/if}
   {/head}
 
-  <p><a href="/">&larr; All meeting types</a></p>
+  <p class="mb-3"><a class="link link-hover text-sm" href="/">&larr; All meeting types</a></p>
 
-  <article class="calit-card book-shell">
-    <div class="book-info">
-      <span class="book-chip">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
-      </span>
-      {#if ownerName}<p class="book-host">{ownerName}</p>{/if}
-      <h1 class="book-title">{type.name}</h1>
-      <p class="book-meta">
-        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
-        </svg>
-        {type.durationMinutes} min
-      </p>
-      {#if type.description}<p class="book-desc">{type.description}</p>{/if}
-      {#if type.locationType.name == 'GOOGLE_MEET'}
-        {#if googleConnected}<p class="book-loc"><strong>Location:</strong> Google Meet — link sent after booking</p>{/if}
-      {#else}
-        <p class="book-loc"><strong>Location:</strong> {type.locationDetail}</p>
-      {/if}
-      {#if type.requiresApproval}
-        <p class="book-desc">This meeting requires owner approval — you'll send a request and be notified once it's approved.</p>
-      {/if}
-    </div>
-
-    <div class="book-main">
-      <h2>Select a Date &amp; Time</h2>
-      {#if error}<p class="err">{error}</p>{/if}
-      {#if days.isEmpty()}
-        <p>No available times right now. Please check back later.</p>
-      {#else}
-        {tzBar.raw}
-        <form method="post" action="/book/{type.slug}">
-          <div class="booking-grid">
-            <div id="calendar" class="calendar"></div>
-            <div class="time-column">
-              {#for day in days}
-                <section class="day-slots" data-date="{day.isoDate}">
-                  <h3>{day.label}</h3>
-                  {#for slot in day.slots}
-                    <label class="slot">
-                      <input type="radio" name="startUtc" value="{slot.startUtc}" required>
-                      <time data-utc="{slot.startUtc}" data-time-only="1">{slot.label}</time>
-                    </label>
-                  {/for}
-                </section>
-              {/for}
-            </div>
-          </div>
-
-          <label>Your name <input type="text" name="inviteeName" required></label>
-          <label>Your email <input type="email" name="inviteeEmail" required></label>
-
-          {#for f in fields}
-            <label>{f.label}
-              {#if f.type.name == 'LONG_TEXT'}
-                <textarea name="answers.{f.fieldKey}" {#if f.required}required{/if}></textarea>
-              {#else if f.type.name == 'EMAIL'}
-                <input type="email" name="answers.{f.fieldKey}" {#if f.required}required{/if}>
-              {#else if f.type.name == 'PHONE'}
-                <input type="tel" name="answers.{f.fieldKey}" {#if f.required}required{/if}>
-              {#else if f.type.name == 'NUMBER'}
-                <input type="number" name="answers.{f.fieldKey}" {#if f.required}required{/if}>
-              {#else}
-                <input type="text" name="answers.{f.fieldKey}" {#if f.required}required{/if}>
-              {/if}
-            </label>
-          {/for}
-
-          {! Honeypot (always present + hidden). A non-empty `website` → rejected server-side. !}
-          <input type="text" name="website" style="display:none" tabindex="-1" autocomplete="off">
-
-          {#if turnstileEnabled}
-          <div class="cf-turnstile" data-sitekey="{turnstileSiteKey}"></div>
-          {/if}
-
-          {#if type.requiresApproval}
-            <button type="submit">Request</button>
+  <div class="card bg-base-100 border border-base-300 shadow-sm">
+    <div class="card-body">
+      <div class="grid gap-6 md:grid-cols-[minmax(13rem,17rem)_1fr] md:gap-8">
+        <div class="md:border-r md:border-base-300 md:pr-8">
+          <span class="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-content mb-3">
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+          </span>
+          {#if ownerName}<p class="font-semibold text-base-content/70 mb-1">{ownerName}</p>{/if}
+          <h1 class="text-2xl font-bold mb-3">{type.name}</h1>
+          <p class="flex items-center gap-2 font-semibold mb-3">
+            <svg class="h-5 w-5 text-base-content/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            {type.durationMinutes} min
+          </p>
+          {#if type.description}<p class="text-sm text-base-content/70 mb-3">{type.description}</p>{/if}
+          {#if type.locationType.name == 'GOOGLE_MEET'}
+            {#if googleConnected}<p class="text-sm mb-2"><strong>Location:</strong> Google Meet — link sent after booking</p>{/if}
           {#else}
-            <button type="submit">Confirm booking</button>
+            <p class="text-sm mb-2"><strong>Location:</strong> {type.locationDetail}</p>
           {/if}
-        </form>
-      {/if}
-      {tzScript.raw}
-      {calScript.raw}
+          {#if type.requiresApproval}
+            <p class="text-sm text-base-content/70">This meeting requires owner approval — you'll send a request and be notified once it's approved.</p>
+          {/if}
+        </div>
+
+        <div>
+          <h2 class="text-lg font-semibold mb-4">Select a Date &amp; Time</h2>
+          {#if error}<div role="alert" class="alert alert-error mb-4">{error}</div>{/if}
+          {#if days.isEmpty()}
+            <p>No available times right now. Please check back later.</p>
+          {#else}
+            {tzBar.raw}
+            <form method="post" action="/book/{type.slug}" class="space-y-4">
+              <div class="booking-grid">
+                <div id="calendar" class="calendar"></div>
+                <div class="time-column">
+                  {#for day in days}
+                    <section class="day-slots" data-date="{day.isoDate}">
+                      <h3>{day.label}</h3>
+                      {#for slot in day.slots}
+                        <label class="slot">
+                          <input type="radio" name="startUtc" value="{slot.startUtc}" required>
+                          <time data-utc="{slot.startUtc}" data-time-only="1">{slot.label}</time>
+                        </label>
+                      {/for}
+                    </section>
+                  {/for}
+                </div>
+              </div>
+
+              <fieldset class="fieldset">
+                <label class="label" for="inviteeName">Your name</label>
+                <input id="inviteeName" class="input w-full" type="text" name="inviteeName" required>
+                <label class="label" for="inviteeEmail">Your email</label>
+                <input id="inviteeEmail" class="input w-full" type="email" name="inviteeEmail" required>
+                {#for f in fields}
+                  <label class="label" for="f-{f.fieldKey}">{f.label}</label>
+                  {#if f.type.name == 'LONG_TEXT'}
+                    <textarea id="f-{f.fieldKey}" class="textarea w-full" name="answers.{f.fieldKey}" {#if f.required}required{/if}></textarea>
+                  {#else if f.type.name == 'EMAIL'}
+                    <input id="f-{f.fieldKey}" class="input w-full" type="email" name="answers.{f.fieldKey}" {#if f.required}required{/if}>
+                  {#else if f.type.name == 'PHONE'}
+                    <input id="f-{f.fieldKey}" class="input w-full" type="tel" name="answers.{f.fieldKey}" {#if f.required}required{/if}>
+                  {#else if f.type.name == 'NUMBER'}
+                    <input id="f-{f.fieldKey}" class="input w-full" type="number" name="answers.{f.fieldKey}" {#if f.required}required{/if}>
+                  {#else}
+                    <input id="f-{f.fieldKey}" class="input w-full" type="text" name="answers.{f.fieldKey}" {#if f.required}required{/if}>
+                  {/if}
+                {/for}
+              </fieldset>
+
+              {! Honeypot (always present + hidden). A non-empty `website` → rejected server-side. !}
+              <input type="text" name="website" style="display:none" tabindex="-1" autocomplete="off">
+
+              {#if turnstileEnabled}
+              <div class="cf-turnstile" data-sitekey="{turnstileSiteKey}"></div>
+              {/if}
+
+              {#if type.requiresApproval}
+                <button type="submit" class="btn btn-primary btn-block">Request</button>
+              {#else}
+                <button type="submit" class="btn btn-primary btn-block">Confirm booking</button>
+              {/if}
+            </form>
+          {/if}
+          {tzScript.raw}
+          {calScript.raw}
+        </div>
+      </div>
     </div>
-  </article>
+  </div>
 {/include}
