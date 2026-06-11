@@ -1,11 +1,303 @@
-{#include base title="calit"}
-  <div class="card bg-base-100 border border-base-300 shadow-sm max-w-xl mx-auto">
-    <div class="card-body items-center text-center">
-      <h1 class="text-3xl font-bold">calit</h1>
-      <p class="text-base-content/70">Self-hosted scheduling. Each user has their own booking page.</p>
-      <div class="card-actions mt-2">
-        <a role="button" class="btn btn-primary" href="/login">Sign in</a>
+{#include base title="calit — scheduling you own" bodyClass="lp-body"}
+{#head}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..600&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ============ calit landing — "warm editorial-tech" ============ */
+  body.lp-body {
+    --paper:   #f4f1e9;
+    --paper-2: #ece7db;
+    --ink:     #16140f;
+    --ink-2:   #565049;
+    --indigo:  #4f46e5;
+    --indigo-2:#6d65f0;
+    --indigo-3:#a5b4fc;
+    --line:    rgba(22,20,15,.12);
+    --dark:    #121019;
+    --dark-2:  #1b1828;
+    --paper-on-dark: #efeadf;
+    --mut-on-dark:   #a39ec4;
+
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  /* break out of the base.html container + hide the global theme toggle on the landing */
+  body.lp-body > .fixed.top-3 { display: none; }
+  body.lp-body > main.container { max-width: none; width: 100%; margin: 0; padding: 0; }
+
+  .lp { position: relative; overflow-x: clip; }
+  /* paper grain */
+  .lp::before {
+    content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .5;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.045'/%3E%3C/svg%3E");
+    mix-blend-mode: multiply;
+  }
+  .lp > * { position: relative; z-index: 1; }
+  .lp-wrap { max-width: 1160px; margin-inline: auto; padding-inline: clamp(20px, 5vw, 40px); }
+
+  .lp-eyebrow {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: .72rem; font-weight: 500; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--indigo); display: inline-flex; align-items: center; gap: .6em;
+  }
+  .lp-eyebrow::before { content: ""; width: 26px; height: 1px; background: currentColor; opacity: .55; }
+
+  .lp h1, .lp h2, .lp h3 { font-family: "Fraunces", Georgia, serif; font-weight: 560; letter-spacing: -.01em; line-height: 1.04; }
+  .lp em { font-style: italic; color: var(--indigo); }
+
+  /* ---- nav ---- */
+  .lp-nav { display: flex; align-items: center; justify-content: space-between; padding: 26px 0 8px; }
+  .lp-brand { display: inline-flex; align-items: center; gap: .55rem; font-weight: 700; font-size: 1.18rem; letter-spacing: -.02em; text-decoration: none; color: var(--ink); }
+  .lp-brand .chip {
+    width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
+    background: var(--indigo); color: #fff; font-family: "Fraunces", serif; font-weight: 600; font-size: 1.05rem;
+    box-shadow: 0 6px 16px -6px rgba(79,70,229,.7);
+  }
+  .lp-nav-right { display: flex; align-items: center; gap: clamp(14px, 2vw, 26px); }
+  .lp-navlink { color: var(--ink-2); font-weight: 500; font-size: .95rem; text-decoration: none; transition: color .15s; }
+  .lp-navlink:hover { color: var(--ink); }
+
+  .lp-btn {
+    --b: var(--indigo); display: inline-flex; align-items: center; gap: .5em; font-weight: 600; font-size: .95rem;
+    padding: .68em 1.15em; border-radius: 11px; text-decoration: none; line-height: 1;
+    transition: transform .15s ease, box-shadow .2s ease, background .15s;
+  }
+  .lp-btn-primary { background: var(--b); color: #fff; box-shadow: 0 10px 24px -10px rgba(79,70,229,.8), inset 0 1px 0 rgba(255,255,255,.18); }
+  .lp-btn-primary:hover { transform: translateY(-2px); box-shadow: 0 16px 30px -12px rgba(79,70,229,.85); }
+  .lp-btn-ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  .lp-btn-ghost:hover { transform: translateY(-2px); border-color: rgba(22,20,15,.28); background: rgba(22,20,15,.03); }
+  .lp-btn .arr { transition: transform .2s ease; }
+  .lp-btn:hover .arr { transform: translateX(3px); }
+
+  /* ---- hero ---- */
+  .lp-hero { padding: clamp(48px, 8vw, 96px) 0 0; text-align: center; }
+  .lp-hero h1 { font-size: clamp(2.6rem, 6.4vw, 5.1rem); margin: 22px auto 0; max-width: 15ch; }
+  .lp-sub { margin: 26px auto 0; max-width: 60ch; font-size: clamp(1.05rem, 1.6vw, 1.28rem); line-height: 1.55; color: var(--ink-2); }
+  .lp-sub strong { color: var(--ink); font-weight: 600; }
+  .lp-cta { margin-top: 34px; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .lp-trust {
+    margin-top: 26px; font-family: "JetBrains Mono", monospace; font-size: .76rem; letter-spacing: .04em;
+    color: var(--ink-2); opacity: .85; display: flex; gap: 1.1em; justify-content: center; flex-wrap: wrap;
+  }
+  .lp-trust span { white-space: nowrap; }
+  .lp-trust span::before { content: "\2023 "; color: var(--indigo); }
+
+  /* hero shot + glow */
+  .lp-shot-wrap { margin: clamp(40px, 6vw, 76px) auto 0; max-width: 1000px; position: relative; }
+  .lp-shot-wrap::after {
+    content: ""; position: absolute; inset: -14% -6% 8%; z-index: -1; border-radius: 50%;
+    background: radial-gradient(60% 60% at 50% 40%, rgba(99,102,241,.42), rgba(99,102,241,0) 70%);
+    filter: blur(38px);
+  }
+
+  .lp-frame {
+    border-radius: 16px; background: #fff; border: 1px solid var(--line);
+    box-shadow: 0 40px 80px -36px rgba(22,20,15,.42), 0 12px 28px -18px rgba(22,20,15,.3);
+    overflow: hidden;
+  }
+  .lp-frame .bar {
+    height: 38px; display: flex; align-items: center; gap: 7px; padding: 0 15px;
+    background: linear-gradient(#fbfaf7, #f3f0ea); border-bottom: 1px solid var(--line);
+  }
+  .lp-frame .bar i { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+  .lp-frame .bar i:nth-child(1) { background: #ef6f5e; }
+  .lp-frame .bar i:nth-child(2) { background: #f3c150; }
+  .lp-frame .bar i:nth-child(3) { background: #62c264; }
+  .lp-frame .bar .url {
+    margin-left: 10px; font-family: "JetBrains Mono", monospace; font-size: .72rem; color: #9a958c;
+    background: #fff; border: 1px solid var(--line); border-radius: 7px; padding: 3px 12px; max-width: 60%;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .lp-frame img { display: block; width: 100%; height: auto; }
+
+  /* ---- dark "in action" band ---- */
+  .lp-dark {
+    margin-top: clamp(72px, 11vw, 150px); padding: clamp(64px, 9vw, 128px) 0;
+    background: var(--dark); color: var(--paper-on-dark); position: relative; isolation: isolate;
+  }
+  .lp-dark::before {
+    content: ""; position: absolute; inset: 0; z-index: -1; opacity: .9;
+    background:
+      radial-gradient(40% 55% at 12% 8%, rgba(99,102,241,.28), transparent 60%),
+      radial-gradient(38% 50% at 92% 96%, rgba(129,140,248,.22), transparent 60%);
+  }
+  .lp-dark .lp-eyebrow { color: var(--indigo-3); }
+  .lp-dark h2 { color: var(--paper-on-dark); }
+  .lp-head { max-width: 30ch; }
+  .lp-dark h2, .lp-feat h2 { font-size: clamp(2rem, 4vw, 3.1rem); margin-top: 16px; }
+  .lp-dark .lp-lede { color: var(--mut-on-dark); margin-top: 16px; max-width: 52ch; font-size: 1.08rem; line-height: 1.55; }
+
+  .lp-gallery { margin-top: clamp(40px, 6vw, 72px); display: grid; grid-template-columns: 1.5fr 1fr; gap: clamp(18px, 2.4vw, 30px); align-items: start; }
+  .lp-card .lp-frame {
+    box-shadow: 0 40px 90px -40px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.05);
+    border-color: rgba(255,255,255,.09); transition: transform .35s cubic-bezier(.2,.7,.2,1), box-shadow .35s;
+  }
+  .lp-card .lp-frame .bar { background: linear-gradient(#23202f, #1b1828); border-bottom-color: rgba(255,255,255,.07); }
+  .lp-card .lp-frame .bar .url { background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.08); color: var(--mut-on-dark); }
+  .lp-card:hover .lp-frame { transform: translateY(-6px); box-shadow: 0 56px 110px -44px rgba(0,0,0,.78), 0 0 0 1px rgba(165,180,252,.25); }
+  .lp-cap { margin-top: 16px; }
+  .lp-cap b { font-family: "Fraunces", serif; font-weight: 560; font-size: 1.15rem; }
+  .lp-cap span { display: block; color: var(--mut-on-dark); font-size: .92rem; margin-top: 4px; line-height: 1.5; }
+  .lp-cap code { font-family: "JetBrains Mono", monospace; font-size: .85em; color: var(--indigo-3); }
+  .lp-stackcol { display: grid; gap: clamp(18px, 2.4vw, 30px); }
+
+  /* ---- features ---- */
+  .lp-feat { padding: clamp(72px, 10vw, 132px) 0; }
+  .lp-feat .lp-lede { color: var(--ink-2); margin-top: 16px; max-width: 54ch; font-size: 1.08rem; line-height: 1.55; }
+  .lp-grid { margin-top: clamp(38px, 5vw, 60px); display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .lp-cell { background: var(--paper); padding: clamp(22px, 2.6vw, 34px); transition: background .2s; }
+  .lp-cell:hover { background: #fbf9f4; }
+  .lp-cell .k { font-family: "JetBrains Mono", monospace; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--indigo); }
+  .lp-cell h3 { font-size: 1.32rem; margin-top: 14px; }
+  .lp-cell p { margin-top: 9px; color: var(--ink-2); font-size: .96rem; line-height: 1.55; }
+
+  /* ---- closing CTA + footer ---- */
+  .lp-close { padding: clamp(60px, 9vw, 120px) 0; text-align: center; }
+  .lp-close .panel {
+    background: linear-gradient(180deg, #1b1828, #121019); color: var(--paper-on-dark);
+    border-radius: 24px; padding: clamp(44px, 6vw, 80px) clamp(24px, 5vw, 64px); position: relative; overflow: hidden;
+    box-shadow: 0 40px 90px -44px rgba(0,0,0,.6);
+  }
+  .lp-close .panel::before {
+    content: ""; position: absolute; inset: 0; z-index: 0; opacity: .85;
+    background: radial-gradient(50% 80% at 50% -10%, rgba(99,102,241,.4), transparent 65%);
+  }
+  .lp-close .panel > * { position: relative; z-index: 1; }
+  .lp-close h2 { font-size: clamp(2rem, 4.4vw, 3.2rem); color: var(--paper-on-dark); }
+  .lp-close p { color: var(--mut-on-dark); margin: 18px auto 0; max-width: 50ch; font-size: 1.06rem; line-height: 1.55; }
+  .lp-close .codeline {
+    display: inline-flex; gap: .5em; margin-top: 26px; font-family: "JetBrains Mono", monospace; font-size: .82rem;
+    background: rgba(0,0,0,.32); border: 1px solid rgba(255,255,255,.1); color: var(--indigo-3);
+    padding: .7em 1.1em; border-radius: 10px;
+  }
+  .lp-close .codeline .p { color: #6f6a8f; }
+  .lp-foot { border-top: 1px solid var(--line); padding: 30px 0 56px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; color: var(--ink-2); font-size: .9rem; }
+  .lp-foot .lp-brand { font-size: 1rem; }
+  .lp-foot .meta { font-family: "JetBrains Mono", monospace; font-size: .74rem; letter-spacing: .04em; opacity: .8; }
+
+  /* ---- motion ---- */
+  @keyframes lp-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+  .lp-rise { opacity: 0; animation: lp-rise .8s cubic-bezier(.2,.7,.2,1) forwards; }
+  .lp-d1 { animation-delay: .05s; }
+  .lp-d2 { animation-delay: .15s; }
+  .lp-d3 { animation-delay: .25s; }
+  .lp-d4 { animation-delay: .35s; }
+  .lp-d5 { animation-delay: .5s; }
+  @media (prefers-reduced-motion: reduce) { .lp-rise { animation: none; opacity: 1; } }
+
+  @media (max-width: 820px) {
+    .lp-gallery { grid-template-columns: 1fr; }
+    .lp-grid { grid-template-columns: 1fr; }
+    .lp-nav-right .hide-sm { display: none; }
+  }
+  html { scroll-behavior: smooth; }
+</style>
+{/head}
+
+<div class="lp">
+  <header class="lp-wrap lp-nav lp-rise lp-d1">
+    <a class="lp-brand" href="/"><span class="chip">c</span> calit</a>
+    <nav class="lp-nav-right">
+      <a class="lp-navlink hide-sm" href="#gallery">Product</a>
+      <a class="lp-navlink hide-sm" href="#features">Features</a>
+      <a class="lp-navlink" href="/login">Sign in</a>
+      <a class="lp-btn lp-btn-primary" href="/login">Open your instance <span class="arr">&rarr;</span></a>
+    </nav>
+  </header>
+
+  <section class="lp-wrap lp-hero">
+    <span class="lp-eyebrow lp-rise lp-d1">Self-hosted &middot; Open source &middot; Multi-user</span>
+    <h1 class="lp-rise lp-d2">The scheduling app you <em>actually own</em>.</h1>
+    <p class="lp-sub lp-rise lp-d3">calit gives every user their own Calendly &mdash; a personal booking page, availability,
+      and Google Calendar &mdash; running entirely on <strong>your</strong> server. No SaaS, no per-seat pricing, no lock-in.</p>
+    <div class="lp-cta lp-rise lp-d3">
+      <a class="lp-btn lp-btn-primary" href="/login">Sign in <span class="arr">&rarr;</span></a>
+      <a class="lp-btn lp-btn-ghost" href="#gallery">See it in action</a>
+    </div>
+    <div class="lp-trust lp-rise lp-d4">
+      <span>argon2id auth</span><span>Google Meet links</span><span>approval flows</span><span>one binary + Postgres</span>
+    </div>
+
+    <div class="lp-shot-wrap lp-rise lp-d5">
+      <div class="lp-frame">
+        <div class="bar"><i></i><i></i><i></i><span class="url">yourteam.com/alex/intro-call</span></div>
+        <img src="/img/product-booking.png" alt="calit booking page: a monthly calendar of available days beside a column of bookable time slots" width="1440" height="960">
       </div>
     </div>
-  </div>
+  </section>
+
+  <section id="gallery" class="lp-dark">
+    <div class="lp-wrap">
+      <div class="lp-head">
+        <span class="lp-eyebrow">A look inside</span>
+        <h2>One app. Three surfaces.</h2>
+        <p class="lp-lede">A public page for invitees, a personal landing for every user, and an owner console to run it all &mdash;
+          each isolated to its owner, served from the same self-hosted instance.</p>
+      </div>
+
+      <div class="lp-gallery">
+        <div class="lp-card">
+          <div class="lp-frame">
+            <div class="bar"><i></i><i></i><i></i><span class="url">yourteam.com/me</span></div>
+            <img src="/img/product-dashboard.png" loading="lazy" alt="calit owner dashboard showing upcoming bookings and a side navigation" width="1440" height="960">
+          </div>
+          <div class="lp-cap"><b>The owner console</b><span>Manage meeting types, availability, booking fields, Google sync, and &mdash; for admins &mdash; the whole team's users at <code>/me</code>.</span></div>
+        </div>
+        <div class="lp-stackcol">
+          <div class="lp-card">
+            <div class="lp-frame">
+              <div class="bar"><i></i><i></i><i></i><span class="url">yourteam.com/alex</span></div>
+              <img src="/img/product-landing.png" loading="lazy" alt="A user's public landing page listing their bookable meeting types" width="1440" height="960">
+            </div>
+            <div class="lp-cap"><b>Each user's landing</b><span>Every user gets <code>/their-name</code> &mdash; their own active meeting types, nobody else's.</span></div>
+          </div>
+          <div class="lp-card">
+            <div class="lp-frame">
+              <div class="bar"><i></i><i></i><i></i><span class="url">&hellip;/intro-call &middot; booked</span></div>
+              <img src="/img/product-confirmation.png" loading="lazy" alt="Booking confirmation screen shown to the invitee after they pick a time" width="1440" height="960">
+            </div>
+            <div class="lp-cap"><b>Confirmed in a tap</b><span>Invitees pick a slot in their own timezone; both sides get an email and a Meet link.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features" class="lp-wrap lp-feat">
+    <span class="lp-eyebrow">Why calit</span>
+    <h2>Built to be run, not rented.</h2>
+    <p class="lp-lede">Everything you expect from a scheduling tool &mdash; plus true multi-tenancy and the peace of mind of owning your data.</p>
+
+    <div class="lp-grid">
+      <div class="lp-cell"><div class="k">Isolation</div><h3>Per-user tenancy</h3><p>Every meeting type, booking, and setting carries an owner. One user can never see or touch another's data.</p></div>
+      <div class="lp-cell"><div class="k">Calendar</div><h3>Google sync &amp; Meet</h3><p>Connect each user's own Google account. Bookings create events and auto-generate a Meet link &mdash; or run fully degraded.</p></div>
+      <div class="lp-cell"><div class="k">Control</div><h3>Approvals &amp; limits</h3><p>Hold meetings as pending until approved, with per-type buffers, minimum notice, and a booking horizon.</p></div>
+      <div class="lp-cell"><div class="k">Trust</div><h3>Real authentication</h3><p>Passwords hashed with argon2id, stateless encrypted cookies, instant lockout &mdash; no embedded admin password.</p></div>
+      <div class="lp-cell"><div class="k">Defense</div><h3>Abuse protection</h3><p>Cloudflare Turnstile, a honeypot, and a per-email daily cap guard every public booking form out of the box.</p></div>
+      <div class="lp-cell"><div class="k">Ops</div><h3>One binary + Postgres</h3><p>A single Quarkus app and a database. Self-host it anywhere, invite your team, done. Opt-in public sign-up too.</p></div>
+    </div>
+  </section>
+
+  <section class="lp-wrap lp-close">
+    <div class="panel">
+      <span class="lp-eyebrow" style="justify-content:center;color:var(--indigo-3)">Get started</span>
+      <h2>Spin up your own in minutes.</h2>
+      <p>Point it at a Postgres database and open the site &mdash; the first visit creates your admin account. No license, no waitlist, no seat math.</p>
+      <div class="codeline"><span class="p">$</span> docker compose up <span class="p">&middot;</span> visit <span style="color:var(--paper-on-dark)">/setup</span></div>
+      <div class="lp-cta" style="justify-content:center;margin-top:28px">
+        <a class="lp-btn lp-btn-primary" href="/login">Sign in <span class="arr">&rarr;</span></a>
+        <a class="lp-btn lp-btn-ghost" style="color:var(--paper-on-dark);border-color:rgba(255,255,255,.18)" href="#features">Explore features</a>
+      </div>
+    </div>
+  </section>
+
+  <footer class="lp-wrap lp-foot">
+    <a class="lp-brand" href="/"><span class="chip">c</span> calit</a>
+    <span class="meta">Self-hosted scheduling &middot; your data never leaves your server</span>
+  </footer>
+</div>
 {/include}
