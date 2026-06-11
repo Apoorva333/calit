@@ -46,21 +46,13 @@ public class GoogleTokenService {
     /** Normalized token data, independent of the Google client types (keeps the test seam clean). */
     public record TokenResponse(String accessToken, String refreshToken, Instant expiry) {}
 
-    /** The Google consent URL the owner is redirected to. Pure string building — no network. */
-    public String buildConsentUrl() {
-        return buildConsentUrl(Instant.now());
-    }
-
     /**
-     * The Google consent URL, carrying a stateless, signed CSRF {@code state}. Pure string building.
-     *
-     * <p>Horizontal scalability: {@code /connect} and {@code /callback} can be served by different
-     * replicas, so the state must be self-describing — no HttpSession. The state is
-     * {@code base64url(nonce:issuedAtEpochSec) + "." + base64url(HMAC-SHA256(...))} signed with the
-     * shared {@code google.oauth.state-secret}. Any replica validates it at {@code /callback} by
-     * recomputing the HMAC and checking the {@link #STATE_TTL} window — no shared mutable state.
+     * The Google consent URL, carrying a stateless, signed CSRF state bound to {@code ownerId}.
+     * Layout: b64(nonce) ":" ownerId ":" issuedAtEpochSec "." b64(HMAC-SHA256(payload)), signed with
+     * the shared google.oauth.state-secret. Any replica validates it at /callback by recomputing the
+     * HMAC and checking the STATE_TTL window — no HttpSession. Pure string building, no network.
      */
-    public String buildConsentUrl(Instant now) {
+    public String buildConsentUrl(long ownerId, Instant now) {
         return AUTH_ENDPOINT + "?"
                 + "client_id=" + enc(config.oauth().clientId())
                 + "&redirect_uri=" + enc(config.oauth().redirectUri())
@@ -69,29 +61,26 @@ public class GoogleTokenService {
                 + "&access_type=offline"
                 + "&prompt=consent"
                 + "&include_granted_scopes=true"
-                + "&state=" + enc(issueState(now));
+                + "&state=" + enc(issueState(ownerId, now));
     }
 
-    /** Mint a signed, time-stamped state value. Stateless: nothing is stored server-side. */
-    public String issueState(Instant now) {
+    /** Mint a signed, time-stamped state bound to {@code ownerId}. Stateless: nothing stored. */
+    public String issueState(long ownerId, Instant now) {
         String payload = b64(UUID.randomUUID().toString().getBytes(StandardCharsets.UTF_8))
+                + ":" + ownerId
                 + ":" + now.getEpochSecond();
         return payload + "." + b64(hmac(payload));
     }
 
     /**
-     * Validate a state returned on the callback: signature must verify and the issue time must be
-     * within {@link #STATE_TTL} of {@code now}. No server-side session or lock — any replica can do
-     * this using only the shared secret. Returns false for any malformed, forged, or expired value.
+     * Validate a callback state and recover the owner id it was issued for. Signature must verify and
+     * the issue time must be within STATE_TTL of {@code now}. Returns {@code null} for any malformed,
+     * forged, or expired value. No server-side session — any replica validates with only the secret.
      */
-    public boolean validateState(String state, Instant now) {
-        if (state == null || state.isBlank()) {
-            return false;
-        }
+    public Long validateState(String state, Instant now) {
+        if (state == null || state.isBlank()) return null;
         int dot = state.lastIndexOf('.');
-        if (dot <= 0) {
-            return false;
-        }
+        if (dot <= 0) return null;
         String payload = state.substring(0, dot);
         String sig = state.substring(dot + 1);
         byte[] expected = hmac(payload);
@@ -99,21 +88,24 @@ public class GoogleTokenService {
         try {
             actual = Base64.getUrlDecoder().decode(sig);
         } catch (IllegalArgumentException e) {
-            return false;
+            return null;
         }
-        if (!java.security.MessageDigest.isEqual(expected, actual)) {
-            return false;
-        }
-        int colon = payload.lastIndexOf(':');
-        if (colon <= 0) {
-            return false;
-        }
+        if (!java.security.MessageDigest.isEqual(expected, actual)) return null;
+        // payload = b64(nonce) ":" ownerId ":" issuedAtEpochSec
+        // The nonce is base64url (alphabet A-Za-z0-9-_, no ':'), so the last two colons are always
+        // the field delimiters — walk them right-to-left.
+        int lastColon = payload.lastIndexOf(':');
+        if (lastColon <= 0) return null;
+        int prevColon = payload.lastIndexOf(':', lastColon - 1);
+        if (prevColon <= 0) return null;
         try {
-            long issuedAt = Long.parseLong(payload.substring(colon + 1));
+            long ownerId = Long.parseLong(payload.substring(prevColon + 1, lastColon));
+            long issuedAt = Long.parseLong(payload.substring(lastColon + 1));
             Instant issued = Instant.ofEpochSecond(issuedAt);
-            return !issued.isAfter(now) && !issued.plus(STATE_TTL).isBefore(now);
+            if (issued.isAfter(now) || issued.plus(STATE_TTL).isBefore(now)) return null;
+            return ownerId;
         } catch (NumberFormatException e) {
-            return false;
+            return null;
         }
     }
 

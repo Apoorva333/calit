@@ -9,6 +9,7 @@ import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusTest
@@ -35,7 +36,7 @@ class GoogleTokenServiceTest {
     @Test
     void buildConsentUrlIncludesOfflineAndConsentAndScope() {
         GoogleTokenService svc = new GoogleTokenService(config);
-        String url = svc.buildConsentUrl();
+        String url = svc.buildConsentUrl(1L, java.time.Instant.parse("2026-06-08T12:00:00Z"));
 
         assertTrue(url.startsWith("https://accounts.google.com/o/oauth2/v2/auth?"));
         assertTrue(url.contains("access_type=offline"));
@@ -51,17 +52,17 @@ class GoogleTokenServiceTest {
     void stateRoundTripsStatelesslyWithinTtl() {
         GoogleTokenService svc = new GoogleTokenService(config);
         Instant now = Instant.parse("2026-06-08T12:00:00Z");
-        String state = svc.issueState(now);
+        String state = svc.issueState(1L, now);
 
-        // A fresh, untampered state validates on any replica using only the shared secret.
-        assertTrue(svc.validateState(state, now.plusSeconds(60)));
+        // A fresh, untampered state validates on any replica and recovers the owner id.
+        assertEquals(1L, svc.validateState(state, now.plusSeconds(60)));
         // Expired beyond the TTL window: rejected.
-        assertEquals(false, svc.validateState(state, now.plus(GoogleTokenService.STATE_TTL).plusSeconds(1)));
+        assertNull(svc.validateState(state, now.plus(GoogleTokenService.STATE_TTL).plusSeconds(1)));
         // Tampered signature: rejected.
-        assertEquals(false, svc.validateState(state + "x", now.plusSeconds(60)));
+        assertNull(svc.validateState(state + "x", now.plusSeconds(60)));
         // Garbage / missing: rejected.
-        assertEquals(false, svc.validateState("not-a-state", now));
-        assertEquals(false, svc.validateState(null, now));
+        assertNull(svc.validateState("not-a-state", now));
+        assertNull(svc.validateState(null, now));
     }
 
     @Test
