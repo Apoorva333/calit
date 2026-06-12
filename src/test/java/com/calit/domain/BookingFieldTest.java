@@ -15,8 +15,14 @@ class BookingFieldTest {
     @Test
     @TestTransaction
     void globalFormIncludesSeededDescription() {
-        // No per-type fields for this id -> falls back to the global default form.
-        List<BookingField> form = BookingField.formFor(999_999L);
+        // Global default fields are now per-owner (the V1 singleton seed was dropped by V8), so seed
+        // owner 1L's global "description" field explicitly, then resolve it via the global form.
+        BookingField desc = field(null, "description", "Description",
+                BookingField.FieldType.LONG_TEXT, false, 0);
+        desc.persist();
+
+        // No per-type fields for this id -> falls back to the owner's global default form.
+        List<BookingField> form = BookingField.formFor(1L, 999_999L);
         assertTrue(form.stream().anyMatch(f -> "description".equals(f.fieldKey)));
     }
 
@@ -26,6 +32,7 @@ class BookingFieldTest {
         // booking_field.meeting_type_id is a real FK, so persist a MeetingType first and use
         // its generated id (a literal id would violate the FK constraint).
         MeetingType type = new MeetingType();
+        type.ownerId = 1L;
         type.name = "BF Test";
         type.slug = "bookingfield-override-type";
         type.durationMinutes = 30;
@@ -38,7 +45,7 @@ class BookingFieldTest {
                 BookingField.FieldType.SHORT_TEXT, false, 0);
         vat.persist();
 
-        List<BookingField> form = BookingField.formFor(type.id);
+        List<BookingField> form = BookingField.formFor(1L, type.id);
 
         assertEquals(2, form.size());
         assertEquals("vat", form.get(0).fieldKey);     // position 0 first
@@ -48,6 +55,7 @@ class BookingFieldTest {
     private BookingField field(Long typeId, String key, String label,
                                BookingField.FieldType type, boolean required, int position) {
         BookingField f = new BookingField();
+        f.ownerId = 1L;
         f.meetingTypeId = typeId;
         f.fieldKey = key;
         f.label = label;

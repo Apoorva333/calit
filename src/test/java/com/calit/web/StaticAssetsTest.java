@@ -10,16 +10,10 @@ import static org.hamcrest.Matchers.containsString;
 class StaticAssetsTest {
 
     @Test
-    void picoWebjarIsServedVersionAgnostically() {
-        given().when().get("/webjars/picocss__pico/css/pico.indigo.min.css")
-                .then().statusCode(200)
-                .contentType(containsString("css"));
-    }
-
-    @Test
     void customStylesheetIsServed() {
         given().when().get("/calit.css")
                 .then().statusCode(200)
-                .body(containsString("--calit"));
+                .contentType(containsString("css"))
+                .body(containsString("--color-base-100"));
     }
 }

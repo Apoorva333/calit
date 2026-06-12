@@ -153,10 +153,10 @@ class SlotServiceTest {
     // --- helpers ---
 
     private void seedSettings(String zone) {
-        OwnerSettings s = OwnerSettings.get();
+        OwnerSettings s = OwnerSettings.forOwner(1L);
         if (s == null) {
             s = new OwnerSettings();
-            s.id = OwnerSettings.SINGLETON_ID;
+            s.ownerId = 1L;
         }
         s.ownerName = "Owner";
         s.ownerEmail = "owner@example.com";
@@ -166,6 +166,7 @@ class SlotServiceTest {
 
     private MeetingType meetingType(String slug, int minutes) {
         MeetingType t = new MeetingType();
+        t.ownerId = 1L;
         t.name = slug;
         t.slug = slug;
         t.durationMinutes = minutes;
@@ -183,6 +184,7 @@ class SlotServiceTest {
 
     private void rule(DayOfWeek dow, String start, String end, Long meetingTypeId) {
         AvailabilityRule r = new AvailabilityRule();
+        r.ownerId = 1L;
         r.dayOfWeek = dow;
         r.startTime = LocalTime.parse(start);
         r.endTime = LocalTime.parse(end);

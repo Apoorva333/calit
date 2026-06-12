@@ -17,7 +17,7 @@ class AdminMeetingTypeFormTest {
     void createFormExposesBufferInputs() {
         given()
             .cookie("quarkus-credential", FormAuth.login())
-            .when().get("/admin/meeting-types")
+            .when().get("/me/meeting-types")
             .then()
                 .statusCode(200)
                 .body(containsString("name=\"bufferBeforeMinutes\""))
@@ -40,10 +40,10 @@ class AdminMeetingTypeFormTest {
             .formParam("locationType", "GOOGLE_MEET")
             .formParam("locationDetail", "")
             .formParam("slotIntervalMinutes", "")
-            .when().post("/admin/meeting-types")
+            .when().post("/me/meeting-types")
             .then().statusCode(200);
 
-        MeetingType t = MeetingType.findBySlug(slug);
+        MeetingType t = MeetingType.findBySlug(1L, slug);
         assertNotNull(t);
         assertEquals(10, t.bufferBeforeMinutes);
         assertEquals(15, t.bufferAfterMinutes);
@@ -63,10 +63,10 @@ class AdminMeetingTypeFormTest {
             .formParam("locationType", "GOOGLE_MEET")
             .formParam("locationDetail", "")
             .formParam("slotIntervalMinutes", "")
-            .when().post("/admin/meeting-types")
+            .when().post("/me/meeting-types")
             .then().statusCode(200);
 
-        MeetingType t = MeetingType.findBySlug(Slugs.slugify(name));
+        MeetingType t = MeetingType.findBySlug(1L, Slugs.slugify(name));
         org.junit.jupiter.api.Assertions.assertNotNull(t);
     }
 
@@ -86,18 +86,18 @@ class AdminMeetingTypeFormTest {
                 .formParam("locationType", "GOOGLE_MEET")
                 .formParam("locationDetail", "")
                 .formParam("slotIntervalMinutes", "")
-                .when().post("/admin/meeting-types")
+                .when().post("/me/meeting-types")
                 .then().statusCode(200);
         }
-        org.junit.jupiter.api.Assertions.assertNotNull(MeetingType.findBySlug(base));
-        org.junit.jupiter.api.Assertions.assertNotNull(MeetingType.findBySlug(base + "-2"));
+        org.junit.jupiter.api.Assertions.assertNotNull(MeetingType.findBySlug(1L, base));
+        org.junit.jupiter.api.Assertions.assertNotNull(MeetingType.findBySlug(1L, base + "-2"));
     }
 
     @Test
     void slugInputHasLiveFillScript() {
         given()
             .cookie("quarkus-credential", FormAuth.login())
-            .when().get("/admin/meeting-types")
+            .when().get("/me/meeting-types")
             .then()
                 .statusCode(200)
                 .body(containsString("data-slug-autofill")); // marker the JS hooks onto
@@ -107,7 +107,7 @@ class AdminMeetingTypeFormTest {
     void createFormExposesWorkingHoursAndOverrideInputs() {
         given()
             .cookie("quarkus-credential", FormAuth.login())
-            .when().get("/admin/meeting-types")
+            .when().get("/me/meeting-types")
             .then()
                 .statusCode(200)
                 .body(containsString("name=\"ruleDay\""))
@@ -134,10 +134,10 @@ class AdminMeetingTypeFormTest {
             .formParam("ruleDay", "MONDAY", "TUESDAY")
             .formParam("ruleStart", "09:00", "")
             .formParam("ruleEnd", "17:00", "")
-            .when().post("/admin/meeting-types")
+            .when().post("/me/meeting-types")
             .then().statusCode(200);
 
-        MeetingType t = MeetingType.findBySlug(slug);
+        MeetingType t = MeetingType.findBySlug(1L, slug);
         assertNotNull(t);
         long count = com.calit.domain.AvailabilityRule.count("meetingTypeId = ?1", t.id);
         assertEquals(1, count); // only the Monday row, blank Tuesday skipped
@@ -160,10 +160,10 @@ class AdminMeetingTypeFormTest {
             .formParam("overrideDate", "2026-12-24")
             .formParam("windowStart", "09:00")
             .formParam("windowEnd", "11:00")
-            .when().post("/admin/meeting-types")
+            .when().post("/me/meeting-types")
             .then().statusCode(200);
 
-        MeetingType t = MeetingType.findBySlug(slug);
+        MeetingType t = MeetingType.findBySlug(1L, slug);
         assertNotNull(t);
         com.calit.domain.DateOverride o =
                 com.calit.domain.DateOverride.find("meetingTypeId = ?1", t.id).firstResult();
@@ -185,10 +185,10 @@ class AdminMeetingTypeFormTest {
             .formParam("locationType", "GOOGLE_MEET")
             .formParam("locationDetail", "")
             .formParam("slotIntervalMinutes", "")
-            .when().post("/admin/meeting-types")
+            .when().post("/me/meeting-types")
             .then().statusCode(200);
 
-        MeetingType t = MeetingType.findBySlug(slug);
+        MeetingType t = MeetingType.findBySlug(1L, slug);
         assertNotNull(t);
         assertEquals(0, com.calit.domain.AvailabilityRule.count("meetingTypeId = ?1", t.id));
     }

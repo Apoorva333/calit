@@ -7,6 +7,7 @@ import com.calit.domain.BookingField.FieldType;
 import com.calit.domain.MeetingType;
 import com.calit.domain.MeetingType.LocationType;
 import com.calit.domain.OwnerSettings;
+import com.calit.user.AppUser;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.transaction.Transactional;
@@ -20,6 +21,7 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
 @QuarkusTest
@@ -30,15 +32,19 @@ class BookPageTest {
 
     @Transactional
     void seed() {
+        AppUser owner = AppUser.findByUsername("bob");
+        if (owner == null) { owner = AppUser.create("bob", "x", false); owner.persistAndFlush(); } // create() builds but does not persist; flush to assign id
+        Long ownerId = owner.id;
         // Idempotent across the multiple seed() calls in this class (committed tx, fixed slug).
-        BookingField.delete("meetingTypeId in (select id from MeetingType where slug = ?1)", "book-page");
-        MeetingType.delete("slug", "book-page");
-        OwnerSettings s = OwnerSettings.get();
-        if (s == null) { s = new OwnerSettings(); s.id = OwnerSettings.SINGLETON_ID; }
+        BookingField.delete("meetingTypeId in (select id from MeetingType where slug = ?1 and ownerId = ?2)", "book-page", ownerId);
+        MeetingType.delete("ownerId = ?1 and slug = ?2", ownerId, "book-page");
+        OwnerSettings s = OwnerSettings.forOwner(ownerId);
+        if (s == null) { s = new OwnerSettings(); s.ownerId = ownerId; }
         s.ownerName = "Owner"; s.ownerEmail = "owner@example.com"; s.timezone = "Europe/Amsterdam";
         s.persist();
 
         MeetingType t = new MeetingType();
+        t.ownerId = ownerId;
         t.name = "Book Page Type"; t.slug = "book-page"; t.durationMinutes = 60;
         t.locationType = LocationType.GOOGLE_MEET; // auto type, Meet location
         t.persist();
@@ -46,6 +52,7 @@ class BookPageTest {
         // A rule for every weekday so at least one day in the next 14 has slots.
         for (DayOfWeek dow : DayOfWeek.values()) {
             AvailabilityRule r = new AvailabilityRule();
+            r.ownerId = ownerId;
             r.dayOfWeek = dow; r.startTime = LocalTime.of(9, 0); r.endTime = LocalTime.of(12, 0);
             r.meetingTypeId = null;
             r.persist();
@@ -53,6 +60,7 @@ class BookPageTest {
 
         // A required custom EXTRA field for this type — must render on the booking form.
         BookingField f = new BookingField();
+        f.ownerId = ownerId;
         f.meetingTypeId = t.id; f.fieldKey = "company"; f.label = "Company Name";
         f.type = FieldType.SHORT_TEXT; f.required = true; f.position = 0;
         f.persist();
@@ -61,18 +69,24 @@ class BookPageTest {
     /** A PHONE-located, approval-requiring type to exercise features 13 + 14a wording. */
     @Transactional
     void seedApprovalPhoneType() {
-        OwnerSettings s = OwnerSettings.get();
-        if (s == null) { s = new OwnerSettings(); s.id = OwnerSettings.SINGLETON_ID; }
+        AppUser owner = AppUser.findByUsername("bob");
+        if (owner == null) { owner = AppUser.create("bob", "x", false); owner.persistAndFlush(); } // create() builds but does not persist; flush to assign id
+        Long ownerId = owner.id;
+        MeetingType.delete("ownerId = ?1 and slug = ?2", ownerId, "phone-approval");
+        OwnerSettings s = OwnerSettings.forOwner(ownerId);
+        if (s == null) { s = new OwnerSettings(); s.ownerId = ownerId; }
         s.ownerName = "Owner"; s.ownerEmail = "owner@example.com"; s.timezone = "Europe/Amsterdam";
         s.persist();
 
         MeetingType t = new MeetingType();
+        t.ownerId = ownerId;
         t.name = "Phone Approval Type"; t.slug = "phone-approval"; t.durationMinutes = 60;
         t.locationType = LocationType.PHONE; t.locationDetail = "Call +1-555-0100";
         t.requiresApproval = true;
         t.persist();
         for (DayOfWeek dow : DayOfWeek.values()) {
             AvailabilityRule r = new AvailabilityRule();
+            r.ownerId = ownerId;
             r.dayOfWeek = dow; r.startTime = LocalTime.of(9, 0); r.endTime = LocalTime.of(12, 0);
             r.meetingTypeId = null;
             r.persist();
@@ -82,12 +96,12 @@ class BookPageTest {
     @Test
     void bookPageRendersSlotsBuiltInsCustomFieldHoneypotForExistingSlug() {
         // Connected, no busy → all raw slots survive.
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
         seed();
 
         given()
-            .when().get("/book/book-page")
+            .when().get("/bob/book-page")
             .then()
                 .statusCode(200)
                 .body(containsString("Book Page Type"))
@@ -107,12 +121,12 @@ class BookPageTest {
 
     @Test
     void bookPageShowsRequestWordingAndLocationDetailForApprovalType() {
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
         seedApprovalPhoneType();
 
         given()
-            .when().get("/book/phone-approval")
+            .when().get("/bob/phone-approval")
             .then()
                 .statusCode(200)
                 // Approval type → submit button reads "Request" (NOT "Confirm booking").
@@ -125,12 +139,12 @@ class BookPageTest {
     @Test
     void bookPageOmitsTurnstileWidgetWhenDisabled() {
         // Default test profile has calit.turnstile.enabled=false → no widget/script.
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
         seed();
 
         given()
-            .when().get("/book/book-page")
+            .when().get("/bob/book-page")
             .then()
                 .statusCode(200)
                 .body(not(containsString("cf-turnstile")))
@@ -144,11 +158,11 @@ class BookPageTest {
         // The server can't run JS in @QuarkusTest, so assert the SERVER-rendered HTML
         // carries the machinery the inline script needs: per-slot data-utc absolute
         // instants, the tz-picker select, the "Times shown in" label, and the reformat script.
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
         seed();
 
-        String html = given().when().get("/book/book-page")
+        String html = given().when().get("/bob/book-page")
                 .then().statusCode(200).extract().asString();
 
         // 1) Each slot's absolute instant is rendered in a machine-readable data-utc attribute.
@@ -163,7 +177,7 @@ class BookPageTest {
                 "the same absolute instant must appear as a data-utc display attribute");
 
         given()
-            .when().get("/book/book-page")
+            .when().get("/bob/book-page")
             .then()
                 .statusCode(200)
                 .body(containsString("id=\"tz-picker\""))     // timezone override select
@@ -176,12 +190,12 @@ class BookPageTest {
 
     @Test
     void bookPageRendersCalendarPickerAndDaySections() {
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
         seed();
 
         given()
-            .when().get("/book/book-page")
+            .when().get("/bob/book-page")
             .then()
                 .statusCode(200)
                 .body(containsString("CALIT_CALENDAR"))      // enhancement script present
@@ -192,11 +206,11 @@ class BookPageTest {
 
     @Test
     void bookPageHidesMeetHintWhenGoogleNotConnected() {
-        when(calendarPort.isConnected()).thenReturn(false);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(java.util.List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(false);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(java.util.List.of());
         seed();
         given()
-            .when().get("/book/book-page")
+            .when().get("/bob/book-page")
             .then().statusCode(200)
                 .body(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("link sent after booking")));
     }
@@ -204,7 +218,7 @@ class BookPageTest {
     @Test
     void bookPageReturns404ForMissingSlug() {
         given()
-            .when().get("/book/does-not-exist")
+            .when().get("/bob/does-not-exist")
             .then().statusCode(404);
     }
 
@@ -212,11 +226,11 @@ class BookPageTest {
     void bookPageWindowFollowsTypeHorizonNotA14DayCap() {
         // seed() gives every weekday a 9-12 rule and a type with the default horizonDays = 60.
         // The booking page must offer days well beyond two weeks (the old hardcoded 14-day cap).
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
         seed();
 
-        String html = given().when().get("/book/book-page")
+        String html = given().when().get("/bob/book-page")
                 .then().statusCode(200).extract().asString();
 
         // Collect every rendered day section's ISO date and find the furthest one.
@@ -237,15 +251,15 @@ class BookPageTest {
 
     @Test
     void bookPageRendersLeftInfoPanelWithHostAndDuration() {
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
         seed();
 
         given()
-            .when().get("/book/book-page")
+            .when().get("/bob/book-page")
             .then()
                 .statusCode(200)
-                .body(containsString("class=\"book-info\""))   // left info panel
+                .body(containsString("Select a Date"))          // picker panel heading
                 .body(containsString("Owner"))                  // host name from OwnerSettings
                 .body(containsString("60 min"))                 // clock-icon duration line
                 .body(containsString("id=\"calendar\""));       // picker still present

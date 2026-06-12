@@ -8,3 +8,16 @@ target/
 
 # Visual brainstorm companion
 .superpowers/
+
+# JS deps (build-stage only; nothing ships at runtime)
+node_modules/
+
+# Generated stylesheet (built by `bun run css:build`)
+src/main/resources/META-INF/resources/calit.css
+
+# Playwright MCP artifacts
+.playwright-mcp/
+working-hours-*.png
+
+# local CI validator
+/actionlint

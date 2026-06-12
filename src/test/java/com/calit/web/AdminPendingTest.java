@@ -23,6 +23,7 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
 @QuarkusTest
@@ -37,8 +38,8 @@ class AdminPendingTest {
     /** Seeds an approval-type meeting and books it → the booking lands PENDING. Returns its id. */
     @Transactional
     Long seedPendingBooking() {
-        OwnerSettings s = OwnerSettings.get();
-        if (s == null) { s = new OwnerSettings(); s.id = OwnerSettings.SINGLETON_ID; }
+        OwnerSettings s = OwnerSettings.forOwner(1L);
+        if (s == null) { s = new OwnerSettings(); s.ownerId = 1L; }
         s.ownerName = "Owner"; s.ownerEmail = "owner@example.com"; s.timezone = "Europe/Amsterdam";
         s.persist();
 
@@ -46,54 +47,56 @@ class AdminPendingTest {
         // collide on the meeting_type unique-slug constraint across tests (Plan 5 isolation).
         String slug = "pending-queue-" + System.nanoTime();
         MeetingType t = new MeetingType();
+        t.ownerId = 1L;
         t.name = "Pending Queue Type"; t.slug = slug; t.durationMinutes = 60;
         t.locationType = LocationType.GOOGLE_MEET; t.requiresApproval = true;
         t.persist();
         for (DayOfWeek dow : DayOfWeek.values()) {
             AvailabilityRule r = new AvailabilityRule();
+            r.ownerId = 1L;
             r.dayOfWeek = dow; r.startTime = LocalTime.of(9, 0); r.endTime = LocalTime.of(12, 0);
             r.meetingTypeId = null;
             r.persist();
         }
         var slot = bookingService.availableSlots(t, java.time.LocalDate.now(),
                 java.time.LocalDate.now().plusDays(14)).get(0);
-        Booking b = bookingService.book(slug, slot.start().toInstant(),
+        Booking b = bookingService.book(1L, slug, slot.start().toInstant(),
                 "Pending Pat", "pat@example.com", java.util.Map.of(), "", "");
         return b.id; // status == PENDING
     }
 
     @Test
     void pendingQueueListsPendingBookingWithApproveDeclineForms() {
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
-        when(calendarPort.createEvent(any(), any(), any(), any(), any(), anyBoolean(), any()))
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
+        when(calendarPort.createEvent(anyLong(), any(), any(), any(), any(), any(), anyBoolean(), any()))
             .thenReturn(new CreatedEvent("evt-p", "https://meet.google.com/pending", "h"));
         Long id = seedPendingBooking();
 
         given()
             .cookie("quarkus-credential", FormAuth.login())
-            .when().get("/admin/pending")
+            .when().get("/me/pending")
             .then()
                 .statusCode(200)
                 .body(containsString("Pending Pat"))                       // the PENDING booking
-                .body(containsString("/admin/bookings/" + id + "/approve")) // approve form
-                .body(containsString("/admin/bookings/" + id + "/decline")) // decline form
+                .body(containsString("/me/bookings/" + id + "/approve")) // approve form
+                .body(containsString("/me/bookings/" + id + "/decline")) // decline form
                 .body(containsString("Approve"))
                 .body(containsString("Decline"));
     }
 
     @Test
     void approveConfirmsTheBooking() {
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
-        when(calendarPort.createEvent(any(), any(), any(), any(), any(), anyBoolean(), any()))
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
+        when(calendarPort.createEvent(anyLong(), any(), any(), any(), any(), any(), anyBoolean(), any()))
             .thenReturn(new CreatedEvent("evt-a", "https://meet.google.com/approved", "h"));
         Long id = seedPendingBooking();
 
         given()
             .cookie("quarkus-credential", FormAuth.login())
             .contentType("application/x-www-form-urlencoded")
-            .when().post("/admin/bookings/" + id + "/approve")
+            .when().post("/me/bookings/" + id + "/approve")
             .then().statusCode(200);
 
         org.junit.jupiter.api.Assertions.assertEquals(
@@ -102,14 +105,14 @@ class AdminPendingTest {
 
     @Test
     void declineMarksTheBookingDeclined() {
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
         Long id = seedPendingBooking();
 
         given()
             .cookie("quarkus-credential", FormAuth.login())
             .contentType("application/x-www-form-urlencoded")
-            .when().post("/admin/bookings/" + id + "/decline")
+            .when().post("/me/bookings/" + id + "/decline")
             .then().statusCode(200);
 
         org.junit.jupiter.api.Assertions.assertEquals(
@@ -118,6 +121,6 @@ class AdminPendingTest {
 
     @Test
     void pendingPageRequiresAuth() {
-        given().redirects().follow(false).when().get("/admin/pending").then().statusCode(302);
+        given().redirects().follow(false).when().get("/me/pending").then().statusCode(302);
     }
 }

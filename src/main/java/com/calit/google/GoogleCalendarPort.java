@@ -42,20 +42,20 @@ public class GoogleCalendarPort implements CalendarPort {
         this.clientFactory = clientFactory;
     }
 
-    private Calendar client() {
-        return clientFactory.build(tokens.validAccessToken(Instant.now()));
+    private Calendar client(Long ownerId) {
+        return clientFactory.build(tokens.validAccessToken(ownerId, Instant.now()));
     }
 
     @Override
     @Transactional
-    public boolean isConnected() {
-        // Connected iff the singleton OAuth credential (with refresh token) exists. No Google call.
-        return GoogleCredential.get() != null;
+    public boolean isConnected(Long ownerId) {
+        // Connected iff this owner's OAuth credential (with refresh token) exists. No Google call.
+        return GoogleCredential.forOwner(ownerId) != null;
     }
 
     @Override
-    public List<BusyInterval> freeBusy(Instant from, Instant to) {
-        List<GoogleCalendar> readers = GoogleCalendar.readForBusy();
+    public List<BusyInterval> freeBusy(Long ownerId, Instant from, Instant to) {
+        List<GoogleCalendar> readers = GoogleCalendar.readForBusy(ownerId);
         if (readers.isEmpty()) {
             return List.of();
         }
@@ -66,7 +66,7 @@ public class GoogleCalendarPort implements CalendarPort {
                         .map(c -> new FreeBusyRequestItem().setId(c.googleCalendarId))
                         .toList());
         try {
-            FreeBusyResponse response = client().freebusy().query(request).execute();
+            FreeBusyResponse response = client(ownerId).freebusy().query(request).execute();
             List<BusyInterval> raw = new ArrayList<>();
             Map<String, FreeBusyCalendar> calendars = response.getCalendars();
             if (calendars != null) {
@@ -88,16 +88,16 @@ public class GoogleCalendarPort implements CalendarPort {
     }
 
     @Override
-    public CreatedEvent createEvent(String summary, String description,
+    public CreatedEvent createEvent(Long ownerId, String summary, String description,
                                     Instant start, Instant end,
                                     List<String> attendeeEmails,
                                     boolean createMeetLink, String locationText) {
-        GoogleCalendar target = requireWriteTarget();
+        GoogleCalendar target = requireWriteTarget(ownerId);
         Event event = new Event()
                 .setSummary(summary)
                 .setDescription(description)
-                .setStart(eventTime(start))
-                .setEnd(eventTime(end));
+                .setStart(eventTime(ownerId, start))
+                .setEnd(eventTime(ownerId, end));
 
         if (attendeeEmails != null && !attendeeEmails.isEmpty()) {
             event.setAttendees(attendeeEmails.stream()
@@ -120,7 +120,7 @@ public class GoogleCalendarPort implements CalendarPort {
         try {
             // setConferenceDataVersion(1) is required so Google honors the createRequest; harmless when absent.
             // setSendUpdates("all") makes Google email the attendees the invite (chosen invitee path).
-            Event created = client().events()
+            Event created = client(ownerId).events()
                     .insert(target.googleCalendarId, event)
                     .setConferenceDataVersion(createMeetLink ? 1 : 0)
                     .setSendUpdates("all")
@@ -133,14 +133,14 @@ public class GoogleCalendarPort implements CalendarPort {
     }
 
     @Override
-    public void updateEvent(String eventId, Instant start, Instant end) {
-        GoogleCalendar target = requireWriteTarget();
+    public void updateEvent(Long ownerId, String eventId, Instant start, Instant end) {
+        GoogleCalendar target = requireWriteTarget(ownerId);
         Event patch = new Event()
-                .setStart(eventTime(start))
-                .setEnd(eventTime(end));
+                .setStart(eventTime(ownerId, start))
+                .setEnd(eventTime(ownerId, end));
         try {
             // sendUpdates=all so Google emails the attendees the rescheduled time.
-            client().events().patch(target.googleCalendarId, eventId, patch)
+            client(ownerId).events().patch(target.googleCalendarId, eventId, patch)
                     .setSendUpdates("all")
                     .execute();
         } catch (IOException e) {
@@ -149,11 +149,11 @@ public class GoogleCalendarPort implements CalendarPort {
     }
 
     @Override
-    public void deleteEvent(String eventId) {
-        GoogleCalendar target = requireWriteTarget();
+    public void deleteEvent(Long ownerId, String eventId) {
+        GoogleCalendar target = requireWriteTarget(ownerId);
         try {
             // sendUpdates=all so Google emails the attendees the cancellation.
-            client().events().delete(target.googleCalendarId, eventId)
+            client(ownerId).events().delete(target.googleCalendarId, eventId)
                     .setSendUpdates("all")
                     .execute();
         } catch (IOException e) {
@@ -161,8 +161,8 @@ public class GoogleCalendarPort implements CalendarPort {
         }
     }
 
-    private GoogleCalendar requireWriteTarget() {
-        GoogleCalendar target = GoogleCalendar.writeTarget();
+    private GoogleCalendar requireWriteTarget(Long ownerId) {
+        GoogleCalendar target = GoogleCalendar.writeTarget(ownerId);
         if (target == null) {
             throw new IllegalStateException("No write-target Google calendar selected. POST /api/google/calendars.");
         }
@@ -172,13 +172,13 @@ public class GoogleCalendarPort implements CalendarPort {
     /**
      * Build the Google EventDateTime for a start/end instant. The absolute instant
      * (epoch-millis DateTime) is already unambiguous, but we additionally stamp the event's
-     * start.timeZone / end.timeZone with the OWNER's IANA zone (read from the OwnerSettings
-     * singleton) so the Google event "owns" the owner's timezone — cleaner for attendees and for
+     * start.timeZone / end.timeZone with the OWNER's IANA zone (read from the given owner's
+     * OwnerSettings) so the Google event "owns" the owner's timezone — cleaner for attendees and for
      * DST handling on Google's side. Each attendee's Google client still displays the event in
      * their own local zone automatically; the invitee's timezone is never stored.
      */
-    private static EventDateTime eventTime(Instant instant) {
-        String ownerZoneId = OwnerSettings.get().timezone;
+    private EventDateTime eventTime(Long ownerId, Instant instant) {
+        String ownerZoneId = OwnerSettings.forOwner(ownerId).timezone;
         return new EventDateTime()
                 .setDateTime(new DateTime(instant.toEpochMilli()))
                 .setTimeZone(ownerZoneId);

@@ -87,11 +87,11 @@ public class BookingService {
      */
     public List<TimeSlot> availableSlots(MeetingType type, LocalDate from, LocalDate to,
                                          Long excludeBookingId) {
-        ZoneId zone = ZoneId.of(OwnerSettings.get().timezone);
+        ZoneId zone = ZoneId.of(OwnerSettings.forOwner(type.ownerId).timezone);
         Instant fromInstant = from.atStartOfDay(zone).toInstant();
         Instant toInstant = to.plusDays(1).atStartOfDay(zone).toInstant();
 
-        List<Interval> busy = busyIntervals(fromInstant, toInstant, excludeBookingId);
+        List<Interval> busy = busyIntervals(type.ownerId, fromInstant, toInstant, excludeBookingId);
 
         // Feature 11 bounds, captured once relative to request time.
         Instant now = Instant.now();
@@ -121,14 +121,14 @@ public class BookingService {
      * PENDING+CONFIRMED bookings in the window (minus an excluded one). PENDING is included so a
      * pending approval request holds its slot (feature 14).
      */
-    List<Interval> busyIntervals(Instant from, Instant to, Long excludeBookingId) {
+    List<Interval> busyIntervals(Long ownerId, Instant from, Instant to, Long excludeBookingId) {
         List<Interval> busy = new ArrayList<>();
-        if (calendarPort.isConnected()) {
-            for (BusyInterval bi : calendarPort.freeBusy(from, to)) {
+        if (calendarPort.isConnected(ownerId)) {
+            for (BusyInterval bi : calendarPort.freeBusy(ownerId, from, to)) {
                 busy.add(new Interval(bi.start(), bi.end()));
             }
         }
-        for (Booking b : Booking.<Booking>heldOverlapping(from, to)) {
+        for (Booking b : Booking.<Booking>heldOverlapping(ownerId, from, to)) {
             if (excludeBookingId != null && excludeBookingId.equals(b.id)) {
                 continue;
             }
@@ -138,12 +138,13 @@ public class BookingService {
     }
 
     @Transactional
-    public Booking book(String meetingTypeSlug, Instant startUtc,
+    public Booking book(Long ownerId, String meetingTypeSlug, Instant startUtc,
                         String inviteeName, String inviteeEmail,
                         Map<String, String> answers, String turnstileToken, String honeypot) {
-        MeetingType type = MeetingType.findBySlug(meetingTypeSlug);
+        MeetingType type = MeetingType.findBySlug(ownerId, meetingTypeSlug);
         if (type == null) {
-            throw new NotFoundException("No meeting type with slug " + meetingTypeSlug);
+            throw new NotFoundException("No meeting type with slug " + meetingTypeSlug
+                    + " for owner " + ownerId);
         }
 
         // Feature 16: all three abuse guards run first, inside book(). The Plan 5 web layer
@@ -152,7 +153,7 @@ public class BookingService {
         if (honeypot != null && !honeypot.isBlank()) {     // a bot filled the hidden field
             throw new AbuseException("Honeypot field was filled.");  // -> AbuseException (400)
         }
-        enforcePerEmailDailyCap(inviteeEmail);             // -> RateLimitException (429) over cap
+        enforcePerEmailDailyCap(type, inviteeEmail);       // -> RateLimitException (429) over cap
 
         Map<String, String> submitted = answers == null ? Map.of() : answers;
 
@@ -167,6 +168,7 @@ public class BookingService {
         assertSlotAvailable(type, startUtc, null);
 
         Booking booking = new Booking();
+        booking.ownerId = type.ownerId;
         booking.meetingTypeId = type.id;
         booking.inviteeName = inviteeName;
         booking.inviteeEmail = inviteeEmail;
@@ -201,7 +203,7 @@ public class BookingService {
         // If createEvent throws, the @Transactional boundary rolls back this booking (no orphan row).
         // `createGoogleEvent` (shared with `approve`, added in Task 7) applies the feature-13
         // location logic: createMeetLink=(locationType==GOOGLE_MEET), locationText=locationDetail.
-        if (calendarPort.isConnected()) {
+        if (calendarPort.isConnected(type.ownerId)) {
             createGoogleEvent(type, booking);
         }
 
@@ -216,8 +218,9 @@ public class BookingService {
      * Caller must guard with {@code calendarPort.isConnected()} (degraded mode skips this entirely).
      */
     private void createGoogleEvent(MeetingType type, Booking booking) {
-        OwnerSettings owner = OwnerSettings.get();
+        OwnerSettings owner = OwnerSettings.forOwner(type.ownerId);
         CreatedEvent created = calendarPort.createEvent(
+                type.ownerId,
                 type.name + " with " + booking.inviteeName,
                 "Booked via calit.",
                 booking.startUtc, booking.endUtc,
@@ -232,8 +235,8 @@ public class BookingService {
      * Feature 16: rejects the booking (HTTP 429) if this invitee email already created at least
      * {@code perEmailDailyCap} bookings during today's owner-tz day window.
      */
-    private void enforcePerEmailDailyCap(String inviteeEmail) {
-        ZoneId zone = ZoneId.of(OwnerSettings.get().timezone);
+    private void enforcePerEmailDailyCap(MeetingType type, String inviteeEmail) {
+        ZoneId zone = ZoneId.of(OwnerSettings.forOwner(type.ownerId).timezone);
         LocalDate today = Instant.now().atZone(zone).toLocalDate();
         Instant dayStart = today.atStartOfDay(zone).toInstant();
         Instant dayEnd = today.plusDays(1).atStartOfDay(zone).toInstant();
@@ -245,10 +248,10 @@ public class BookingService {
 
     /**
      * Feature 10: rejects the booking (HTTP 422) if any required field in
-     * {@code BookingField.formFor(type.id)} is missing or blank in the submitted answers.
+     * {@code BookingField.formFor(type.ownerId, type.id)} is missing or blank in the submitted answers.
      */
     private void validateRequiredFields(MeetingType type, Map<String, String> answers) {
-        for (BookingField field : BookingField.formFor(type.id)) {
+        for (BookingField field : BookingField.formFor(type.ownerId, type.id)) {
             if (field.required) {
                 String value = answers.get(field.fieldKey);
                 if (value == null || value.isBlank()) {
@@ -272,7 +275,7 @@ public class BookingService {
 
     /** Throws BookingConflictException unless an available slot starts exactly at {@code startUtc}. */
     private void assertSlotAvailable(MeetingType type, Instant startUtc, Long excludeBookingId) {
-        ZoneId zone = ZoneId.of(OwnerSettings.get().timezone);
+        ZoneId zone = ZoneId.of(OwnerSettings.forOwner(type.ownerId).timezone);
         LocalDate day = startUtc.atZone(zone).toLocalDate();
         boolean ok = availableSlots(type, day, day, excludeBookingId).stream()
                 .anyMatch(s -> s.start().toInstant().equals(startUtc));
@@ -291,7 +294,7 @@ public class BookingService {
         booking.status = BookingStatus.CONFIRMED;
         MeetingType type = MeetingType.findById(booking.meetingTypeId);
         // Feature 14 + degraded mode: create the Google event now, only when connected.
-        if (calendarPort.isConnected()) {
+        if (calendarPort.isConnected(type.ownerId)) {
             createGoogleEvent(type, booking);
         }
         bookingApprovedEvent.fire(new BookingApproved(bookingId));
@@ -349,13 +352,13 @@ public class BookingService {
         }
 
         if (reApproval) {
-            if (calendarPort.isConnected() && priorEventId != null) {
-                calendarPort.deleteEvent(priorEventId);
+            if (calendarPort.isConnected(type.ownerId) && priorEventId != null) {
+                calendarPort.deleteEvent(type.ownerId, priorEventId);
             }
             bookingRequestedEvent.fire(new BookingRequested(booking.id)); // re-approval request
         } else {
-            if (calendarPort.isConnected() && booking.googleEventId != null) {
-                calendarPort.updateEvent(booking.googleEventId, newStartUtc, newEnd);
+            if (calendarPort.isConnected(type.ownerId) && booking.googleEventId != null) {
+                calendarPort.updateEvent(type.ownerId, booking.googleEventId, newStartUtc, newEnd);
             }
             bookingRescheduledEvent.fire(new BookingRescheduled(booking.id, oldStart));
         }
@@ -369,8 +372,8 @@ public class BookingService {
             throw new NotFoundException("No booking for token " + manageToken);
         }
         booking.status = BookingStatus.CANCELLED;
-        if (calendarPort.isConnected() && booking.googleEventId != null) {
-            calendarPort.deleteEvent(booking.googleEventId);
+        if (calendarPort.isConnected(booking.ownerId) && booking.googleEventId != null) {
+            calendarPort.deleteEvent(booking.ownerId, booking.googleEventId);
         }
         bookingCancelledEvent.fire(new BookingCancelled(booking.id));
     }

@@ -11,6 +11,9 @@ import com.calit.booking.RateLimitException;
 import com.calit.domain.BookingField;
 import com.calit.domain.MeetingType;
 import com.calit.domain.OwnerSettings;
+import com.calit.user.AppUser;
+import com.calit.user.CurrentOwner;
+import com.calit.user.Usernames;
 import io.quarkus.qute.CheckedTemplate;
 import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
@@ -40,9 +43,12 @@ public class PublicResource {
 
     @CheckedTemplate
     public static class Templates {
-        public static native TemplateInstance landing(List<MeetingType> types);
+        public static native TemplateInstance index(boolean authenticated, String username);
+
+        public static native TemplateInstance landing(List<MeetingType> types, String user, String ownerName);
 
         public static native TemplateInstance book(
+                String user,
                 MeetingType type,
                 java.util.List<PublicResource.DaySlots> days,
                 java.util.List<com.calit.domain.BookingField> fields,
@@ -73,8 +79,16 @@ public class PublicResource {
     @Inject
     BookingService bookingService;
 
+    @Inject
+    CurrentOwner currentOwner;
+
     @jakarta.inject.Inject
     com.calit.google.CalendarPort calendarPort;
+
+    // Root landing is public; with proactive auth this is the anonymous identity when logged out,
+    // or the logged-in user's identity (so the landing can show Logout/Settings instead of Sign in).
+    @jakarta.inject.Inject
+    io.quarkus.security.identity.SecurityIdentity identity;
 
     // Owner-configurable Turnstile (feature 16). When disabled, the template skips the widget.
     @ConfigProperty(name = "calit.turnstile.enabled", defaultValue = "false")
@@ -95,32 +109,50 @@ public class PublicResource {
 
     @GET
     @Produces(MediaType.TEXT_HTML)
-    public TemplateInstance landing() {
-        // listPublic() = active && !secret — secret types never reach this page.
-        return Templates.landing(MeetingType.listPublic());
+    public TemplateInstance index() {
+        // Root is a generic product page — NOT any owner's landing. Per-owner landings live at /{user}.
+        // Auth-aware: a logged-in visitor sees Settings/Log out + their dashboard, not "Sign in".
+        boolean authenticated = !identity.isAnonymous();
+        String username = authenticated ? identity.getPrincipal().getName() : null;
+        return Templates.index(authenticated, username);
     }
 
     @GET
-    @Path("/book/{slug}")
+    @Path("/{user}")
     @Produces(MediaType.TEXT_HTML)
-    public TemplateInstance book(@PathParam("slug") String slug) {
-        MeetingType type = MeetingType.findBySlug(slug); // secret types reachable by direct link
+    public TemplateInstance userLanding(@PathParam("user") String user) {
+        AppUser owner = resolveOwner(user);
+        OwnerSettings settings = OwnerSettings.forOwner(owner.id);
+        if (settings == null) {
+            return Templates.notReady();
+        }
+        // listPublic(ownerId) = that owner's active && !secret types.
+        return Templates.landing(MeetingType.listPublic(owner.id), owner.username, settings.ownerName);
+    }
+
+    @GET
+    @Path("/{user}/{slug}")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance book(@PathParam("user") String user, @PathParam("slug") String slug) {
+        AppUser owner = resolveOwner(user); // 404 if unknown; binds CurrentOwner
+        MeetingType type = MeetingType.findBySlug(owner.id, slug); // secret types reachable by direct link
         if (type == null) {
             throw new NotFoundException("No meeting type with slug " + slug);
         }
-        if (OwnerSettings.get() == null) {
+        OwnerSettings settings = OwnerSettings.forOwner(owner.id);
+        if (settings == null) {
             return Templates.notReady();
         }
         List<DaySlots> byDate = daySlots(type);
         // Resolved EXTRA fields (per-type-else-global), already ordered by position.
-        List<BookingField> fields = BookingField.formFor(type.id);
+        List<BookingField> fields = BookingField.formFor(owner.id, type.id);
         // turnstileEnabled drives the widget; site key is public (rendered). The approval
         // flag (type.requiresApproval) + locationType/locationDetail are read off `type`
         // directly in the template for the button wording + location line.
-        return Templates.book(type, byDate, fields, null,
+        return Templates.book(owner.username, type, byDate, fields, null,
                               Layout.TZ_BAR, Layout.TZ_SCRIPT, Layout.CALENDAR_SCRIPT,
-                              turnstileEnabled, turnstileSiteKey(), calendarPort.isConnected(),
-                              OwnerSettings.get().ownerName);
+                              turnstileEnabled, turnstileSiteKey(), calendarPort.isConnected(owner.id),
+                              settings.ownerName);
     }
 
     private String turnstileSiteKey() {
@@ -128,21 +160,24 @@ public class PublicResource {
     }
 
     @POST
-    @Path("/book/{slug}")
+    @Path("/{user}/{slug}")
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Produces(MediaType.TEXT_HTML)
-    public TemplateInstance submitBooking(@PathParam("slug") String slug,
+    public TemplateInstance submitBooking(@PathParam("user") String user,
+                                          @PathParam("slug") String slug,
                                           @RestForm String startUtc,
                                           @RestForm String inviteeName,
                                           @RestForm String inviteeEmail,
                                           @RestForm String website,                 // honeypot
                                           @RestForm("cf-turnstile-response") String turnstileToken,
                                           MultivaluedMap<String, String> form) {
-        MeetingType type = MeetingType.findBySlug(slug);
+        AppUser owner = resolveOwner(user); // 404 if unknown; binds CurrentOwner
+        MeetingType type = MeetingType.findBySlug(owner.id, slug);
         if (type == null) {
             throw new NotFoundException("No meeting type with slug " + slug);
         }
-        if (OwnerSettings.get() == null) {
+        OwnerSettings settings = OwnerSettings.forOwner(owner.id);
+        if (settings == null) {
             return Templates.notReady();
         }
 
@@ -160,18 +195,18 @@ public class PublicResource {
             // book(...) enforces required fields AND the abuse guards (Turnstile + honeypot +
             // per-email/day cap) server-side; the handler just forwards the two raw inputs.
             booking = bookingService.book(
-                    slug, Instant.parse(startUtc), inviteeName, inviteeEmail, answers,
+                    owner.id, slug, Instant.parse(startUtc), inviteeName, inviteeEmail, answers,
                     turnstileToken, website);
         } catch (BookingValidationException | AbuseException | RateLimitException
                  | BookingConflictException be) {
             // Required-field 422 OR an abuse-guard rejection (filled honeypot / failed Turnstile /
             // per-email cap) / slot conflict. Re-render the form inline with the message; do NOT
             // 500, NOT confirm. (Plan 3 has no common BookingException superclass, so catch each.)
-            return Templates.book(type, daySlots(type), BookingField.formFor(type.id),
+            return Templates.book(owner.username, type, daySlots(type), BookingField.formFor(owner.id, type.id),
                                   be.getMessage(),
                                   Layout.TZ_BAR, Layout.TZ_SCRIPT, Layout.CALENDAR_SCRIPT,
-                                  turnstileEnabled, turnstileSiteKey(), calendarPort.isConnected(),
-                                  OwnerSettings.get().ownerName);
+                                  turnstileEnabled, turnstileSiteKey(), calendarPort.isConnected(owner.id),
+                                  settings.ownerName);
         }
         return confirmationPage(booking, type);
     }
@@ -180,7 +215,7 @@ public class PublicResource {
     private TemplateInstance confirmationPage(Booking booking, MeetingType type) {
         // Server fallback label is owner-tz; the page also carries the booked instant as a
         // data-utc attribute so the shared script can relabel it to the viewer's zone.
-        ZoneId zone = ZoneId.of(OwnerSettings.get().timezone);
+        ZoneId zone = ZoneId.of(OwnerSettings.forOwner(type.ownerId).timezone);
         String when = booking.startUtc.atZone(zone)
                 .format(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy 'at' HH:mm (z)"));
         String startUtcIso = booking.startUtc.toString(); // absolute instant for data-utc
@@ -201,11 +236,12 @@ public class PublicResource {
         if (booking == null) {
             throw new NotFoundException("No booking for token " + manageToken); // unknown token → 404
         }
-        if (OwnerSettings.get() == null) {
+        MeetingType type = MeetingType.findById(booking.meetingTypeId);
+        OwnerSettings settings = OwnerSettings.forOwner(type.ownerId);
+        if (settings == null) {
             return Templates.notReady();
         }
-        MeetingType type = MeetingType.findById(booking.meetingTypeId);
-        ZoneId zone = ZoneId.of(OwnerSettings.get().timezone);
+        ZoneId zone = ZoneId.of(settings.timezone);
         List<DaySlots> byDate = daySlots(type);
         String current = booking.startUtc.atZone(zone)
                 .format(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy 'at' HH:mm (z)"));
@@ -237,9 +273,19 @@ public class PublicResource {
         return Templates.cancelled();
     }
 
+    /** Resolve the {user} segment to an owner, 404 if unknown, and bind CurrentOwner for the request. */
+    private AppUser resolveOwner(String user) {
+        AppUser owner = AppUser.findByUsername(Usernames.normalize(user));
+        if (owner == null) {
+            throw new NotFoundException("No user " + user);
+        }
+        currentOwner.set(owner);
+        return owner;
+    }
+
     /** Available slots as an ordered per-day list (ISO date + label), chronological. */
     private List<DaySlots> daySlots(MeetingType type) {
-        ZoneId zone = ZoneId.of(OwnerSettings.get().timezone);
+        ZoneId zone = ZoneId.of(OwnerSettings.forOwner(type.ownerId).timezone);
         LocalDate from = LocalDate.now(zone);
         // Show the full configured booking horizon; availableSlots(...) also clamps to the same
         // horizon (now + horizonDays) and to min-notice, so this only sets the candidate range.

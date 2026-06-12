@@ -20,6 +20,7 @@ class AvailabilityRuleTest {
         // A typed rule's meeting_type_id is a real FK, so persist a MeetingType first
         // and use its generated id (a literal id would violate the FK constraint).
         MeetingType type = new MeetingType();
+        type.ownerId = 1L;
         type.name = "Sep Test";
         type.slug = "avail-sep-type";
         type.durationMinutes = 30;
@@ -30,18 +31,19 @@ class AvailabilityRuleTest {
         AvailabilityRule typed = rule(DayOfWeek.MONDAY, "13:00", "14:00", type.id);
         typed.persist();
 
-        List<AvailabilityRule> globals = AvailabilityRule.globalFor(DayOfWeek.MONDAY);
-        List<AvailabilityRule> typedRules = AvailabilityRule.forMeetingType(type.id, DayOfWeek.MONDAY);
+        List<AvailabilityRule> globals = AvailabilityRule.globalForOwner(1L, DayOfWeek.MONDAY);
+        List<AvailabilityRule> typedRules = AvailabilityRule.forMeetingType(1L, type.id, DayOfWeek.MONDAY);
 
         assertEquals(1, globals.size());
         assertEquals(LocalTime.of(9, 0), globals.get(0).startTime);
         assertEquals(1, typedRules.size());
         assertEquals(LocalTime.of(13, 0), typedRules.get(0).startTime);
-        assertTrue(AvailabilityRule.forMeetingType(type.id, DayOfWeek.TUESDAY).isEmpty());
+        assertTrue(AvailabilityRule.forMeetingType(1L, type.id, DayOfWeek.TUESDAY).isEmpty());
     }
 
     private AvailabilityRule rule(DayOfWeek dow, String start, String end, Long meetingTypeId) {
         AvailabilityRule r = new AvailabilityRule();
+        r.ownerId = 1L;
         r.dayOfWeek = dow;
         r.startTime = LocalTime.parse(start);
         r.endTime = LocalTime.parse(end);

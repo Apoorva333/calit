@@ -1,5 +1,17 @@
 # syntax=docker/dockerfile:1
 
+# --- CSS stage: compile Tailwind + daisyUI with Bun (no JS ships at runtime) ---
+FROM oven/bun:1 AS css
+WORKDIR /app
+COPY package.json bun.lock ./
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install --frozen-lockfile
+# Templates are needed so Tailwind's @source can scan them for class names.
+COPY src/main/css/ src/main/css/
+COPY src/main/resources/templates/ src/main/resources/templates/
+RUN bun run css:build
+# Output: /app/src/main/resources/META-INF/resources/calit.css
+
 # --- Build stage: BellSoft Liberica JDK 25 + the Maven wrapper (no Maven in the image) ---
 FROM bellsoft/liberica-runtime-container:jdk-26-musl AS build
 WORKDIR /build
@@ -7,13 +19,17 @@ WORKDIR /build
 # Warm the dependency cache on the POM first so source-only edits don't re-download everything.
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
-RUN ./mvnw -B -q -DskipTests dependency:go-offline
+RUN --mount=type=cache,target=/root/.m2 \
+    ./mvnw -B -q -DskipTests dependency:go-offline
 
 # Build the Quarkus fast-jar. Tests are skipped here: they rely on Quarkus Dev Services
 # (a Docker-managed Postgres), which is not available inside this build. Run `./mvnw test`
 # on the host (with Docker running) before building the image.
 COPY src/ src/
-RUN ./mvnw -B -q -DskipTests clean package
+# Overlay the Bun-compiled stylesheet (gitignored, so not in the COPY above).
+COPY --from=css /app/src/main/resources/META-INF/resources/calit.css src/main/resources/META-INF/resources/calit.css
+RUN --mount=type=cache,target=/root/.m2 \
+    ./mvnw -B -q -DskipTests clean package
 
 # --- Runtime stage: BellSoft minimal musl runtime container (production) ---
 # JRE 26 runs the JDK-25-compiled fast-jar fine (forward-compatible); pure-bytecode app, so the

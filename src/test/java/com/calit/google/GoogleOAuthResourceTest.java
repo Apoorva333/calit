@@ -24,10 +24,12 @@ class GoogleOAuthResourceTest {
 
     @Test
     void connectRedirectsToGoogleConsent() {
-        Mockito.when(tokenService.buildConsentUrl())
+        Mockito.when(tokenService.buildConsentUrl(org.mockito.ArgumentMatchers.anyLong(),
+                        org.mockito.ArgumentMatchers.any(Instant.class)))
                 .thenReturn("https://accounts.google.com/o/oauth2/v2/auth?access_type=offline&prompt=consent");
 
         RestAssured.given().redirects().follow(false)
+                .cookie("quarkus-credential", com.calit.web.FormAuth.login())
                 .when().get("/api/google/connect")
                 .then().statusCode(302)
                 .header("Location", containsString("accounts.google.com"))
@@ -37,31 +39,35 @@ class GoogleOAuthResourceTest {
     @Test
     void callbackExchangesCodeAndRedirectsToAdmin() {
         // Stateless CSRF: the mocked service accepts this state without any session.
-        Mockito.when(tokenService.validateState(eq("good-state"), any(Instant.class))).thenReturn(true);
-        doNothing().when(tokenService).exchangeCode(eq("the-code"), any(Instant.class));
+        Mockito.when(tokenService.validateState(eq("good-state"), any(Instant.class))).thenReturn(7L);
+        doNothing().when(tokenService).exchangeCode(any(), eq("the-code"), any(Instant.class));
 
         RestAssured.given().redirects().follow(false)
+                .cookie("quarkus-credential", com.calit.web.FormAuth.login())
                 .when().get("/api/google/callback?code=the-code&state=good-state")
                 .then().statusCode(302)
-                .header("Location", containsString("/admin"));
+                .header("Location", containsString("/me/google"));
 
-        verify(tokenService).exchangeCode(eq("the-code"), any(Instant.class));
+        // The owner came from the trusted state (7L), not from CurrentOwner.
+        verify(tokenService).exchangeCode(eq(7L), eq("the-code"), any(Instant.class));
     }
 
     @Test
     void callbackWithInvalidStateReturns400() {
         // Forged/expired state is rejected before any code exchange — no session to consult.
-        Mockito.when(tokenService.validateState(eq("bad-state"), any(Instant.class))).thenReturn(false);
+        Mockito.when(tokenService.validateState(eq("bad-state"), any(Instant.class))).thenReturn((Long) null);
 
-        given().when().get("/api/google/callback?code=the-code&state=bad-state")
+        given().cookie("quarkus-credential", com.calit.web.FormAuth.login())
+                .when().get("/api/google/callback?code=the-code&state=bad-state")
                 .then().statusCode(400).body(containsString("Invalid or expired OAuth state"));
 
-        verify(tokenService, Mockito.never()).exchangeCode(any(), any());
+        verify(tokenService, Mockito.never()).exchangeCode(any(), any(), any());
     }
 
     @Test
     void callbackWithErrorReturns400() {
-        given().when().get("/api/google/callback?error=access_denied")
+        given().cookie("quarkus-credential", com.calit.web.FormAuth.login())
+                .when().get("/api/google/callback?error=access_denied")
                 .then().statusCode(400).body(containsString("access_denied"));
     }
 }

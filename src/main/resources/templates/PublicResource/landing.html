@@ -1,20 +1,30 @@
 {@java.util.List<com.calit.domain.MeetingType> types}
+{@java.lang.String user}
+{@java.lang.String ownerName}
 {#include base title="Book a meeting"}
-  <hgroup>
-    <h1>Book a meeting</h1>
-    <p>Pick a meeting type to see available times.</p>
-  </hgroup>
-  {#if types.isEmpty()}
-    <p>No meeting types are currently available.</p>
-  {#else}
-    <div class="type-grid">
-      {#for t in types}
-        <article>
-          <header><strong>{t.name}</strong></header>
-          <p>{t.durationMinutes} minutes</p>
-          <a role="button" href="/book/{t.slug}">Choose a time &rarr;</a>
-        </article>
-      {/for}
-    </div>
-  {/if}
+  <div class="max-w-3xl mx-auto">
+    <header class="mb-6">
+      <h1 class="text-3xl font-bold">Book a meeting</h1>
+      {#if ownerName}<p class="font-semibold text-base-content/70">{ownerName}</p>{/if}
+      <p class="text-base-content/70">Pick a meeting type to see available times.</p>
+    </header>
+    {#if types.isEmpty()}
+      <div class="alert">No meeting types are currently available.</div>
+    {#else}
+      <div class="grid gap-4 sm:grid-cols-2">
+        {#for t in types}
+          <div class="card bg-base-100 border border-base-300 transition-shadow hover:shadow-lg">
+            <div class="card-body">
+              <h2 class="card-title">{t.name}</h2>
+              <p class="text-sm text-base-content/70">{t.durationMinutes} min &middot; {t.locationType.display}</p>
+              {#if t.description}<p class="text-sm text-base-content/70">{t.description}</p>{/if}
+              <div class="card-actions mt-2">
+                <a role="button" class="btn btn-primary btn-block" href="/{user}/{t.slug}">Choose a time &rarr;</a>
+              </div>
+            </div>
+          </div>
+        {/for}
+      </div>
+    {/if}
+  </div>
 {/include}

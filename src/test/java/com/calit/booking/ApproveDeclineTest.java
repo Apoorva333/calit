@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -50,12 +51,12 @@ class ApproveDeclineTest {
         // Feature 14: approve a PENDING request -> CONFIRMED + Google event created now.
         seedSettings();
         approvalType("approve");
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
-        when(calendarPort.createEvent(anyString(), anyString(), eq(SLOT_09), any(), any(), anyBoolean(), any()))
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
+        when(calendarPort.createEvent(anyLong(), anyString(), anyString(), eq(SLOT_09), any(), any(), anyBoolean(), any()))
                 .thenReturn(new CreatedEvent("evt-ap", "https://meet.google.com/ap-1-2", "h"));
 
-        Booking b = bookingService.book("approve", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "");
+        Booking b = bookingService.book(1L, "approve", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "");
         assertEquals(BookingStatus.PENDING, b.status);
 
         bookingService.approve(b.id);
@@ -65,7 +66,7 @@ class ApproveDeclineTest {
         assertEquals("evt-ap", loaded.googleEventId);
         assertEquals("https://meet.google.com/ap-1-2", loaded.meetLink);
         // The event is created at approve time (createMeetLink=true for GOOGLE_MEET), not at book time.
-        verify(calendarPort, times(1)).createEvent(anyString(), anyString(), eq(SLOT_09),
+        verify(calendarPort, times(1)).createEvent(anyLong(), anyString(), anyString(), eq(SLOT_09),
                 eq(SLOT_09.plusSeconds(3600)), eq(List.of("sam@example.com", "owner@example.com")),
                 eq(true), eq(null));
     }
@@ -76,10 +77,10 @@ class ApproveDeclineTest {
         // Feature 14: decline a PENDING request -> DECLINED, slot freed, no Google event.
         seedSettings();
         MeetingType t = approvalType("decline");
-        when(calendarPort.isConnected()).thenReturn(true);
-        when(calendarPort.freeBusy(any(), any())).thenReturn(List.of());
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
 
-        Booking b = bookingService.book("decline", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "");
+        Booking b = bookingService.book(1L, "decline", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "");
         // While PENDING, the 09:00 slot is held.
         assertTrue(bookingService.availableSlots(t, DAY, DAY).stream()
                 .noneMatch(s -> s.start().toLocalTime().equals(LocalTime.of(9, 0))));
@@ -88,7 +89,7 @@ class ApproveDeclineTest {
 
         Booking loaded = Booking.findById(b.id);
         assertEquals(BookingStatus.DECLINED, loaded.status);
-        verify(calendarPort, never()).createEvent(anyString(), anyString(), any(), any(), any(), anyBoolean(), any());
+        verify(calendarPort, never()).createEvent(anyLong(), anyString(), anyString(), any(), any(), any(), anyBoolean(), any());
         // DECLINED leaves the partial constraint -> 09:00 is bookable again.
         List<TimeSlot> avail = bookingService.availableSlots(t, DAY, DAY);
         assertTrue(avail.stream().anyMatch(s -> s.start().toLocalTime().equals(LocalTime.of(9, 0))));
@@ -100,10 +101,10 @@ class ApproveDeclineTest {
         // Idempotent upsert: a non-@TestTransaction REST test (MeetingTypeResourceTest PUT /api/settings)
         // may have committed the singleton row before this suite runs, so reuse it if present rather
         // than re-inserting the same primary key (which would violate owner_settings_pkey).
-        OwnerSettings s = OwnerSettings.get();
+        OwnerSettings s = OwnerSettings.forOwner(1L);
         if (s == null) {
             s = new OwnerSettings();
-            s.id = OwnerSettings.SINGLETON_ID;
+            s.ownerId = 1L;
         }
         s.ownerName = "Owner";
         s.ownerEmail = "owner@example.com";
@@ -113,6 +114,7 @@ class ApproveDeclineTest {
 
     private MeetingType approvalType(String slug) {
         MeetingType t = new MeetingType();
+        t.ownerId = 1L;
         t.name = slug;
         t.slug = slug;
         t.durationMinutes = 60;
@@ -122,6 +124,7 @@ class ApproveDeclineTest {
         t.requiresApproval = true; // feature 14
         t.persist();
         AvailabilityRule r = new AvailabilityRule();
+        r.ownerId = 1L;
         r.dayOfWeek = DAY.getDayOfWeek();
         r.startTime = LocalTime.of(9, 0);
         r.endTime = LocalTime.of(11, 0);

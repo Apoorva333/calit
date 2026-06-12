@@ -19,6 +19,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
 /**
@@ -46,7 +47,7 @@ class ReminderEmailEndToEndTest {
     @Test
     void dispatchTickDeliversReminderEmailToInviteeAndOwner() {
         // Google disconnected -> invitee fallback reminder fires.
-        when(calendarPort.isConnected()).thenReturn(false);
+        when(calendarPort.isConnected(anyLong())).thenReturn(false);
 
         Long bookingId = seedConfirmedBookingWithOwner();
         seedDueUnsentReminder(bookingId);
@@ -71,10 +72,10 @@ class ReminderEmailEndToEndTest {
 
     private Long seedConfirmedBookingWithOwner() {
         return QuarkusTransaction.requiringNew().call(() -> {
-            OwnerSettings s = OwnerSettings.get();
+            OwnerSettings s = OwnerSettings.forOwner(1L);
             if (s == null) {
                 s = new OwnerSettings();
-                s.id = OwnerSettings.SINGLETON_ID;
+                s.ownerId = 1L;
             }
             s.ownerName = "Owner";
             s.ownerEmail = OWNER_EMAIL;
@@ -83,6 +84,7 @@ class ReminderEmailEndToEndTest {
             s.persist();
 
             MeetingType t = new MeetingType();
+            t.ownerId = 1L;
             t.name = "E2E Reminder Call";
             t.slug = "e2e-" + System.nanoTime();
             t.durationMinutes = 30;
@@ -91,6 +93,7 @@ class ReminderEmailEndToEndTest {
             t.persist();
 
             Booking b = new Booking();
+            b.ownerId = 1L;
             b.meetingTypeId = t.id;
             b.inviteeName = "Sam Invitee";
             b.inviteeEmail = INVITEE_EMAIL;

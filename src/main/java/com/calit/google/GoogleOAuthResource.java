@@ -11,22 +11,27 @@ import jakarta.ws.rs.core.Response;
 import java.net.URI;
 import java.time.Instant;
 
+@io.quarkus.security.Authenticated
 @Path("/api/google")
 public class GoogleOAuthResource {
 
     private final GoogleTokenService tokenService;
+    private final com.calit.user.CurrentOwner currentOwner;
 
     @Inject
-    public GoogleOAuthResource(GoogleTokenService tokenService) {
+    public GoogleOAuthResource(GoogleTokenService tokenService,
+                               com.calit.user.CurrentOwner currentOwner) {
         this.tokenService = tokenService;
+        this.currentOwner = currentOwner;
     }
 
     /** Kick off the owner consent flow: 302 to Google. */
     @GET
     @Path("/connect")
     public Response connect() {
+        long ownerId = currentOwner.id(); // @Authenticated guarantees a principal, so this won't NPE-on-unbox
         return Response.status(Response.Status.FOUND)
-                .location(URI.create(tokenService.buildConsentUrl()))
+                .location(URI.create(tokenService.buildConsentUrl(ownerId, Instant.now())))
                 .build();
     }
 
@@ -43,9 +48,11 @@ public class GoogleOAuthResource {
                     .build();
         }
         Instant now = Instant.now();
-        // Stateless CSRF check: validate the signed state with no session. /connect and /callback
-        // may be served by different replicas, so verification uses only the shared signing secret.
-        if (!tokenService.validateState(state, now)) {
+        // The owner is recovered from the trusted, HMAC-signed state — NOT from CurrentOwner —
+        // because Google's redirect may arrive without the session. /connect and /callback may
+        // be served by different replicas, so verification uses only the shared signing secret.
+        Long ownerId = tokenService.validateState(state, now);
+        if (ownerId == null) {
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity("Invalid or expired OAuth state")
                     .build();
@@ -55,9 +62,9 @@ public class GoogleOAuthResource {
                     .entity("Missing authorization code")
                     .build();
         }
-        tokenService.exchangeCode(code, now);
+        tokenService.exchangeCode(ownerId, code, now);
         return Response.status(Response.Status.FOUND)
-                .location(URI.create("/admin"))
+                .location(URI.create("/me/google"))
                 .build();
     }
 }
