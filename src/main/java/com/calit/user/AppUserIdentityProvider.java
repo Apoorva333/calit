@@ -9,6 +9,7 @@ import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
+import java.time.Instant;
 
 /**
  * Verifies form-login credentials against the DB argon2id hash. Replaces the Elytron
@@ -21,6 +22,9 @@ public class AppUserIdentityProvider implements IdentityProvider<UsernamePasswor
 
     @Inject
     PasswordHasher passwordHasher;
+
+    @Inject
+    LoginTicketService loginTickets;
 
     @Override
     public Class<UsernamePasswordAuthenticationRequest> getRequestType() {
@@ -36,11 +40,21 @@ public class AppUserIdentityProvider implements IdentityProvider<UsernamePasswor
     @ActivateRequestContext
     SecurityIdentity authenticateBlocking(UsernamePasswordAuthenticationRequest request) {
         String username = request.getUsername();
-        String password = new String(request.getPassword().getPassword());
+        String secret = new String(request.getPassword().getPassword());
+
         AppUser user = AppUser.findByUsername(username);
-        if (user == null || !user.enabled || !passwordHasher.verify(password, user.passwordHash)) {
-            throw new AuthenticationFailedException();
+        // 1) Normal form login: verify the argon2id hash (skipped for passwordless Google users).
+        if (user != null && user.enabled && user.passwordHash != null
+                && passwordHasher.verify(secret, user.passwordHash)) {
+            return AppUserSecurityIdentities.of(user);
         }
-        return AppUserSecurityIdentities.of(user);
+        // 2) Google sign-in bridge: the "password" may be a single-use login ticket. It is consumed
+        //    here (single-use) and must belong to the username it was submitted under.
+        AppUser ticketUser = loginTickets.consume(secret, Instant.now());
+        if (ticketUser != null && ticketUser.enabled
+                && ticketUser.username.equals(Usernames.normalize(username))) {
+            return AppUserSecurityIdentities.of(ticketUser);
+        }
+        throw new AuthenticationFailedException();
     }
 }
