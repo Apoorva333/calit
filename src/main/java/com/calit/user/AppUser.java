@@ -75,7 +75,7 @@ public class AppUser extends PanacheEntityBase {
 
     /**
      * Factory for a Google-only user: no password, non-admin, not yet onboarded. The username
-     * must already be normalized + uniquified by the caller (see Usernames.uniquify).
+     * must already be uniquified by the caller (see Usernames.uniquify); it is normalized here.
      */
     public static AppUser createGoogleUser(String username, String googleSub) {
         AppUser u = new AppUser();
@@ -83,7 +83,7 @@ public class AppUser extends PanacheEntityBase {
         u.passwordHash = null;
         u.googleSub = googleSub;
         u.isAdmin = false;
-        u.roles = "user";
+        u.roles = rolesFor(false);
         u.mustChangePassword = false;
         u.settingsComplete = false;
         u.createdAt = Instant.now();

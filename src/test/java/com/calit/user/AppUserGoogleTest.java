@@ -23,10 +23,12 @@ class AppUserGoogleTest {
         assertEquals("user", u.roles, "non-admin role");
         assertFalse(u.mustChangePassword, "no forced password reset for OAuth users");
         assertFalse(u.settingsComplete, "still needs the first-login wizard");
+        assertFalse(u.isAdmin, "Google users are non-admin");
 
         AppUser found = AppUser.findByGoogleSub("google-sub-123");
         assertNotNull(found, "lookup by sub returns the user");
         assertEquals(u.id, found.id);
+        assertEquals("google-sub-123", found.googleSub, "sub round-trips");
     }
 
     @Test
