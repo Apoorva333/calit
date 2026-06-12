@@ -141,6 +141,7 @@ public class BookingService {
     public Booking book(Long ownerId, String meetingTypeSlug, Instant startUtc,
                         String inviteeName, String inviteeEmail,
                         Map<String, String> answers, String turnstileToken, String honeypot) {
+        validateInviteeEmail(inviteeEmail);
         MeetingType type = MeetingType.findBySlug(ownerId, meetingTypeSlug);
         if (type == null) {
             throw new NotFoundException("No meeting type with slug " + meetingTypeSlug
@@ -235,6 +236,26 @@ public class BookingService {
      * Feature 16: rejects the booking (HTTP 429) if this invitee email already created at least
      * {@code perEmailDailyCap} bookings during today's owner-tz day window.
      */
+    // RFC-pragmatic single-address check: one @, no CRLF/comma, <=254 chars. Not a full RFC 5322
+    // parser — just enough to stop header/ICS injection and obvious malformed input (SEC-INPUT-01).
+    private static final java.util.regex.Pattern EMAIL =
+            java.util.regex.Pattern.compile("^[^\\s@,]+@[^\\s@,]+\\.[^\\s@,]+$");
+
+    private static void validateInviteeEmail(String email) {
+        if (email == null || email.isBlank()) {
+            throw new BookingValidationException("Email is required.");
+        }
+        if (email.length() > 254) {
+            throw new BookingValidationException("Email is too long.");
+        }
+        if (email.indexOf('\r') >= 0 || email.indexOf('\n') >= 0) {
+            throw new BookingValidationException("Email contains illegal characters.");
+        }
+        if (!EMAIL.matcher(email).matches()) {
+            throw new BookingValidationException("Enter a valid email address.");
+        }
+    }
+
     private void enforcePerEmailDailyCap(MeetingType type, String inviteeEmail) {
         ZoneId zone = ZoneId.of(OwnerSettings.forOwner(type.ownerId).timezone);
         LocalDate today = Instant.now().atZone(zone).toLocalDate();
