@@ -19,6 +19,9 @@ class TokenEncryptionAtRestTest {
     @Inject
     EntityManager em;
 
+    @Inject
+    com.calit.crypto.TokenBackfill backfill;
+
     @Test
     @Transactional
     void refreshTokenIsCiphertextInTheRowButPlaintextViaEntity() {
@@ -41,5 +44,21 @@ class TokenEncryptionAtRestTest {
         GoogleCredential reloaded = GoogleCredential.findById(c.id);
         assertEquals("1//super-secret-refresh", reloaded.refreshToken);
         assertEquals("ya29.access-secret", reloaded.accessToken);
+    }
+
+    @Test
+    @Transactional
+    void backfillEncryptsLegacyPlaintextRow() {
+        em.createNativeQuery("insert into google_credential " +
+                "(owner_id, refresh_token, access_token, google_sub, needs_reconnect) " +
+                "values (1, 'legacy-plain-refresh', 'legacy-plain-access', 'sub-legacy', false)")
+                .executeUpdate();
+
+        backfill.encryptLegacy();
+
+        Object raw = em.createNativeQuery(
+                "select refresh_token from google_credential where google_sub = 'sub-legacy'")
+                .getSingleResult();
+        assertTrue(raw.toString().startsWith("enc:v1:"), "legacy row must be encrypted after backfill");
     }
 }
