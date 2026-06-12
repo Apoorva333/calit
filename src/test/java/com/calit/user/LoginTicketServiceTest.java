@@ -67,4 +67,17 @@ class LoginTicketServiceTest {
         Long uid = newUserId();
         assertNotEquals(tickets.issue(uid, now), tickets.issue(uid, now), "tokens are random");
     }
+
+    @Test
+    @TestTransaction
+    void consumeReturnsNullWhenUserWasDeleted() {
+        Instant now = Instant.parse("2026-06-12T12:00:00Z");
+        Long uid = newUserId();
+        String raw = tickets.issue(uid, now);
+
+        // User deleted between ticket issuance and consumption -> consume yields null.
+        AppUser.deleteById(uid);
+
+        assertNull(tickets.consume(raw, now.plusSeconds(5)), "no user -> no login");
+    }
 }
