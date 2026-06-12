@@ -28,8 +28,12 @@ public class GoogleLoginResource {
 
     @CheckedTemplate
     public static class Templates {
+        private Templates() {}
+
         public static native TemplateInstance bridge(String username, String token);
     }
+
+    private static final String NOTICE_GENERIC = "google";
 
     private final GoogleLoginService loginService;
     private final GoogleSignInService signInService;
@@ -59,13 +63,13 @@ public class GoogleLoginResource {
                              @QueryParam("error") String error) {
         Instant now = Instant.now();
         if (error != null) {
-            return redirectToLogin("google");
+            return redirectToLogin(NOTICE_GENERIC);
         }
         if (!loginService.validateLoginState(state, now)) {
-            return redirectToLogin("google");
+            return redirectToLogin(NOTICE_GENERIC);
         }
         if (code == null || code.isBlank()) {
-            return redirectToLogin("google");
+            return redirectToLogin(NOTICE_GENERIC);
         }
 
         GoogleIdentity identity;
@@ -74,7 +78,7 @@ public class GoogleLoginResource {
         } catch (RuntimeException e) {
             // Google/network error or malformed token response — recoverable; send the user back to login.
             LOG.warn("Google sign-in token exchange failed", e);
-            return redirectToLogin("google");
+            return redirectToLogin(NOTICE_GENERIC);
         }
         AppUser user;
         try {

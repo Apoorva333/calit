@@ -26,7 +26,7 @@ public class LoginTicket extends PanacheEntityBase {
     @Column(name = "user_id", nullable = false)
     public Long userId;
 
-    @Column(name = "token_hash", nullable = false, unique = true, length = 64)
+    @Column(name = "token_hash", nullable = false, unique = true)
     public String tokenHash;
 
     @Column(name = "expires_at", nullable = false)

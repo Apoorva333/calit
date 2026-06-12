@@ -68,23 +68,35 @@ public final class Usernames {
         }
         int at = email.indexOf('@');
         String local = normalize(at > 0 ? email.substring(0, at) : email);
-        StringBuilder sb = new StringBuilder(local.length());
-        for (int i = 0; i < local.length(); i++) {
-            char c = local.charAt(i);
-            boolean allowed = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-';
-            if (!allowed) {
-                continue; // drop chars outside [a-z0-9-]
-            }
-            if (c == '-' && (sb.length() == 0 || sb.charAt(sb.length() - 1) == '-')) {
-                continue; // skip leading hyphen and collapse repeats
-            }
-            sb.append(c);
-        }
-        while (sb.length() > 0 && sb.charAt(sb.length() - 1) == '-') {
-            sb.setLength(sb.length() - 1); // trim trailing hyphens
-        }
-        String cleaned = sb.toString();
+        String cleaned = trimHyphens(keepHandleChars(local));
         return isValid(cleaned) && !isReserved(cleaned) ? cleaned : "user";
+    }
+
+    /** Keep only [a-z0-9-], dropping a leading hyphen and collapsing consecutive hyphens. */
+    private static String keepHandleChars(String s) {
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            boolean allowed = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-';
+            boolean repeatedHyphen = c == '-' && (sb.isEmpty() || sb.charAt(sb.length() - 1) == '-');
+            if (allowed && !repeatedHyphen) {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
+
+    /** Strip leading and trailing hyphens. */
+    private static String trimHyphens(String s) {
+        int start = 0;
+        int end = s.length();
+        while (start < end && s.charAt(start) == '-') {
+            start++;
+        }
+        while (end > start && s.charAt(end - 1) == '-') {
+            end--;
+        }
+        return s.substring(start, end);
     }
 
     /**
@@ -98,14 +110,9 @@ public final class Usernames {
             return root;
         }
         // Leave room for a "-NN" suffix within MAX_LEN so suffixed candidates stay valid handles.
-        String stem = root;
-        if (root.length() > MAX_LEN - 4) {
-            int end = MAX_LEN - 4;
-            while (end > 0 && root.charAt(end - 1) == '-') {
-                end--; // trim trailing hyphens left by truncation
-            }
-            stem = root.substring(0, end);
-        }
+        String stem = root.length() > MAX_LEN - 4
+                ? trimHyphens(root.substring(0, MAX_LEN - 4))
+                : root;
         for (int n = 2; ; n++) {
             String candidate = stem + "-" + n;
             if (!taken.test(candidate)) {

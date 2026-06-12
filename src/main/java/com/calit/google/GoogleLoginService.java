@@ -71,7 +71,7 @@ public class GoogleLoginService {
         byte[] actual;
         try {
             actual = Base64.getUrlDecoder().decode(state.substring(dot + 1));
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             return false;
         }
         if (!MessageDigest.isEqual(expected, actual)) return false;
@@ -84,7 +84,7 @@ public class GoogleLoginService {
         try {
             Instant issued = Instant.ofEpochSecond(Long.parseLong(payload.substring(lastColon + 1)));
             return !issued.isAfter(now) && !issued.plus(STATE_TTL).isBefore(now);
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException _) {
             return false;
         }
     }
