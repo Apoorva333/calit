@@ -3,6 +3,8 @@
 {@java.time.DayOfWeek[] daysOfWeek}
 {@java.lang.Long pendingCount}
 {@java.lang.Boolean isAdmin}
+{@java.lang.String username}
+{@java.lang.String baseUrl}
 {#include adminBase title="Admin — Meeting types" pendingCount=pendingCount active="meetingTypes" isAdmin=isAdmin}
   <h1 class="text-2xl font-bold mb-4">Meeting types</h1>
 
@@ -18,6 +20,9 @@
         <p class="text-sm text-base-content/70">/{t.slug} &middot; {t.durationMinutes} min &middot; {t.locationType.display}{#if t.locationDetail} ({t.locationDetail}){/if}</p>
         <p class="text-sm text-base-content/70">min notice {t.minNoticeMinutes} min &middot; horizon {t.horizonDays} days{#if t.slotIntervalMinutes} &middot; slot interval {t.slotIntervalMinutes} min{/if} &middot; buffer {t.bufferBeforeMinutes}/{t.bufferAfterMinutes} min</p>
         <div class="flex flex-wrap items-center gap-2 mt-1">
+          <button type="button" class="btn btn-ghost btn-sm btn-square copy-link-btn" data-copy-link="{baseUrl}/{username}/{t.slug}" aria-label="Copy booking link" title="Copy booking link">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
+          </button>
           <a href="/me/meeting-types/{t.id}" role="button" class="btn btn-outline btn-sm">Edit</a>
           <form method="post" action="/me/meeting-types/{t.id}/toggle">
             <button type="submit" class="btn btn-ghost btn-sm">{#if t.active}Deactivate{#else}Activate{/if}</button>
@@ -152,4 +157,40 @@
     </script>
     <button type="submit" class="btn btn-primary">Create</button>
   </form>
+
+  <div class="toast toast-end z-50" id="copy-toast" style="display:none" role="status" aria-live="polite">
+    <div class="alert alert-success" id="copy-toast-alert">
+      <span id="copy-toast-msg">Link copied</span>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var toast = document.getElementById('copy-toast');
+      var alert = document.getElementById('copy-toast-alert');
+      var msg = document.getElementById('copy-toast-msg');
+      var timer = null;
+      function showToast(text, ok) {
+        if (!toast) { return; }
+        if (msg) { msg.textContent = text; }
+        if (alert) { alert.className = ok ? 'alert alert-success' : 'alert alert-error'; }
+        toast.style.display = '';
+        if (timer) { clearTimeout(timer); }
+        timer = setTimeout(function () { toast.style.display = 'none'; }, 2000);
+      }
+      document.addEventListener('click', function (e) {
+        var btn = e.target.closest ? e.target.closest('.copy-link-btn') : null;
+        if (!btn) { return; }
+        var url = btn.getAttribute('data-copy-link');
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(
+            function () { showToast('Link copied', true); },
+            function () { showToast('Copy failed — ' + url, false); }
+          );
+        } else {
+          showToast('Copy failed — ' + url, false);
+        }
+      });
+    })();
+  </script>
 {/include}

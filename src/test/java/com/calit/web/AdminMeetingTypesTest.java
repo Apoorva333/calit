@@ -21,6 +21,41 @@ class AdminMeetingTypesTest {
         secret.persist();
     }
 
+    @Transactional
+    void seedCoffee() {
+        if (MeetingType.findBySlug(1L, "coffee") == null) {
+            MeetingType m = new MeetingType();
+            m.ownerId = 1L;
+            m.name = "Coffee Chat";
+            m.slug = "coffee";
+            m.durationMinutes = 30;
+            m.persist();
+        }
+    }
+
+    @Test
+    void cardRendersAbsoluteCopyLinkAndButton() {
+        seedCoffee();
+        given()
+            .cookie("quarkus-credential", FormAuth.login())
+            .when().get("/me/meeting-types")
+            .then()
+                .statusCode(200)
+                .body(containsString("data-copy-link=\"http://localhost:8080/admin/coffee\""))
+                .body(containsString("copy-link-btn"));
+    }
+
+    @Test
+    void pageIncludesToastAndClipboardScript() {
+        given()
+            .cookie("quarkus-credential", FormAuth.login())
+            .when().get("/me/meeting-types")
+            .then()
+                .statusCode(200)
+                .body(containsString("id=\"copy-toast\""))
+                .body(containsString("navigator.clipboard"));
+    }
+
     @Test
     void adminListShowsSecretTypeUnlikePublicLanding() {
         seedSecret();

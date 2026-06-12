@@ -45,7 +45,8 @@ public class AdminResource {
 
         public static native TemplateInstance meetingTypes(
                 List<MeetingType> types, LocationType[] locationTypes,
-                DayOfWeek[] daysOfWeek, Long pendingCount, boolean isAdmin);
+                DayOfWeek[] daysOfWeek, Long pendingCount, boolean isAdmin,
+                String username, String baseUrl);
 
         public static native TemplateInstance meetingTypeDetail(
                 MeetingType type,
@@ -79,6 +80,9 @@ public class AdminResource {
 
     @Inject
     com.calit.user.CurrentOwner currentOwner;
+
+    @ConfigProperty(name = "app.base-url")
+    String baseUrl;
 
     @Inject
     SecurityIdentity identity;
@@ -115,7 +119,7 @@ public class AdminResource {
     public TemplateInstance meetingTypes() {
         // Pass LocationType.values() so the form can render the location dropdown options.
         return Templates.meetingTypes(MeetingType.listForOwner(currentOwner.id()), allowedLocationTypes(),
-                DayOfWeek.values(), pendingCount(), isAdmin()); // includes secret
+                DayOfWeek.values(), pendingCount(), isAdmin(), currentOwner.require().username, baseUrl); // includes secret
     }
 
     @POST
@@ -157,7 +161,7 @@ public class AdminResource {
         createInitialWorkingHours(t.id, t.ownerId, form);
         createInitialDateOverride(t.id, t.ownerId, form);
         return Templates.meetingTypes(MeetingType.listForOwner(currentOwner.id()), allowedLocationTypes(),
-                DayOfWeek.values(), pendingCount(), isAdmin());
+                DayOfWeek.values(), pendingCount(), isAdmin(), currentOwner.require().username, baseUrl);
     }
 
     /**
@@ -215,7 +219,7 @@ public class AdminResource {
         MeetingType t = requireType(id);
         t.active = !t.active;
         return Templates.meetingTypes(MeetingType.listForOwner(currentOwner.id()), allowedLocationTypes(),
-                DayOfWeek.values(), pendingCount(), isAdmin());
+                DayOfWeek.values(), pendingCount(), isAdmin(), currentOwner.require().username, baseUrl);
     }
 
     @POST
@@ -227,7 +231,7 @@ public class AdminResource {
         requireType(id);
         MeetingType.deleteById(id);
         return Templates.meetingTypes(MeetingType.listForOwner(currentOwner.id()), allowedLocationTypes(),
-                DayOfWeek.values(), pendingCount(), isAdmin());
+                DayOfWeek.values(), pendingCount(), isAdmin(), currentOwner.require().username, baseUrl);
     }
 
     /** Date overrides scoped to one meeting type, each with its (transient) windows loaded. */
