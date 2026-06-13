@@ -30,7 +30,7 @@ class TokenEncryptionAtRestTest {
         c.googleSub = "sub-enc-test";
         c.refreshToken = "1//super-secret-refresh";
         c.accessToken = "ya29.access-secret";
-        c.accessTokenExpiry = Instant.now().plusSeconds(3600);
+        c.accessTokenExpiry = Instant.parse("2099-01-01T11:00:00Z");
         c.persist();
         c.flush();
 

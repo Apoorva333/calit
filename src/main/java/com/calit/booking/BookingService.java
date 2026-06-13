@@ -237,13 +237,6 @@ public class BookingService {
      * Feature 16: rejects the booking (HTTP 429) if this invitee email already created at least
      * {@code perEmailDailyCap} bookings during today's owner-tz day window.
      */
-    // RFC-pragmatic single-address check: one @, no CRLF/comma, <=254 chars. Not a full RFC 5322
-    // parser — just enough to stop header/ICS injection and obvious malformed input (SEC-INPUT-01).
-    // Domain is dot-separated labels that exclude '.', so each '\.' is a deterministic boundary —
-    // the pattern is linear (no overlapping quantifiers), avoiding polynomial-backtracking ReDoS.
-    private static final java.util.regex.Pattern EMAIL =
-            java.util.regex.Pattern.compile("^[^\\s@,]+@[^\\s@,.]+(?:\\.[^\\s@,.]+)+$");
-
     private static void validateInputBounds(String inviteeName, Map<String, String> answers) {
         if (inviteeName == null || inviteeName.isBlank()) {
             throw new BookingValidationException("Name is required.");
@@ -267,12 +260,31 @@ public class BookingService {
         if (email.length() > 254) {
             throw new BookingValidationException("Email is too long.");
         }
-        if (email.indexOf('\r') >= 0 || email.indexOf('\n') >= 0) {
-            throw new BookingValidationException("Email contains illegal characters.");
-        }
-        if (!EMAIL.matcher(email).matches()) {
+        if (!isPlausibleEmail(email)) {
             throw new BookingValidationException("Enter a valid email address.");
         }
+    }
+
+    // RFC-pragmatic single-address check done WITHOUT a regex (so there is no ReDoS or regex-engine
+    // stack-overflow risk on hostile input): exactly one non-leading '@', a domain with at least one
+    // dot and no empty labels, and no whitespace or comma anywhere — the latter blocks header/ICS
+    // injection and CRLF smuggling. Not a full RFC 5322 parser (SEC-INPUT-01).
+    private static boolean isPlausibleEmail(String email) {
+        for (int i = 0; i < email.length(); i++) {
+            char ch = email.charAt(i);
+            if (ch == ',' || Character.isWhitespace(ch)) {
+                return false; // commas and CR/LF/space/tab are injection vectors — reject
+            }
+        }
+        int at = email.indexOf('@');
+        if (at <= 0 || at != email.lastIndexOf('@') || at == email.length() - 1) {
+            return false; // need exactly one '@', neither first nor last char
+        }
+        String domain = email.substring(at + 1);
+        if (domain.startsWith(".") || domain.endsWith(".") || domain.contains("..")) {
+            return false; // no empty domain labels
+        }
+        return domain.indexOf('.') >= 0; // domain must have at least one dot
     }
 
     private void enforcePerEmailDailyCap(MeetingType type, String inviteeEmail) {

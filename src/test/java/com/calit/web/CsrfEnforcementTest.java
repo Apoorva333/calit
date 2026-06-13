@@ -50,8 +50,8 @@ class CsrfEnforcementTest {
                 .then().statusCode(400);
     }
 
-    // Enforcement on an anonymous form route too: a public booking POST matches the /{user}/{slug}
-    // route template, so the CSRF filter runs before the handler -> 400 regardless of body.
+    // Enforcement on an anonymous form route too. A public booking POST still matches its routing
+    // template, so the CSRF filter rejects it before the handler runs, no matter the body.
     @Test
     void tokenlessAnonymousFormPostIsRejected() {
         given()

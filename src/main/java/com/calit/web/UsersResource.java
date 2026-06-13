@@ -40,6 +40,9 @@ public class UsersResource {
     @Inject
     CurrentOwner currentOwner;
 
+    /** Audit-event target prefix for a user-directed admin action. */
+    private static final String USER_TARGET = "user:";
+
     @Inject
     SecurityIdentity identity;
 
@@ -77,7 +80,7 @@ public class UsersResource {
         u.mustChangePassword = true;   // must reset the temp password on first login
         u.settingsComplete = false;    // and complete the settings wizard
         u.persist();
-        audit.event(identity.getPrincipal().getName(), "create-user", "user:" + normalized, null);
+        audit.event(identity.getPrincipal().getName(), "create-user", USER_TARGET +normalized, null);
         return render(null);
     }
 
@@ -110,7 +113,7 @@ public class UsersResource {
     @Transactional
     public TemplateInstance grantAdmin(@PathParam("id") Long id) {
         requireUser(id).setAdmin(true);
-        audit.event(identity.getPrincipal().getName(), "grant-admin", "user:" + id, null);
+        audit.event(identity.getPrincipal().getName(), "grant-admin", USER_TARGET +id, null);
         return render(null);
     }
 
@@ -125,7 +128,7 @@ public class UsersResource {
             return render("Cannot revoke admin from the last enabled admin.");
         }
         target.setAdmin(false);
-        audit.event(identity.getPrincipal().getName(), "revoke-admin", "user:" + id, null);
+        audit.event(identity.getPrincipal().getName(), "revoke-admin", USER_TARGET +id, null);
         return render(null);
     }
 
@@ -143,7 +146,7 @@ public class UsersResource {
             return render("Cannot lock the last enabled admin.");
         }
         target.enabled = false;
-        audit.event(identity.getPrincipal().getName(), "lock", "user:" + id, null);
+        audit.event(identity.getPrincipal().getName(), "lock", USER_TARGET +id, null);
         return render(null);
     }
 
@@ -153,7 +156,7 @@ public class UsersResource {
     @Transactional
     public TemplateInstance unlock(@PathParam("id") Long id) {
         requireUser(id).enabled = true;
-        audit.event(identity.getPrincipal().getName(), "unlock", "user:" + id, null);
+        audit.event(identity.getPrincipal().getName(), "unlock", USER_TARGET +id, null);
         return render(null);
     }
 }

@@ -41,8 +41,9 @@ public class StartupSecretCheck {
         validate("GOOGLE_OAUTH_STATE_SECRET", stateSecret, 32);
         // Quarkus form-auth cookie encryption key; framework minimum is 16 chars.
         validate("SESSION_ENCRYPTION_KEY", sessionKey, 16);
-        // AES-256-GCM token key; 64 hex chars = 32 bytes (SEC-SECRET-02). Length+blank checks here;
-        // the all-zeros dev placeholder can't carry the marker, so reject it by exact value below.
+        // AES-256-GCM token key (SEC-SECRET-02) — a 64-hex-character value. The blank and length
+        // checks run here; the all-zeros dev placeholder cannot carry the dev marker, so it is
+        // rejected by exact value just below.
         validate("TOKEN_ENCRYPTION_KEY", tokenKey, 64);
         if (TOKEN_KEY_DEV_DEFAULT.equals(tokenKey)) {
             throw new IllegalStateException(
