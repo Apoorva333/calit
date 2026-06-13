@@ -43,6 +43,9 @@ public class UsersResource {
     @Inject
     SecurityIdentity identity;
 
+    @Inject
+    com.calit.audit.AuditLog audit;
+
     /** This admin's own pending-approval count — drives the shared nav badge (consistent with other /me pages). */
     private long pendingCount() {
         return Booking.count("ownerId = ?1 and status = ?2", currentOwner.id(), BookingStatus.PENDING);
@@ -74,6 +77,7 @@ public class UsersResource {
         u.mustChangePassword = true;   // must reset the temp password on first login
         u.settingsComplete = false;    // and complete the settings wizard
         u.persist();
+        audit.event(identity.getPrincipal().getName(), "create-user", "user:" + normalized, null);
         return render(null);
     }
 
@@ -106,6 +110,7 @@ public class UsersResource {
     @Transactional
     public TemplateInstance grantAdmin(@PathParam("id") Long id) {
         requireUser(id).setAdmin(true);
+        audit.event(identity.getPrincipal().getName(), "grant-admin", "user:" + id, null);
         return render(null);
     }
 
@@ -120,6 +125,7 @@ public class UsersResource {
             return render("Cannot revoke admin from the last enabled admin.");
         }
         target.setAdmin(false);
+        audit.event(identity.getPrincipal().getName(), "revoke-admin", "user:" + id, null);
         return render(null);
     }
 
@@ -137,6 +143,7 @@ public class UsersResource {
             return render("Cannot lock the last enabled admin.");
         }
         target.enabled = false;
+        audit.event(identity.getPrincipal().getName(), "lock", "user:" + id, null);
         return render(null);
     }
 
@@ -146,6 +153,7 @@ public class UsersResource {
     @Transactional
     public TemplateInstance unlock(@PathParam("id") Long id) {
         requireUser(id).enabled = true;
+        audit.event(identity.getPrincipal().getName(), "unlock", "user:" + id, null);
         return render(null);
     }
 }
