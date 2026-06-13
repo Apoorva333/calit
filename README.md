@@ -343,11 +343,12 @@ The port number alone does **not** pick the mode — set `MAIL_TLS` explicitly f
 
 ## Upgrading
 
-### ⚠️ BREAKING (token-at-rest encryption release) — set `TOKEN_ENCRYPTION_KEY` before deploying
+### ⚠️ BREAKING in v1.4.0 — set `TOKEN_ENCRYPTION_KEY` before deploying
 
-This release encrypts stored Google OAuth tokens at rest. It adds a **new required production
-secret**, `TOKEN_ENCRYPTION_KEY`. A `%prod` deployment **fails to boot** until it is set (fail-closed,
-by design — the app will not serve traffic with no key).
+**Applies when upgrading from v1.3.x (or earlier) to v1.4.0.** v1.4.0 encrypts stored Google OAuth
+tokens at rest and adds a **new required production secret**, `TOKEN_ENCRYPTION_KEY`. A `%prod`
+deployment **fails to boot** until it is set (fail-closed, by design — the app will not serve traffic
+with no key).
 
 **Migration steps for existing operators:**
 
