@@ -68,3 +68,9 @@ Flyway migrations `V1…V10` in `src/main/resources/db/migration/`, applied at b
 ## Docker / CI
 
 `Dockerfile` multi-stage: Bun compiles CSS → BellSoft **Liberica JDK 26** builds → **Liberica JRE 26 (musl)** runs. Tests skipped in image — run `mvn test` on host (with Docker) before building. CI is `.github/workflows/ci.yml` (test/build/merge/release, native multi-arch images to `ghcr.io/asm0dey/calit`). Dependency updates via **Renovate** (`renovate.json`), not Dependabot.
+
+## Documentation
+
+Public docs site lives on the **`docs-site`** branch (Astro Starlight project in `docs-site/`, deployed to GitHub Pages at `https://asm0dey.github.io/calit/` by `.github/workflows/docs.yml` on push). The homepage reuses the marketing landing; doc pages cover install, configuration, reverse-proxy, Google/Turnstile setup, usage, and releases.
+
+**On every interesting change, update the docs too.** Any user-facing change — new/changed env var, route, config flag, setup step, feature, or upgrade/migration note — must be reflected on the `docs-site` branch in the same effort. Treat the docs as part of "done", not a follow-up.
