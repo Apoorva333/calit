@@ -1,0 +1,112 @@
+---
+title: Configuration
+description: Every environment variable calit reads, with defaults and how to obtain secrets.
+---
+
+calit is configured entirely through environment variables. In a Docker Compose deployment these come from your `.env` file (loaded via `env_file`). Copy `.env.example` to `.env` and edit it before starting the stack.
+
+## Database
+
+| Variable | Description | Default |
+|---|---|---|
+| `DB_NAME` | Postgres database name | `calit` |
+| `DB_USER` | Postgres user | `calit` |
+| `DB_PASSWORD` | Postgres password | **required** |
+
+The compose file derives `DB_URL=jdbc:postgresql://db:5432/${DB_NAME}` automatically — you do not set `DB_URL` in `.env`.
+
+## App
+
+| Variable | Description | Default |
+|---|---|---|
+| `APP_PORT` | Host port to expose (the container always listens on 8080) | `8080` |
+| `APP_BASE_URL` | Public origin users hit — e.g. `https://book.example.com`. Used as the base for invitee manage links and the Google OAuth redirect URIs. | **required** |
+
+On first run with an empty database every request redirects to `/setup` to create the first admin user. There is no default password.
+
+## SMTP (email)
+
+| Variable | Description | Default |
+|---|---|---|
+| `MAIL_HOST` | SMTP hostname | **required** |
+| `MAIL_USERNAME` | SMTP username | **required** |
+| `MAIL_PASSWORD` | SMTP password | **required** |
+| `MAIL_FROM` | Sender address (e.g. `calit@example.com`) | **required** |
+| `MAIL_PORT` | SMTP port | **required** |
+| `MAIL_START_TLS` | STARTTLS mode: `REQUIRED`, `OPTIONAL`, or `DISABLED` | **required** |
+| `MAIL_TLS` | Implicit TLS (SMTPS): `true` or `false` | **required** |
+
+### Encryption mode — set explicitly
+
+The port number does **not** automatically select an encryption mode. You must set `MAIL_PORT`, `MAIL_START_TLS`, and `MAIL_TLS` together. There are two valid combinations:
+
+**Option A — port 587, STARTTLS (most common)**
+
+Connection starts plaintext and upgrades to TLS via STARTTLS.
+
+```dotenv
+MAIL_PORT=587
+MAIL_START_TLS=REQUIRED
+MAIL_TLS=false
+```
+
+**Option B — port 465, implicit TLS / SMTPS**
+
+Connection is encrypted from the first byte.
+
+```dotenv
+MAIL_PORT=465
+MAIL_TLS=true
+MAIL_START_TLS=OPTIONAL
+```
+
+`MAIL_START_TLS` is an **enum** (`REQUIRED` / `OPTIONAL` / `DISABLED`), not a boolean. `MAIL_TLS` is a boolean.
+
+## Behaviour
+
+| Variable | Description | Default |
+|---|---|---|
+| `REMINDER_LEAD_MINUTES` | Minutes before a meeting to send the reminder email | `1440` (24 h) |
+| `APPROVAL_HOLD_HOURS` | How long a pending (approval-required) booking is held before it expires | `24` |
+| `PER_EMAIL_DAILY_CAP` | Maximum bookings an invitee email address may make per day (abuse protection) | `10` |
+
+## Secrets
+
+| Variable | Description | Default |
+|---|---|---|
+| `SESSION_ENCRYPTION_KEY` | Signs and encrypts the login session cookie. At least 16 characters. Must be **identical on every replica**. | **required** |
+| `TOKEN_ENCRYPTION_KEY` | AES-256-GCM key that encrypts Google OAuth tokens at rest. Must be exactly 64 hex characters. Must be **identical on every replica**. | **required in prod** |
+
+Generate both keys with:
+
+```bash
+openssl rand -hex 32
+```
+
+:::caution[TOKEN_ENCRYPTION_KEY rotation]
+Changing `TOKEN_ENCRYPTION_KEY` after deployment **strands all existing encrypted Google OAuth tokens** — users will need to re-authorise Google Calendar. Keep this key stable and back it up alongside your database.
+:::
+
+## Google Calendar (optional)
+
+Leave `GOOGLE_OAUTH_CLIENT_ID` blank to run calit in degraded mode without Google Calendar integration. See [Google OAuth setup](/calit/installation/google-oauth/) for full instructions.
+
+| Variable | Description | Default |
+|---|---|---|
+| `GOOGLE_OAUTH_CLIENT_ID` | Google OAuth client ID | *(blank — disables Google)* |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | Google OAuth client secret | *(blank)* |
+| `GOOGLE_OAUTH_REDIRECT_URI` | Override the calendar sync redirect URI | Derived: `${APP_BASE_URL}/api/google/callback` |
+| `GOOGLE_OAUTH_LOGIN_REDIRECT_URI` | Override the sign-in redirect URI | Derived: `${APP_BASE_URL}/api/google/login/callback` |
+| `GOOGLE_OAUTH_STATE_SECRET` | Strong random string shared by all replicas. Generate: `openssl rand -hex 32`. Required when Google is enabled. | *(blank)* |
+
+Register **both** derived redirect URIs in your Google OAuth client even if you do not override them.
+
+## Cloudflare Turnstile (optional)
+
+Turnstile adds a bot-protection widget to the public booking form. See [Turnstile setup](/calit/installation/turnstile/) for full instructions.
+
+| Variable | Description | Default |
+|---|---|---|
+| `TURNSTILE_ENABLED` | Enable Turnstile on the public booking form | `false` |
+| `TURNSTILE_SITE_KEY` | Turnstile site key from the Cloudflare dashboard | *(blank)* |
+| `TURNSTILE_SECRET_KEY` | Turnstile secret key | *(blank)* |

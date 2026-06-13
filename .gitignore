@@ -1,0 +1,12 @@
+# Astro / docs-site build artifacts
+docs-site/node_modules/
+docs-site/dist/
+docs-site/.astro/
+
+# local tooling / editor cruft
+.idea/
+.playwright-mcp/
+.quarkus/
+.superpowers/
+.worktrees/
+actionlint

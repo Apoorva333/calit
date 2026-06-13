@@ -1,0 +1,32 @@
+/* Bridge the calit landing palette into Starlight's design tokens. */
+:root {
+  /* Indigo accent ramp (Starlight expects 9 steps, low..high). */
+  --sl-color-accent-low: #1e1b4b;
+  --sl-color-accent: #4f46e5;
+  --sl-color-accent-high: #c7d2fe;
+
+  --sl-font: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --sl-font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* Light theme: warm paper background, dark ink text. */
+:root[data-theme='light'] {
+  --sl-color-accent-low: #c7d2fe;
+  --sl-color-accent: #4f46e5;
+  --sl-color-accent-high: #1e1b4b;
+  --sl-color-white: #16140f;
+  --sl-color-gray-1: #2a2620;
+  --sl-color-bg: #f4f1e9;
+  --sl-color-bg-nav: #ece7db;
+}
+
+/* Fraunces for headings, matching the landing. */
+.sl-markdown-content h1,
+.sl-markdown-content h2,
+.sl-markdown-content h3,
+.content-panel h1,
+h1#_top {
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 560;
+  letter-spacing: -0.01em;
+}
