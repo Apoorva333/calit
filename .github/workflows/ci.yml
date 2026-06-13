@@ -45,6 +45,22 @@ jobs:
       - name: Build and run tests
         run: ./mvnw --batch-mode --no-transfer-progress verify
 
+  scan:
+    name: Vulnerability scan (Trivy fs)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v6
+
+      - name: Trivy filesystem scan (fail on HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+
   build:
     name: Build image (${{ matrix.arch }})
     needs: [test]
@@ -131,6 +147,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
     steps:
       - name: Download digests
         uses: actions/download-artifact@v8
@@ -172,6 +190,30 @@ jobs:
         run: |
           docker buildx imagetools inspect \
             "ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version }}"
+
+  scan-image:
+    name: Vulnerability scan (Trivy image)
+    needs: merge
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trivy image scan (fail on HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ghcr.io/${{ github.repository }}:${{ needs.merge.outputs.version }}
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
 
   release:
     name: Create GitHub Release
