@@ -35,6 +35,10 @@ Your landing page at `/<username>` lists all of your **active, non-secret** meet
 | **Custom booking fields** | Extra questions shown to the invitee on the booking form (name, company, notes, etc.). |
 | **Secret** | Hides the type from `/<username>` while keeping the direct link active. |
 
+:::tip[Minimum notice smart default]
+When creating a new meeting type, **Min scheduling notice** defaults to 4× the duration and updates automatically as you adjust the duration (e.g. a 45-minute meeting suggests 180 minutes' notice). Once you edit the notice field yourself it stops updating. You can set it to any value — including 0 for instant bookings — before saving.
+:::
+
 ## Google account
 
 Connect a Google account in your account settings to enable Google Meet links and Google Calendar sync for your bookings.
