@@ -7,6 +7,19 @@ This changelog is maintained manually. The canonical release notes, including
 asset downloads, are on
 [GitHub Releases](https://github.com/asm0dey/calit/releases).
 
+## 1.5.0
+
+Self-service password reset.
+
+- Users who forget their password can reset it from the sign-in page via
+  **Forgot password?**. Requesting by username emails a single-use,
+  30-minute reset link to the account's stored address.
+- The request never reveals whether an account exists (anti-enumeration);
+  only a hashed token is stored server-side.
+- Google-only accounts can set a password through the same flow.
+- New V13 migration adds the `password_reset_token` table. No new
+  configuration — reuses the existing mailer settings.
+
 ## 1.4.0
 
 Token-at-rest encryption and security audit remediation.
