@@ -7,11 +7,11 @@ import com.calit.booking.events.BookingConfirmed;
 import com.calit.booking.events.BookingDeclined;
 import com.calit.booking.events.BookingRequested;
 import com.calit.booking.events.BookingRescheduled;
-import com.calit.booking.events.ReminderDue;
+import com.calit.email.EmailService;
+import io.quarkus.logging.Log;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Event;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.event.TransactionPhase;
 import jakarta.inject.Inject;
@@ -20,7 +20,6 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.List;
 
 @ApplicationScoped
@@ -29,11 +28,14 @@ public class ReminderScheduler {
     @ConfigProperty(name = "calit.reminder.lead-minutes", defaultValue = "1440")
     int leadMinutes;
 
+    @ConfigProperty(name = "calit.scheduler.grace-seconds", defaultValue = "30")
+    int graceSeconds;
+
     @Inject
     EntityManager em;
 
     @Inject
-    Event<ReminderDue> reminderDueEvent;
+    EmailService emailService;
 
     // --- lifecycle observers (creation/recompute/delete side) ---
 
@@ -105,47 +107,49 @@ public class ReminderScheduler {
     }
 
     /**
-     * Feature 15 dispatch tick. Runs on EVERY replica every 60s. Multi-node-safe with NO
-     * leader: each tick claims due unsent reminders with SELECT ... FOR UPDATE SKIP LOCKED,
-     * so a concurrent replica's identical query skips rows this one already locked. Two
-     * replicas never claim the same reminder -> each reminder is sent exactly once.
+     * Feature 15 dispatch tick. Runs on EVERY replica every 60s. Multi-node-safe with NO leader:
+     * each tick claims due unsent reminders with SELECT ... FOR UPDATE SKIP LOCKED. The reminder
+     * email is enqueued to the outbox in the SAME transaction as the claim (crash-safe), so a node
+     * dying mid-tick never loses a reminder: either both the sent_at stamp and the outbox row commit,
+     * or neither does and the row is reclaimed next tick. OutboxScheduler delivers, with retry/backoff.
      */
     @Scheduled(every = "60s")
     void dispatchDueReminders() {
-        List<Long> bookingIds = claimAndMarkDueReminders();
-        // Fire AFTER the claim transaction commits (rows are durably marked sent). Each fire runs
-        // in its own committed transaction to GUARANTEE delivery of the AFTER_SUCCESS email observer
-        // across Quarkus versions. (Verified: on Quarkus 3.36.1 an out-of-transaction fire is also
-        // delivered, but the in-tx fire is the spec-safe contract -- AFTER_SUCCESS needs a tx phase.)
-        for (Long bookingId : bookingIds) {
-            QuarkusTransaction.requiringNew().run(() -> reminderDueEvent.fire(new ReminderDue(bookingId)));
-        }
+        claimAndMarkDueReminders();
     }
 
     /**
-     * Claims up to 50 due unsent reminders FOR UPDATE SKIP LOCKED, stamps sent_at = now()
-     * on each in the SAME transaction (atomic claim+mark), and returns their bookingIds.
+     * Claims up to 50 due unsent reminders FOR UPDATE SKIP LOCKED, and for each, in the SAME tx:
+     * stamps sent_at (exactly-once claim) and enqueues the reminder email to the outbox. A render
+     * failure for one poison booking is caught and logged so it can't roll back the whole batch.
      */
-    List<Long> claimAndMarkDueReminders() {
-        return QuarkusTransaction.requiringNew().call(() -> {
+    void claimAndMarkDueReminders() {
+        QuarkusTransaction.requiringNew().run(() -> {
             @SuppressWarnings("unchecked")
             List<Number> ids = em.createNativeQuery(
                     "SELECT id FROM reminder "
-                            + "WHERE sent_at IS NULL AND send_at <= now() "
+                            + "WHERE sent_at IS NULL AND send_at <= now() + make_interval(secs => :graceSeconds) "
                             + "ORDER BY send_at "
                             + "FOR UPDATE SKIP LOCKED "
                             + "LIMIT 50")
+                    .setParameter("graceSeconds", (double) graceSeconds)
                     .getResultList();
 
-            List<Long> bookingIds = new ArrayList<>();
             Instant now = Instant.now();
             for (Number n : ids) {
-                Long id = n.longValue();
-                Reminder r = Reminder.findById(id);
-                r.sentAt = now;          // marked within the lock-holding transaction
-                bookingIds.add(r.bookingId);
+                Reminder r = Reminder.findById(n.longValue());
+                r.sentAt = now; // claim: marked within the lock-holding transaction
+                // Guard covers a render/load failure (e.g. missing OwnerSettings), which throws
+                // BEFORE any persist -- session stays clean, the claim still commits, one mail dropped.
+                // A node crash is not caught here: it kills the process pre-commit, the tx rolls back,
+                // and the row is reclaimed next tick -- that is the crash-safety guarantee.
+                try {
+                    emailService.enqueueReminder(r.bookingId); // durable intent, same tx
+                } catch (Exception ex) {
+                    Log.errorf(ex, "reminder enqueue failed for booking %d (marked sent, mail dropped)",
+                            r.bookingId);
+                }
             }
-            return bookingIds;
         });
     }
 }
