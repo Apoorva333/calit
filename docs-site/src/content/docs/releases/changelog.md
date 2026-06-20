@@ -7,6 +7,12 @@ This changelog is maintained manually. The canonical release notes, including
 asset downloads, are on
 [GitHub Releases](https://github.com/asm0dey/calit/releases).
 
+## Unreleased
+
+- **Build info in the footer.** Every page now shows the running release version
+  and short git commit in the footer (e.g. `calit 1.8.0 · a1b2c3d`), so you can
+  tell at a glance which build a deployment is running.
+
 ## 1.8.0
 
 Scheduler timing control and crash-safe dispatch.
