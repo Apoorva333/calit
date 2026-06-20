@@ -229,6 +229,16 @@ jobs:
         with:
           fetch-depth: 0 # full history for generated release notes
 
+      - name: Verify tag matches pom version
+        run: |
+          # First <version> in pom.xml is the project version (no <parent> block).
+          POM_VERSION=$(grep -m1 -oP '(?<=<version>)[^<]+' pom.xml)
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$POM_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match pom version $POM_VERSION"
+            exit 1
+          fi
+
       - name: Create release with generated notes
         uses: softprops/action-gh-release@v3
         with:
