@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **calit** — self-hosted, multi-user Calendly alternative on Quarkus 3.36 / Java 25. Each user get isolated scheduling page at `/<username>/<slug>`: own meeting types, availability, bookings, settings, Google account. Server-rendered HTML via Qute; **no JavaScript ships at runtime** (few inline vanilla scripts aside). Stateless — run as N identical replicas; all shared state in Postgres.
 
+## Library source / javadocs
+
+Need a dependency's API or source? Prefer the **`javadocs` MCP** (configured in `.mcp.json`, server `https://www.javadocs.dev/mcp`) over decompiling jars. Decompile only when the MCP lacks the artifact.
+
 ## Build & run
 
 ```bash
