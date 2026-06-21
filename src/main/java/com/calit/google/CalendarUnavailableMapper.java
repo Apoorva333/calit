@@ -1,6 +1,9 @@
 package com.calit.google;
 
+import com.calit.i18n.ActiveLocale;
+import com.calit.i18n.Messages;
 import com.calit.web.PublicResource;
+import jakarta.inject.Inject;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.ExceptionMapper;
@@ -13,11 +16,19 @@ import jakarta.ws.rs.ext.Provider;
  */
 @Provider
 public class CalendarUnavailableMapper implements ExceptionMapper<CalendarUnavailableException> {
+
+    @Inject
+    Messages messages;
+
+    @Inject
+    ActiveLocale activeLocale;
+
     @Override
     public Response toResponse(CalendarUnavailableException ex) {
+        var m = messages.forLocale(activeLocale.current());
         return Response.status(Response.Status.SERVICE_UNAVAILABLE)
                 .type(MediaType.TEXT_HTML)
-                .entity(PublicResource.Templates.unavailable().render())
+                .entity(PublicResource.Templates.unavailable(m.pub_unavailable_title()).render())
                 .build();
     }
 }

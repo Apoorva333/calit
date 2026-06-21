@@ -21,6 +21,9 @@ public interface AppMessages {
 
     // ---- Landing page (index.html at /) ----
 
+    @Message("calit — scheduling you own")
+    String pub_index_title();
+
     @Message("Product")
     String pub_landing_nav_product();
 
@@ -214,6 +217,9 @@ public interface AppMessages {
     String pub_user_choose_time();
 
     // ---- Booking page (book.html) ----
+
+    @Message("Book —")
+    String pub_book_title_prefix();
 
     @Message("← All meeting types")
     String pub_book_back();

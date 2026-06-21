@@ -1,3 +1,4 @@
+{@java.lang.String title}
 {@com.calit.domain.MeetingType type}
 {@java.lang.String user}
 {@java.util.List<com.calit.web.PublicResource$DaySlots> days}
@@ -10,7 +11,7 @@
 {@java.lang.String turnstileSiteKey}
 {@java.lang.Boolean googleConnected}
 {@java.lang.String ownerName}
-{#include base title="Book — {type.name}" bodyClass="book-page"}
+{#include base title=title bodyClass="book-page"}
   {#head}
     {#if turnstileEnabled}
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>

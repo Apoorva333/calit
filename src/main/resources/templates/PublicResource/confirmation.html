@@ -1,3 +1,4 @@
+{@java.lang.String title}
 {@com.calit.booking.Booking booking}
 {@com.calit.domain.MeetingType type}
 {@java.lang.Boolean pending}
@@ -6,7 +7,7 @@
 {@java.lang.String startUtcIso}
 {@java.lang.String tzBar}
 {@java.lang.String tzScript}
-{#include base title="{#if pending}Request sent{#else}Booking confirmed{/if}"}
+{#include base title=title}
   <div class="card bg-base-100 border border-base-300 shadow-sm max-w-xl mx-auto">
     <div class="card-body">
       {#if pending}
