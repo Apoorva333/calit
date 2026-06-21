@@ -992,6 +992,37 @@ Commit: `feat(i18n): translate email bodies`.
 
 ---
 
+## Task 9e: Invitee language switcher widget (added)
+
+The `/lang/{code}` endpoint exists (Task 5) but nothing in the UI invokes it. Add the
+public footer switcher so an invitee can change language; selecting a language sets the
+`calit_lang` cookie and 303-redirects back to the same page, which re-renders server-side
+in the new language (full reload, no JS — consistent with the no-runtime-JS rule).
+
+**Files:**
+- Modify: `src/main/java/com/calit/i18n/ActiveLocale.java` — add a `requestPath` field (raw path + query of the current request) with `set`/`get`.
+- Modify: `src/main/java/com/calit/i18n/LocaleResolutionFilter.java` — stash the request path+query into `ActiveLocale` (URL-encode it for use as a query-param value).
+- Modify: `src/main/java/com/calit/i18n/LocaleTemplateInitializer.java` — expose it to templates via `instance.data("returnPath", ...)` (default `"/"` off-request).
+- Modify: `src/main/resources/templates/base.html` — add the switcher to the public footer ONLY (not `adminBase.html`; owners pick language in Settings).
+- Modify: `AppMessages` + `msg_de.properties` — a key for the switcher label/aria.
+- Test: `src/test/java/com/calit/web/LangSwitcherTest.java`.
+
+**Behavior:**
+- Footer shows one link per supported locale (English / Deutsch), the active one marked
+  (e.g. `aria-current` / a `font-semibold` class). Each link is
+  `/lang/<code>?return={returnPath}` where `returnPath` is the current page path+query.
+- `returnPath` must be URL-encoded in Java (`URLEncoder.encode(path, UTF_8)`) so the
+  query parses; `LangResource.safeLocal` already validates it server-side.
+- Endpoint already 303-redirects back (Task 5) → page reloads in the chosen language.
+
+**Test:** GET a public booking page → footer HTML contains `/lang/en?return=...` and
+`/lang/de?return=...`; with `cookie("calit_lang","de")` the German link is marked active and
+the label renders in German. (Round-trip cookie+redirect behavior is already covered by
+`LangResourceTest`.)
+Commit: `feat(i18n): invitee language switcher in public footer`.
+
+---
+
 ## Task 10: Localize the two client-side scripts
 
 **Files:**
