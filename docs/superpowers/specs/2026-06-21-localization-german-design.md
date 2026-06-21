@@ -50,10 +50,13 @@ external/professional translation step for v1.
 
 ## Locale resolution
 
-A `@RequestScoped CurrentLocale` holder carries the active `Locale` for the
-request. A custom Qute `LocaleResolver` CDI bean returns it so
-`{msg:...}` renders in the right language. A request filter sets
-`CurrentLocale` early:
+A `@RequestScoped ActiveLocale` holder carries the active `Locale` for the
+request. A JAX-RS `ContainerRequestFilter` (running after `MeOwnerFilter`)
+computes and sets it; a `TemplateInstance.Initializer` CDI bean then applies it
+to every Qute render via `setLocale(...)` so `{msg:...}` renders in the right
+language and `{lang}` is available for `<html lang>`. (Quarkus Qute 3.36 has no
+`LocaleResolver` SPI — `TemplateInstance.Initializer` is the supported hook;
+verified via javadocs MCP.) The filter resolves:
 
 - **Owner routes (`/me`, `/me/*`):** use `OwnerSettings.locale` for the current
   owner. Cookie and `Accept-Language` are ignored here.

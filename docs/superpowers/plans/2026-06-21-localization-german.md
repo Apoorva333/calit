@@ -28,8 +28,9 @@
 **New files:**
 - `src/main/java/com/calit/i18n/AppMessages.java` — `@MessageBundle` interface; every UI string is a `@Message` method (English default values).
 - `src/main/java/com/calit/i18n/AppLocales.java` — supported-locale list + parsing/negotiation helpers (pure, unit-testable).
-- `src/main/java/com/calit/i18n/CurrentLocaleResolver.java` — Qute `LocaleResolver` bean: owner locale for `/me*`, else cookie → `Accept-Language` → default.
-- `src/main/java/com/calit/i18n/LangGlobal.java` — `@TemplateGlobal` exposing `lang` (BCP-47 string) to all templates.
+- `src/main/java/com/calit/i18n/ActiveLocale.java` — `@RequestScoped` holder of the active locale.
+- `src/main/java/com/calit/i18n/LocaleResolutionFilter.java` — `ContainerRequestFilter` computing the active locale (owner for `/me*`, else cookie → `Accept-Language` → default) into `ActiveLocale`.
+- `src/main/java/com/calit/i18n/LocaleTemplateInitializer.java` — `TemplateInstance.Initializer` applying the active locale to every render (`setLocale` + `{lang}` data).
 - `src/main/java/com/calit/i18n/Messages.java` — thin helper to fetch a locale-specific `AppMessages` for Java code (email subjects), backed by `@Localized` injections.
 - `src/main/java/com/calit/web/LangResource.java` — `GET /lang/{code}` switch endpoint.
 - `src/main/resources/messages/msg_de.properties` — German translations.
@@ -354,92 +355,150 @@ git commit -m "feat(i18n): add locale columns to owner_settings and booking"
 
 ---
 
-## Task 4: Locale resolver + `<html lang>` global
+## Task 4: Per-request locale resolution + `{lang}` for templates
+
+> **API CORRECTION (verified against quarkus-qute 3.36.3 / qute-core via javadocs MCP):**
+> Quarkus Qute has **no `LocaleResolver` SPI** and **no `MessageBundles.getCurrentLocale()`**.
+> The real mechanism: locale comes from `quarkus.default-locale`, from `quarkus-rest-qute`
+> auto-deriving `Accept-Language`, or from `TemplateInstance.setLocale(...)`. The clean central
+> override hook is **`io.quarkus.qute.TemplateInstance.Initializer`** — a CDI bean
+> (`extends Consumer<TemplateInstance>`) whose `accept(TemplateInstance)` runs for EVERY template
+> instance and can call `setLocale(...)` and `data(key,value)`. Confirmed API:
+> `TemplateInstance.setLocale(Locale)` / `setLocale(String)`, `TemplateInstance.data(String,Object)`,
+> `TemplateInstance.Initializer extends Consumer<TemplateInstance>`.
 
 **Files:**
-- Create: `src/main/java/com/calit/i18n/CurrentLocaleResolver.java`, `src/main/java/com/calit/i18n/LangGlobal.java`
-- Test: `src/test/java/com/calit/i18n/LocaleResolutionTest.java` (uses a tiny test-only template)
+- Create: `src/main/java/com/calit/i18n/ActiveLocale.java` (`@RequestScoped` holder)
+- Create: `src/main/java/com/calit/i18n/LocaleResolutionFilter.java` (`ContainerRequestFilter`, runs after `MeOwnerFilter`)
+- Create: `src/main/java/com/calit/i18n/LocaleTemplateInitializer.java` (`TemplateInstance.Initializer`)
+- Test: `src/test/java/com/calit/i18n/LocaleResolutionTest.java` + a test-only probe resource + template
 
 **Interfaces:**
-- Consumes: `CurrentOwner` (from `com.calit.user`), `AppLocales` (Task 1), `OwnerSettings.locale` (Task 3).
-- Produces: per-request locale for Qute message rendering; `{lang}` template global (BCP-47 string of the active locale).
+- Consumes: `CurrentOwner` (`com.calit.user`), `AppLocales` (Task 1), `OwnerSettings.locale` (Task 3).
+- Produces:
+  - `ActiveLocale` (`@RequestScoped`): `void set(Locale)`, `Locale getOrNull()` (null if unset), `Locale current()` (getOrNull, else `AppLocales.DEFAULT`). **Task 7 (booking capture) and Task 8 (emails) read the active request locale via `ActiveLocale`.**
+  - Every Qute render gets the right locale for `{msg:}` and a `lang` data value for `<html lang="{lang}">`.
 
-**Resolution order (single bean):**
-1. If `CurrentOwner` is set (i.e. an owner-scoped `/me*` request) → `AppLocales.pick(owner's OwnerSettings.locale)`.
-2. Else cookie `calit_lang` → `AppLocales.pick(cookie)` if supported.
-3. Else `Accept-Language` → `AppLocales.fromAcceptLanguage(header)`.
-4. Else `AppLocales.DEFAULT`.
-Return `null` when there is no active HTTP request (e.g. scheduler thread) so emails fall back to explicit `.setLocale(...)`.
+**Resolution order** (computed in the filter, stored in `ActiveLocale`):
+1. `CurrentOwner.isSet()` (owner-scoped `/me*` request) → `AppLocales.pick(OwnerSettings.forOwner(id).locale)`.
+2. Else cookie `calit_lang` (if `AppLocales.isSupported`) → `AppLocales.pick`.
+3. Else `AppLocales.fromAcceptLanguage(Accept-Language)`.
+(The filter always sets a non-null locale on `ActiveLocale`. Off-request threads — scheduler/outbox — never run the filter, so `ActiveLocale` is simply not active there; emails set locale explicitly in Task 8.)
 
-- [ ] **Step 1: Implement the resolver**
+- [ ] **Step 1: Implement the request-scoped holder**
+
+```java
+package com.calit.i18n;
+
+import jakarta.enterprise.context.RequestScoped;
+import java.util.Locale;
+
+/** Holds the active locale for the current request. Set by LocaleResolutionFilter,
+ *  read by the template initializer and by booking/email code. */
+@RequestScoped
+public class ActiveLocale {
+    private Locale locale;
+    public void set(Locale locale) { this.locale = locale; }
+    public Locale getOrNull() { return locale; }
+    public Locale current() { return locale != null ? locale : AppLocales.DEFAULT; }
+}
+```
+
+- [ ] **Step 2: Implement the resolution filter** (JAX-RS `ContainerRequestFilter`, mirrors `MeOwnerFilter`)
 
 ```java
 package com.calit.i18n;
 
 import com.calit.domain.OwnerSettings;
 import com.calit.user.CurrentOwner;
-import io.quarkus.qute.i18n.LocaleResolver;
-import io.vertx.core.http.HttpServerRequest;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
+import jakarta.annotation.Priority;
 import jakarta.inject.Inject;
+import jakarta.ws.rs.Priorities;
+import jakarta.ws.rs.container.ContainerRequestContext;
+import jakarta.ws.rs.container.ContainerRequestFilter;
+import jakarta.ws.rs.core.Cookie;
+import jakarta.ws.rs.ext.Provider;
 import java.util.Locale;
 
 /**
- * Computes the active locale for every Qute render. Owner UI ({@code /me*}) uses the owner's
- * stored locale; everyone else uses cookie -> Accept-Language -> default. Returns null when
- * there is no live HTTP request (scheduler/outbox threads), so email rendering must set the
- * locale explicitly via TemplateInstance#setLocale.
+ * Resolves the active locale for every request and stashes it in {@link ActiveLocale}.
+ * Owner-scoped routes use the owner's stored locale; everyone else uses the calit_lang cookie,
+ * then Accept-Language, then the default. Runs AFTER MeOwnerFilter so CurrentOwner is populated.
  */
-@ApplicationScoped
-public class CurrentLocaleResolver implements LocaleResolver {
+@Provider
+@Priority(Priorities.AUTHORIZATION + 100) // after MeOwnerFilter (which resolves CurrentOwner)
+public class LocaleResolutionFilter implements ContainerRequestFilter {
 
-    @Inject Instance<CurrentOwner> currentOwner;   // request-scoped; Instance guards no-request threads
-    @Inject Instance<HttpServerRequest> request;
+    @Inject CurrentOwner currentOwner;
+    @Inject ActiveLocale activeLocale;
 
     @Override
-    public Locale getLocale() {
-        // Owner-scoped request: owner's chosen language wins.
-        if (currentOwner.isResolvable()) {
-            CurrentOwner co = currentOwner.get();
-            if (co.isSet()) {
-                OwnerSettings s = OwnerSettings.forOwner(co.id());
-                if (s != null && s.locale != null) return AppLocales.pick(s.locale);
-            }
+    public void filter(ContainerRequestContext ctx) {
+        activeLocale.set(resolve(ctx));
+    }
+
+    private Locale resolve(ContainerRequestContext ctx) {
+        if (currentOwner.isSet()) {
+            OwnerSettings s = OwnerSettings.forOwner(currentOwner.id());
+            return AppLocales.pick(s != null ? s.locale : null);
         }
-        if (!request.isResolvable()) return null; // no HTTP request (scheduler) -> defer
-        HttpServerRequest req = request.get();
-        if (req == null) return null;
-
-        String cookie = req.getCookie("calit_lang") != null ? req.getCookie("calit_lang").getValue() : null;
-        if (cookie != null && AppLocales.isSupported(cookie)) return AppLocales.pick(cookie);
-
-        return AppLocales.fromAcceptLanguage(req.getHeader("Accept-Language"));
+        Cookie c = ctx.getCookies().get("calit_lang");
+        if (c != null && AppLocales.isSupported(c.getValue())) return AppLocales.pick(c.getValue());
+        return AppLocales.fromAcceptLanguage(ctx.getHeaderString("Accept-Language"));
     }
 }
 ```
 
-- [ ] **Step 2: Implement the template global**
+> Verify `MeOwnerFilter`'s effective priority. It declares no `@Priority`, so JAX-RS treats it as
+> `Priorities.USER` (5000). To guarantee this filter runs AFTER it, set this filter's priority
+> HIGHER than MeOwnerFilter's (request filters run low→high). If `Priorities.AUTHORIZATION + 100`
+> (1100) runs too early, bump to `Priorities.USER + 100` (5100) and note it. Confirm by checking
+> that the owner-locale test (Task 6) sees the owner's locale, not the cookie.
+
+- [ ] **Step 3: Implement the template initializer** (the central locale hook)
 
 ```java
 package com.calit.i18n;
 
-import io.quarkus.qute.TemplateGlobal;
-import io.quarkus.qute.i18n.MessageBundles;
+import io.quarkus.arc.Arc;
+import io.quarkus.qute.TemplateInstance;
+import jakarta.enterprise.context.ApplicationScoped;
+import java.util.Locale;
 
-/** Exposes {lang} (active BCP-47 tag) to every template for <html lang="{lang}">. */
-@TemplateGlobal
-public class LangGlobal {
-    static String lang() {
-        java.util.Locale l = MessageBundles.getCurrentLocale();
-        return (l != null ? l : AppLocales.DEFAULT).toLanguageTag();
+/**
+ * Applies the active request locale to EVERY Qute template instance: sets the message-bundle
+ * locale (drives {msg:...}) and a {lang} data value (drives <html lang="{lang}">). Off-request
+ * threads (scheduler/outbox emails) have no active request scope, so this defers to whatever
+ * locale the caller set explicitly (Task 8) and only fills {lang} with the default.
+ */
+@ApplicationScoped
+public class LocaleTemplateInitializer implements TemplateInstance.Initializer {
+
+    @Override
+    public void accept(TemplateInstance instance) {
+        Locale locale = null;
+        if (Arc.container().requestContext().isActive()) {
+            ActiveLocale active = Arc.container().instance(ActiveLocale.class).get();
+            if (active != null) locale = active.getOrNull();
+        }
+        if (locale != null) {
+            instance.setLocale(locale);
+            instance.data("lang", locale.toLanguageTag());
+        } else {
+            instance.data("lang", AppLocales.DEFAULT.toLanguageTag());
+        }
     }
 }
 ```
 
-> NOTE: if `MessageBundles.getCurrentLocale()` is not available in this Qute version, inject `CurrentLocaleResolver` and call `getLocale()` (null → DEFAULT) instead. Verify against the `io.quarkus.qute.i18n` API at implementation time via the javadocs MCP.
+> The `Arc.container().requestContext().isActive()` guard is what makes this safe on scheduler/
+> outbox threads (no request scope). `Arc` is `io.quarkus.arc.Arc` (always present in Quarkus).
+> `data("lang", ...)` adds a root-context value visible to base/adminBase via `{lang}`; it does not
+> collide with `@CheckedTemplate` params (extra data is allowed). Verify `instance.data(...)` /
+> `setLocale(...)` exist on `io.quarkus.qute.TemplateInstance` (they do in qute-core 3.36) if a
+> compile error appears.
 
-- [ ] **Step 3: Write failing test** (test-only template proves both resolution paths)
+- [ ] **Step 4: Write the failing test + probe** (proves all three resolution paths and `{lang}`)
 
 Create `src/test/resources/templates/i18nProbe.html`:
 
@@ -447,12 +506,11 @@ Create `src/test/resources/templates/i18nProbe.html`:
 lang={lang}|cancel={msg:common_cancel}
 ```
 
-Create the test:
+Test `src/test/java/com/calit/i18n/LocaleResolutionTest.java`:
 
 ```java
 package com.calit.i18n;
 
-import io.quarkus.qute.CheckedTemplate;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 import static io.restassured.RestAssured.given;
@@ -467,16 +525,16 @@ class LocaleResolutionTest {
     }
     @Test void publicAcceptLanguageDe() {
         given().header("Accept-Language", "de").when().get("/__i18n_probe")
-            .then().statusCode(200).body(containsString("cancel=Abbrechen"));
+            .then().statusCode(200).body(containsString("cancel=Abbrechen")).body(containsString("lang=de"));
     }
     @Test void unsupportedFallsToEnglish() {
         given().header("Accept-Language", "fr").when().get("/__i18n_probe")
-            .then().statusCode(200).body(containsString("cancel=Cancel"));
+            .then().statusCode(200).body(containsString("cancel=Cancel")).body(containsString("lang=en"));
     }
 }
 ```
 
-Add a test-only probe resource `src/test/java/com/calit/i18n/I18nProbeResource.java`:
+Test-only probe resource `src/test/java/com/calit/i18n/I18nProbeResource.java`:
 
 ```java
 package com.calit.i18n;
@@ -498,16 +556,20 @@ public class I18nProbeResource {
 }
 ```
 
-- [ ] **Step 4: Run, verify fail then pass**
+> If `@CheckedTemplate(basePath = "")` does not resolve `i18nProbe.html` at the test templates
+> root, adapt the probe to the project's checked-template convention (see how `AdminResource`'s
+> inner `Templates` class + `templates/AdminResource/` layout works) and note the adjustment.
+
+- [ ] **Step 5: Run, verify fail then pass**
 
 Run: `mvn test -Dtest=LocaleResolutionTest`
-First expected: FAIL (resolver/global/probe missing or German not resolving). Implement until: PASS (3 tests).
+First expected: FAIL (filter/initializer/probe missing, or German not resolving). Implement until: PASS (3 tests).
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add src/main/java/com/calit/i18n/CurrentLocaleResolver.java src/main/java/com/calit/i18n/LangGlobal.java src/test/java/com/calit/i18n/ src/test/resources/templates/i18nProbe.html
-git commit -m "feat(i18n): per-request locale resolver + {lang} template global"
+git add src/main/java/com/calit/i18n/ActiveLocale.java src/main/java/com/calit/i18n/LocaleResolutionFilter.java src/main/java/com/calit/i18n/LocaleTemplateInitializer.java src/test/java/com/calit/i18n/ src/test/resources/templates/i18nProbe.html
+git commit -m "feat(i18n): per-request locale resolution + {lang} for templates"
 ```
 
 ---
@@ -712,7 +774,7 @@ git commit -m "feat(i18n): owner language setting"
 - Test: `src/test/java/com/calit/booking/BookingLocaleTest.java`
 
 **Interfaces:**
-- Consumes: `CurrentLocaleResolver`/`MessageBundles.getCurrentLocale()` (Task 4) to read the active invitee locale at booking time.
+- Consumes: `com.calit.i18n.ActiveLocale` (Task 4) — `@Inject ActiveLocale` and call `current()` to read the active invitee locale at booking time.
 - Produces: `Booking.locale` is set from the request locale; `BookingService.book(...)` gains a trailing `String locale` parameter.
 
 > Note the existing guard in `BookingResource`: all booking creation MUST go through `BookingService.book`. Add the param there; do not branch logic.
@@ -753,13 +815,13 @@ Expected: FAIL — `book` has no locale parameter (compile error).
 - [ ] **Step 3: Implement**
 
 - Add `String locale` as the last parameter of `BookingService.book(...)`; inside, set `booking.locale = AppLocales.isSupported(locale) ? locale : "en";` before persist.
-- In `BookingResource.create`, resolve the request locale and pass it: read `MessageBundles.getCurrentLocale()` (null → "en") → `.toLanguageTag()`, or accept it from the JSON `BookRequest` if the web form already sends it. Simplest: resolve server-side from the request, ignore client input.
+- In `BookingResource.create`, resolve the request locale via the injected `ActiveLocale` and pass it (ignore any client-supplied locale — resolve server-side from the request).
 - In the `PublicResource` web booking form handler, pass the active locale the same way.
 
 ```java
-// in both call sites:
-java.util.Locale cur = io.quarkus.qute.i18n.MessageBundles.getCurrentLocale();
-String locale = (cur != null ? cur : com.calit.i18n.AppLocales.DEFAULT).getLanguage();
+// inject once:  @Inject com.calit.i18n.ActiveLocale activeLocale;
+// at both call sites:
+String locale = activeLocale.current().getLanguage(); // "de" / "en"
 Booking b = bookingService.book(owner.id, slug, start, name, email, answers, /*...*/, locale);
 ```
 
@@ -1032,5 +1094,6 @@ git add -A && git commit -m "test(i18n): fix up callers and assertions after i18
 
 - **Spec coverage:** engine (T2,T4) · two locale axes (T4 owner path, T4 cookie/header path) · cookie switch (T5) · persisted booking locale (T7) + owner locale (T6) · server date formatting (T8) · client-side time/calendar localization (T10) · `<html lang>` (T4 global + T9a) · V16 columns (T3) · owner settings UI (T6) · tests (each task) · docs (T12) · RTL hedge (T9 procedure step 5) — all mapped.
 - **Placeholders:** translation tasks (T9) are intentionally procedural (enumerating hundreds of literals verbatim would duplicate the templates); the procedure, key convention, worked examples, and per-group test pattern are concrete. All logic/infra tasks carry full code.
-- **Type consistency:** `AppLocales.pick/isSupported/fromAcceptLanguage`, `Messages.forLocale/forTag`, `CurrentLocaleResolver.getLocale`, `Booking.locale`/`OwnerSettings.locale`, the added `book(...)` trailing `String locale`, `{lang}` global — names used consistently across tasks.
-- **Open verification at impl time:** `MessageBundles.getCurrentLocale()` availability in this Qute version (Task 4 note) — confirm via javadocs MCP; fallback path given.
+- **Type consistency:** `AppLocales.pick/isSupported/fromAcceptLanguage`, `Messages.forLocale/forTag`, `ActiveLocale.set/getOrNull/current`, `LocaleResolutionFilter`, `LocaleTemplateInitializer`, `Booking.locale`/`OwnerSettings.locale`, the added `book(...)` trailing `String locale`, `{lang}` data value — names used consistently across tasks.
+- **API verified (javadocs MCP, quarkus-qute 3.36.3 / qute-core):** no `LocaleResolver` SPI and no `MessageBundles.getCurrentLocale()`; the locale hook is `TemplateInstance.Initializer` (`Consumer<TemplateInstance>`) with `setLocale(Locale)` + `data(String,Object)`. Task 4 rewritten to this design; Tasks 7/8 consume `ActiveLocale` / `setLocale(...)`.
+- **Open verification at impl time:** JAX-RS filter priority ordering (LocaleResolutionFilter must run after MeOwnerFilter) and the `@CheckedTemplate(basePath="")` probe resolution — both noted inline in Task 4 with fallbacks.
