@@ -12,6 +12,7 @@ import com.calit.domain.BookingField;
 import com.calit.domain.MeetingType;
 import com.calit.domain.OwnerSettings;
 import com.calit.google.CalendarUnavailableException;
+import com.calit.i18n.ActiveLocale;
 import com.calit.user.AppUser;
 import com.calit.user.CurrentOwner;
 import com.calit.user.Usernames;
@@ -84,6 +85,9 @@ public class PublicResource {
 
     @Inject
     CurrentOwner currentOwner;
+
+    @Inject
+    ActiveLocale activeLocale;
 
     @jakarta.inject.Inject
     com.calit.google.CalendarPort calendarPort;
@@ -203,9 +207,11 @@ public class PublicResource {
         try {
             // book(...) enforces required fields AND the abuse guards (Turnstile + honeypot +
             // per-email/day cap) server-side; the handler just forwards the two raw inputs.
+            // Locale is resolved server-side from the request (set by LocaleResolutionFilter).
+            String locale = activeLocale.current().getLanguage();
             booking = bookingService.book(
                     owner.id, slug, Instant.parse(startUtc), inviteeName, inviteeEmail, answers,
-                    turnstileToken, website);
+                    turnstileToken, website, locale);
         } catch (BookingValidationException | AbuseException | RateLimitException
                  | BookingConflictException be) {
             // Required-field 422 OR an abuse-guard rejection (filled honeypot / failed Turnstile /

@@ -6,6 +6,7 @@ import com.calit.domain.MeetingType;
 import com.calit.domain.OwnerSettings;
 import com.calit.google.BusyInterval;
 import com.calit.google.CalendarPort;
+import com.calit.i18n.AppLocales;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -140,7 +141,8 @@ public class BookingService {
     @Transactional
     public Booking book(Long ownerId, String meetingTypeSlug, Instant startUtc,
                         String inviteeName, String inviteeEmail,
-                        Map<String, String> answers, String turnstileToken, String honeypot) {
+                        Map<String, String> answers, String turnstileToken, String honeypot,
+                        String locale) {
         validateInviteeEmail(inviteeEmail);
         validateInputBounds(inviteeName, answers);
         MeetingType type = MeetingType.findBySlug(ownerId, meetingTypeSlug);
@@ -179,6 +181,7 @@ public class BookingService {
         booking.createdAt = Instant.now();
         booking.manageToken = UUID.randomUUID().toString();
         booking.answers = submitted;
+        booking.locale = AppLocales.isSupported(locale) ? locale : "en";
         // Feature 14: approval types hold the slot as PENDING; auto types are CONFIRMED immediately.
         booking.status = type.requiresApproval ? BookingStatus.PENDING : BookingStatus.CONFIRMED;
 

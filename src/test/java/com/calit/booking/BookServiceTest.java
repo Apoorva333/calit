@@ -71,7 +71,7 @@ class BookServiceTest {
 
         // No per-type fields and the only global field (seeded description) is optional,
         // so an empty answers map books successfully.
-        Booking b = bookingService.book(1L, "book-happy", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "");
+        Booking b = bookingService.book(1L, "book-happy", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "", "en");
 
         assertEquals(BookingStatus.CONFIRMED, b.status);
         assertEquals("evt-99", b.googleEventId);
@@ -97,7 +97,7 @@ class BookServiceTest {
         when(calendarPort.createEvent(anyLong(), anyString(), anyString(), any(), any(), any(), anyBoolean(), any()))
                 .thenReturn(new CreatedEvent("evt-ph", null, "h"));
 
-        Booking b = bookingService.book(1L, "book-phone", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "");
+        Booking b = bookingService.book(1L, "book-phone", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "", "en");
 
         assertEquals(BookingStatus.CONFIRMED, b.status);
         assertNull(b.meetLink, "no Meet link for a non-Meet location");
@@ -113,7 +113,7 @@ class BookServiceTest {
         meetingTypeWithMondayWindow("book-degraded", LocationType.GOOGLE_MEET, false);
         when(calendarPort.isConnected(anyLong())).thenReturn(false);
 
-        Booking b = bookingService.book(1L, "book-degraded", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "");
+        Booking b = bookingService.book(1L, "book-degraded", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "", "en");
 
         assertEquals(BookingStatus.CONFIRMED, b.status);
         assertNull(b.googleEventId);
@@ -134,7 +134,7 @@ class BookServiceTest {
         int requestedBefore = REQUESTED.get();
         int confirmedBefore = CONFIRMED.get();
 
-        Booking b = bookingService.book(1L, "book-approval", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "");
+        Booking b = bookingService.book(1L, "book-approval", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "", "en");
 
         assertEquals(BookingStatus.PENDING, b.status);
         assertNull(b.googleEventId);
@@ -157,7 +157,7 @@ class BookServiceTest {
         when(calendarPort.createEvent(anyLong(), anyString(), anyString(), any(), any(), any(), anyBoolean(), any()))
                 .thenReturn(new CreatedEvent("evt-opt", "https://meet.google.com/opt-1-2", "h"));
 
-        Booking b = bookingService.book(1L, "book-optional", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "");
+        Booking b = bookingService.book(1L, "book-optional", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "", "en");
 
         assertEquals(BookingStatus.CONFIRMED, b.status);
     }
@@ -174,7 +174,7 @@ class BookServiceTest {
 
         // answers lacks "company" -> 422-mapped validation failure, before any Google call.
         assertThrows(BookingValidationException.class, () ->
-                bookingService.book(1L, "book-required-missing", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", ""));
+                bookingService.book(1L, "book-required-missing", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "", "en"));
     }
 
     @Test
@@ -189,7 +189,7 @@ class BookServiceTest {
         // Present but blank value is rejected just like a missing key.
         assertThrows(BookingValidationException.class, () ->
                 bookingService.book(1L, "book-required-blank", SLOT_09, "Sam", "sam@example.com",
-                        Map.of("company", "   "), "tok", ""));
+                        Map.of("company", "   "), "tok", "", "en"));
     }
 
     @Test
@@ -204,7 +204,7 @@ class BookServiceTest {
                 .thenReturn(new CreatedEvent("evt-ans", "https://meet.google.com/ans-1-2", "h"));
 
         Booking b = bookingService.book(1L, "book-required-ok", SLOT_09, "Sam", "sam@example.com",
-                Map.of("company", "Acme", "note", "extra-key-kept"), "tok", "");
+                Map.of("company", "Acme", "note", "extra-key-kept"), "tok", "", "en");
 
         Booking loaded = Booking.findById(b.id);
         assertEquals(BookingStatus.CONFIRMED, loaded.status);
@@ -223,13 +223,13 @@ class BookServiceTest {
         when(calendarPort.createEvent(anyLong(), anyString(), anyString(), any(), any(), any(), anyBoolean(), any()))
                 .thenReturn(new CreatedEvent("evt-1", "https://meet.google.com/a-b-c", "h"));
 
-        bookingService.book(1L, "book-double", SLOT_09, "First", "first@example.com", Map.of(), "tok", "");
+        bookingService.book(1L, "book-double", SLOT_09, "First", "first@example.com", Map.of(), "tok", "", "en");
 
         // Second attempt on the now-taken slot is rejected (the persisted booking is busy).
         // The app-level re-check catches it here; the DB exclusion constraint is the
         // cross-replica backstop (guards against concurrent inserts from multiple replicas).
         assertThrows(BookingConflictException.class,
-                () -> bookingService.book(1L, "book-double", SLOT_09, "Second", "second@example.com", Map.of(), "tok", ""));
+                () -> bookingService.book(1L, "book-double", SLOT_09, "Second", "second@example.com", Map.of(), "tok", "", "en"));
     }
 
     @Test
@@ -257,7 +257,7 @@ class BookServiceTest {
         }
 
         assertThrows(RateLimitException.class, () ->
-                bookingService.book(1L, "book-cap", SLOT_09, "Spammer", "spam@example.com", Map.of(), "tok", ""));
+                bookingService.book(1L, "book-cap", SLOT_09, "Spammer", "spam@example.com", Map.of(), "tok", "", "en"));
     }
 
     @Test
@@ -273,7 +273,7 @@ class BookServiceTest {
 
         assertThrows(AbuseException.class, () ->
                 bookingService.book(1L, "book-honeypot", SLOT_09, "Bot", "bot@example.com",
-                        Map.of(), "tok", "http://spam.example"));
+                        Map.of(), "tok", "http://spam.example", "en"));
     }
 
     @Test
@@ -287,7 +287,7 @@ class BookServiceTest {
         // 09:13 is not a generated slot start.
         assertThrows(BookingConflictException.class, () ->
                 bookingService.book(1L, "book-bad-start",
-                        DAY.atTime(9, 13).atZone(ZONE).toInstant(), "X", "x@example.com", Map.of(), "tok", ""));
+                        DAY.atTime(9, 13).atZone(ZONE).toInstant(), "X", "x@example.com", Map.of(), "tok", "", "en"));
     }
 
     // --- helpers ---

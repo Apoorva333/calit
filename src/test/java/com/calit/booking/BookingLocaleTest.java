@@ -18,7 +18,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @QuarkusTest
-class BookingOwnerStampTest {
+class BookingLocaleTest {
 
     @Inject
     BookingService bookingService;
@@ -51,15 +51,40 @@ class BookingOwnerStampTest {
 
     @Test
     @TestTransaction
-    void bookingIsStampedWithItsMeetingTypesOwner() {
-        MeetingType t = seedOwnerAndType("ownerstamp");
-        // Pick a slot far enough out to clear min-notice (0) and inside the horizon.
+    void bookStoresProvidedLocale() {
+        MeetingType t = seedOwnerAndType("locale-de-user");
         ZonedDateTime slot = ZonedDateTime.now(ZoneId.of("UTC"))
                 .plusDays(2).withHour(10).withMinute(0).withSecond(0).withNano(0);
 
         Booking b = bookingService.book(t.ownerId, t.slug, slot.toInstant(),
-                "Invitee", "invitee@x.com", Map.of(), null, null, "en");
+                "Erika", "erika@example.de", Map.of(), null, null, "de");
 
-        assertEquals(t.ownerId, b.ownerId, "booking.ownerId must equal the meeting type's owner");
+        assertEquals("de", b.locale);
+    }
+
+    @Test
+    @TestTransaction
+    void bookFallsBackToEnForUnsupportedLocale() {
+        MeetingType t = seedOwnerAndType("locale-xx-user");
+        ZonedDateTime slot = ZonedDateTime.now(ZoneId.of("UTC"))
+                .plusDays(2).withHour(11).withMinute(0).withSecond(0).withNano(0);
+
+        Booking b = bookingService.book(t.ownerId, t.slug, slot.toInstant(),
+                "Xavier", "xavier@example.com", Map.of(), null, null, "xx");
+
+        assertEquals("en", b.locale);
+    }
+
+    @Test
+    @TestTransaction
+    void bookFallsBackToEnForNullLocale() {
+        MeetingType t = seedOwnerAndType("locale-null-user");
+        ZonedDateTime slot = ZonedDateTime.now(ZoneId.of("UTC"))
+                .plusDays(2).withHour(12).withMinute(0).withSecond(0).withNano(0);
+
+        Booking b = bookingService.book(t.ownerId, t.slug, slot.toInstant(),
+                "Nadia", "nadia@example.com", Map.of(), null, null, null);
+
+        assertEquals("en", b.locale);
     }
 }
