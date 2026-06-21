@@ -17,6 +17,9 @@ public interface AppMessages {
     String common_cancel();
 
     @Message("Language")
+    String common_language();
+
+    @Message("Language")
     String adm_settings_language();
 
     // ---- Landing page (index.html at /) ----

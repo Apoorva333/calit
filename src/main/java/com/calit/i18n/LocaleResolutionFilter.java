@@ -9,6 +9,8 @@ import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerRequestFilter;
 import jakarta.ws.rs.core.Cookie;
 import jakarta.ws.rs.ext.Provider;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
 /**
@@ -34,6 +36,24 @@ public class LocaleResolutionFilter implements ContainerRequestFilter {
     @Override
     public void filter(ContainerRequestContext ctx) {
         activeLocale.set(resolve(ctx));
+        activeLocale.setReturnPath(computeReturnPath(ctx));
+    }
+
+    /**
+     * Computes a URL-encoded string of the current request path (+ query if present) suitable
+     * for use as the {@code ?return=} query param on /lang/{code} links.
+     * Returns "/" (encoded) if the current path is already the /lang switch endpoint,
+     * to avoid return-to-switch loops.
+     */
+    private static String computeReturnPath(ContainerRequestContext ctx) {
+        String rawPath = ctx.getUriInfo().getRequestUri().getRawPath();
+        // Guard: avoid redirect loops back to the /lang/... switch endpoint
+        if (rawPath.startsWith("/lang/")) {
+            return "%2F"; // URL-encoded "/"
+        }
+        String rawQuery = ctx.getUriInfo().getRequestUri().getRawQuery();
+        String raw = (rawQuery != null && !rawQuery.isEmpty()) ? rawPath + "?" + rawQuery : rawPath;
+        return URLEncoder.encode(raw, StandardCharsets.UTF_8);
     }
 
     private Locale resolve(ContainerRequestContext ctx) {

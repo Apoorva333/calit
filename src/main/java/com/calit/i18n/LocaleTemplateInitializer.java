@@ -29,9 +29,13 @@ public class LocaleTemplateInitializer implements TemplateInstance.Initializer {
     @Override
     public void accept(TemplateInstance instance) {
         Locale locale = null;
+        String returnPath = "/";
         if (Arc.container().requestContext().isActive()) {
             ActiveLocale active = Arc.container().instance(ActiveLocale.class).get();
-            if (active != null) locale = active.getOrNull();
+            if (active != null) {
+                locale = active.getOrNull();
+                returnPath = active.getReturnPath();
+            }
         }
         if (locale != null) {
             instance.setLocale(locale);
@@ -39,5 +43,6 @@ public class LocaleTemplateInitializer implements TemplateInstance.Initializer {
         } else {
             instance.data("lang", AppLocales.DEFAULT.toLanguageTag());
         }
+        instance.data("returnPath", returnPath);
     }
 }

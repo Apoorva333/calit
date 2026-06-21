@@ -33,6 +33,19 @@
   <footer class="container py-6 text-center text-xs text-base-content/50">
     <a href="https://github.com/asm0dey/calit" class="link link-hover">calit</a>
     {inject:build.version} &middot; {inject:build.commit}
+    <nav class="mt-2" aria-label="{msg:common_language}">
+      {#if lang == "en"}
+        <span class="font-semibold" aria-current="true">English</span>
+      {#else}
+        <a href="/lang/en?return={returnPath}" class="link link-hover">English</a>
+      {/if}
+      <span class="mx-1">&middot;</span>
+      {#if lang == "de"}
+        <span class="font-semibold" aria-current="true">Deutsch</span>
+      {#else}
+        <a href="/lang/de?return={returnPath}" class="link link-hover">Deutsch</a>
+      {/if}
+    </nav>
   </footer>
   <script>
     /* Persist the manual theme choice; default (no attr) falls back to OS via prefersdark. */
