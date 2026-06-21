@@ -59,8 +59,8 @@ class EmailLocaleTest {
 
     @Test
     void germanSubjectResolves() {
-        String deSubj = messages.forTag("de").email_confirmation_subject();
-        String enSubj = messages.forTag("en").email_confirmation_subject();
+        String deSubj = messages.forTag("de").email_confirmed_subject("X");
+        String enSubj = messages.forTag("en").email_confirmed_subject("X");
         assertFalse(deSubj.isBlank(), "German confirmation subject must not be blank");
         assertNotEquals(enSubj, deSubj, "German subject must differ from English");
     }

@@ -2,6 +2,7 @@ package com.calit.user;
 
 import com.calit.domain.OwnerSettings;
 import com.calit.email.EmailService;
+import com.calit.i18n.AppLocales;
 import io.quarkus.qute.CheckedTemplate;
 import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
@@ -64,7 +65,8 @@ public class PasswordResetResource {
                 Instant now = Instant.now();
                 String token = resetService.issue(user.id, now);
                 emailService.sendPasswordReset(os.ownerEmail,
-                        baseUrl + "/reset-password?token=" + token, now.plus(PasswordResetService.TTL));
+                        baseUrl + "/reset-password?token=" + token, now.plus(PasswordResetService.TTL),
+                        AppLocales.pick(os.locale));
             }
         }
         // Always the same response — never disclose whether the account exists.

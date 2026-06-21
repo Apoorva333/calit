@@ -96,9 +96,10 @@ public class EmailService {
      * Sends a password-reset link. Caller has already resolved the destination address.
      * {@code expiresAt} is the reset token's expiry: if the mail can't be sent now and has to fall
      * back to the outbox, retries stop at that instant so a dead-link email is never delivered.
+     * {@code locale} drives any {msg:} keys rendered in the template body.
      */
-    public void sendPasswordReset(String toEmail, String resetUrl, Instant expiresAt) {
-        String body = passwordReset.data("resetUrl", resetUrl).render();
+    public void sendPasswordReset(String toEmail, String resetUrl, Instant expiresAt, Locale locale) {
+        String body = passwordReset.instance().setLocale(locale).data("resetUrl", resetUrl).render();
         mailSender.send(toEmail, "Reset your calit password", body, null, expiresAt);
     }
 
@@ -106,10 +107,11 @@ public class EmailService {
      * Critical operational alert: the owner's Google account is disconnected and their booking page
      * is paused. Sent regardless of {@code ownerNotificationsEnabled} (that flag governs only routine
      * booking notifications). Links to the Google settings page so the owner can reconnect.
+     * {@code locale} drives any {msg:} keys rendered in the template body.
      */
-    public void sendGoogleDisconnected(String toEmail, String accountEmail) {
+    public void sendGoogleDisconnected(String toEmail, String accountEmail, Locale locale) {
         String reconnectUrl = baseUrl + "/me/google";
-        String body = googleDisconnected
+        String body = googleDisconnected.instance().setLocale(locale)
                 .data("accountEmail", accountEmail == null ? "your account" : accountEmail)
                 .data("reconnectUrl", reconnectUrl)
                 .render();

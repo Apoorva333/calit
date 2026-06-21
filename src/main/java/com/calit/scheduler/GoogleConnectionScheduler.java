@@ -4,6 +4,7 @@ import com.calit.domain.OwnerSettings;
 import com.calit.email.EmailService;
 import com.calit.google.GoogleCredential;
 import com.calit.google.GoogleTokenService;
+import com.calit.i18n.AppLocales;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -15,6 +16,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Feature: Google disconnect detection. Runs on EVERY replica every probe-interval. Multi-node-safe
@@ -90,11 +92,11 @@ public class GoogleConnectionScheduler {
     public void notifyPendingDisconnects() {
         List<Pending> pending = claimUnnotifiedDisconnects();
         for (Pending p : pending) {
-            emailService.sendGoogleDisconnected(p.ownerEmail(), p.accountEmail());
+            emailService.sendGoogleDisconnected(p.ownerEmail(), p.accountEmail(), p.locale());
         }
     }
 
-    private record Pending(String ownerEmail, String accountEmail) {}
+    private record Pending(String ownerEmail, String accountEmail, Locale locale) {}
 
     List<Pending> claimUnnotifiedDisconnects() {
         return QuarkusTransaction.requiringNew().call(() -> {
@@ -112,7 +114,7 @@ public class GoogleConnectionScheduler {
                 c.reconnectNotifiedAt = now; // claim: prevents any replica re-sending
                 OwnerSettings s = OwnerSettings.forOwner(c.ownerId);
                 if (s != null) {
-                    out.add(new Pending(s.ownerEmail, c.accountEmail));
+                    out.add(new Pending(s.ownerEmail, c.accountEmail, AppLocales.pick(s.locale)));
                 }
             }
             return out;

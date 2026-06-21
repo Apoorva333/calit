@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
+import java.util.Locale;
+
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusTest
@@ -20,7 +22,7 @@ class GoogleDisconnectedEmailTest {
 
     @Test
     void sendsReconnectLinkToOwner() {
-        emailService.sendGoogleDisconnected("owner@example.com", "work@gmail.com");
+        emailService.sendGoogleDisconnected("owner@example.com", "work@gmail.com", Locale.ENGLISH);
 
         ArgumentCaptor<String> to = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> subject = ArgumentCaptor.forClass(String.class);

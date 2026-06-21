@@ -42,10 +42,6 @@ public interface AppMessages {
     @Message("Reminder: {meetingTypeName}")
     String email_reminder_subject(String meetingTypeName);
 
-    /** Shorthand for tests: confirmation subject with placeholder filled. */
-    @Message("Booking confirmed")
-    String email_confirmation_subject();
-
     // ---- Email date/time formatting ----
 
     /** strftime-like pattern used to format booking date/time in email bodies. */
