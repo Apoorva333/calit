@@ -60,7 +60,7 @@ Each user connects their **own** Google account from the owner console (`/me`). 
 
 ## OAuth verification
 
-Until your OAuth app is verified, Google shows users an **"Google hasn't verified this app"** warning and caps the app at **100 users**. To remove the warning and lift the cap, complete verification in the Google Cloud Console:
+Until your OAuth app is verified, Google shows users an **"Google hasn't verified this app"** warning and caps the app at **100 new users** (a per-project lifetime cap that cannot be reset). To remove the warning and lift the cap, complete verification in the Google Cloud Console:
 
 1. Set `OPERATOR_NAME` and `PRIVACY_CONTACT_EMAIL` (see [configuration](/calit/installation/configuration/#public-site--legal-pages-optional)). calit then serves a complete privacy policy at `${APP_BASE_URL}/privacy` and terms at `${APP_BASE_URL}/terms`, including the required Google **Limited Use** disclosure.
 2. On the **OAuth consent screen**, set the privacy-policy link to `${APP_BASE_URL}/privacy` (and, optionally, terms to `${APP_BASE_URL}/terms`).
