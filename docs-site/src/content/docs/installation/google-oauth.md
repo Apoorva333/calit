@@ -58,6 +58,19 @@ Each user connects their **own** Google account from the owner console (`/me`). 
 - Creates a Google Calendar event on the user's calendar.
 - Generates a Google Meet link included in the booking confirmation.
 
+## OAuth verification
+
+Until your OAuth app is verified, Google shows users an **"Google hasn't verified this app"** warning and caps the app at **100 users**. To remove the warning and lift the cap, complete verification in the Google Cloud Console:
+
+1. Set `OPERATOR_NAME` and `PRIVACY_CONTACT_EMAIL` (see [configuration](/calit/installation/configuration/#public-site--legal-pages-optional)). calit then serves a complete privacy policy at `${APP_BASE_URL}/privacy` and terms at `${APP_BASE_URL}/terms`, including the required Google **Limited Use** disclosure.
+2. On the **OAuth consent screen**, set the privacy-policy link to `${APP_BASE_URL}/privacy` (and, optionally, terms to `${APP_BASE_URL}/terms`).
+3. Verify domain ownership — either set `GOOGLE_SITE_VERIFICATION` to the token from Google Search Console (calit renders the `<meta>` tag on every page), or add the DNS TXT record Google offers.
+4. Submit for verification.
+
+:::note
+calit only requests **sensitive** Calendar scopes, not **restricted** scopes, so verification does **not** require a third-party security assessment (CASA).
+:::
+
 ## Disconnect detection
 
 A Google connection can break without warning — access is revoked, the account password is changed, or the refresh token simply expires. calit detects this and **fails closed**: while an owner's Google account is disconnected, their public booking page shows *"Scheduling temporarily unavailable"* instead of offering every slot as free. This prevents bookings landing on top of calendar events calit can no longer see.

@@ -124,6 +124,18 @@ Leave `GOOGLE_OAUTH_CLIENT_ID` blank to run calit in degraded mode without Googl
 
 Register **both** derived redirect URIs in your Google OAuth client even if you do not override them.
 
+## Public site & legal pages (optional)
+
+These let a hosted instance pass Google OAuth verification. calit serves a privacy policy at `/privacy` and terms at `/terms`; each deployment is its own data controller, so the operator details are configurable. All three are optional and the feature is off/safe when unset.
+
+| Variable | Description | Default |
+|---|---|---|
+| `GOOGLE_SITE_VERIFICATION` | Google Search Console domain-verification token. When set, every page renders `<meta name="google-site-verification">`. Leave blank to verify ownership via a DNS TXT record instead. | *(blank — no tag)* |
+| `OPERATOR_NAME` | Legal entity running this instance, shown as the data controller on `/privacy` and `/terms`. | `APP_BASE_URL` |
+| `PRIVACY_CONTACT_EMAIL` | Contact address shown on `/privacy` for privacy/data requests. Hidden when blank. | *(blank — line hidden)* |
+
+See [Google OAuth setup → OAuth verification](/calit/installation/google-oauth/#oauth-verification) for when these are needed.
+
 ## Cloudflare Turnstile (optional)
 
 Turnstile adds a bot-protection widget to the public booking form. See [Turnstile setup](/calit/installation/turnstile/) for full instructions.
