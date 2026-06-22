@@ -1,23 +1,24 @@
+{@java.lang.String title}
 {@java.lang.String token}
 {@java.lang.Boolean error}
-{#include base title="Reset password"}
+{#include base title=title}
   <div class="card bg-base-100 border border-base-300 shadow-sm max-w-sm mx-auto">
     <div class="card-body">
-      <h1 class="text-2xl font-bold">Reset password</h1>
+      <h1 class="text-2xl font-bold">{msg:auth_reset_h1}</h1>
       {#if token}
-        {#if error}<div role="alert" class="alert alert-error mt-2">Enter a new password.</div>{/if}
+        {#if error}<div role="alert" class="alert alert-error mt-2">{msg:auth_reset_enter_new_password}</div>{/if}
         <form method="post" action="/reset-password" class="mt-2">
           <input type="hidden" name="{inject:csrf.parameterName}" value="{inject:csrf.token}">
           <input type="hidden" name="token" value="{token}">
           <fieldset class="fieldset">
-            <label class="label" for="password">New password</label>
+            <label class="label" for="password">{msg:auth_reset_new_password_label}</label>
             <input id="password" class="input w-full" type="password" name="password" required autofocus>
-            <button type="submit" class="btn btn-primary btn-block mt-2">Set new password</button>
+            <button type="submit" class="btn btn-primary btn-block mt-2">{msg:auth_reset_submit}</button>
           </fieldset>
         </form>
       {#else}
-        <div role="alert" class="alert alert-error mt-2">This reset link is invalid or has expired.</div>
-        <a href="/forgot-password" class="btn btn-outline btn-block mt-2">Request a new link</a>
+        <div role="alert" class="alert alert-error mt-2">{msg:auth_reset_invalid_link}</div>
+        <a href="/forgot-password" class="btn btn-outline btn-block mt-2">{msg:auth_reset_request_new_link}</a>
       {/if}
     </div>
   </div>

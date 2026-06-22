@@ -1,5 +1,7 @@
 package com.calit.web;
 
+import com.calit.i18n.ActiveLocale;
+import com.calit.i18n.AppMessageResolver;
 import com.calit.user.AppUser;
 import com.calit.user.PasswordHasher;
 import com.calit.user.Usernames;
@@ -24,7 +26,7 @@ public class SignupResource {
 
     @CheckedTemplate
     public static class Templates {
-        public static native TemplateInstance signup(String error);
+        public static native TemplateInstance signup(String title, String error);
     }
 
     @ConfigProperty(name = "calit.signup.enabled", defaultValue = "false")
@@ -32,6 +34,12 @@ public class SignupResource {
 
     @Inject
     PasswordHasher passwordHasher;
+
+    @Inject
+    AppMessageResolver messages;
+
+    @Inject
+    ActiveLocale activeLocale;
 
     /** When signup is disabled the whole resource is invisible: behave exactly like no route. */
     private void requireEnabled() {
@@ -44,7 +52,8 @@ public class SignupResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance form() {
         requireEnabled();
-        return Templates.signup(null);
+        String title = messages.forLocale(activeLocale.current()).auth_signup_title();
+        return Templates.signup(title, null);
     }
 
     @POST
@@ -53,11 +62,13 @@ public class SignupResource {
     @Transactional
     public Response register(@RestForm String username, @RestForm String password) {
         requireEnabled();
+        String title = messages.forLocale(activeLocale.current()).auth_signup_title();
         String normalized;
         try {
             normalized = Usernames.validateNew(username, AppUser::usernameTaken); // throws on invalid/reserved/taken
-        } catch (IllegalArgumentException e) {
-            return Response.ok(Templates.signup(e.getMessage())).build();
+        } catch (IllegalArgumentException _) {
+            String error = messages.forLocale(activeLocale.current()).auth_signup_error();
+            return Response.ok(Templates.signup(title, error)).build();
         }
         AppUser u = AppUser.create(normalized, passwordHasher.hash(password), false);
         u.mustChangePassword = false; // self-chosen password → no forced reset

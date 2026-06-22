@@ -28,6 +28,10 @@ public class OwnerSettings extends PanacheEntityBase {
     @Column(nullable = false, length = 64)
     public String timezone;
 
+    /** BCP-47 language tag for this owner's admin UI + owner-copy emails. */
+    @Column(nullable = false)
+    public String locale = "en";
+
     /** When false, the owner suppresses their own notification emails (Plan 4 gates on this). */
     @Column(name = "owner_notifications_enabled", nullable = false)
     public boolean ownerNotificationsEnabled = true;

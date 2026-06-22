@@ -56,7 +56,7 @@ class ApproveDeclineTest {
         when(calendarPort.createEvent(anyLong(), anyString(), anyString(), eq(SLOT_09), any(), any(), anyBoolean(), any()))
                 .thenReturn(new CreatedEvent("evt-ap", "https://meet.google.com/ap-1-2", "h"));
 
-        Booking b = bookingService.book(1L, "approve", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "");
+        Booking b = bookingService.book(1L, "approve", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "", "en");
         assertEquals(BookingStatus.PENDING, b.status);
 
         bookingService.approve(b.id);
@@ -80,7 +80,7 @@ class ApproveDeclineTest {
         when(calendarPort.isConnected(anyLong())).thenReturn(true);
         when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
 
-        Booking b = bookingService.book(1L, "decline", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "");
+        Booking b = bookingService.book(1L, "decline", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "", "en");
         // While PENDING, the 09:00 slot is held.
         assertTrue(bookingService.availableSlots(t, DAY, DAY).stream()
                 .noneMatch(s -> s.start().toLocalTime().equals(LocalTime.of(9, 0))));

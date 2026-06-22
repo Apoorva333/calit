@@ -2,6 +2,10 @@ package com.calit.user;
 
 import com.calit.domain.OwnerSettings;
 import com.calit.email.EmailService;
+import com.calit.i18n.ActiveLocale;
+import com.calit.i18n.AppLocales;
+import com.calit.i18n.AppMessages;
+import com.calit.i18n.AppMessageResolver;
 import io.quarkus.qute.CheckedTemplate;
 import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
@@ -36,20 +40,27 @@ public class PasswordResetResource {
     @Inject
     EmailService emailService;
 
+    @Inject
+    AppMessageResolver messages;
+
+    @Inject
+    ActiveLocale activeLocale;
+
     @ConfigProperty(name = "app.base-url")
     String baseUrl;
 
     @CheckedTemplate
     public static class Templates {
-        public static native TemplateInstance forgot(boolean sent);
-        public static native TemplateInstance reset(String token, boolean error);
+        public static native TemplateInstance forgot(String title, boolean sent);
+        public static native TemplateInstance reset(String title, String token, boolean error);
     }
 
     @GET
     @Path("forgot-password")
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance forgotForm() {
-        return Templates.forgot(false);
+        AppMessages m = messages.forLocale(activeLocale.current());
+        return Templates.forgot(m.auth_forgot_title(), false);
     }
 
     @POST
@@ -64,18 +75,21 @@ public class PasswordResetResource {
                 Instant now = Instant.now();
                 String token = resetService.issue(user.id, now);
                 emailService.sendPasswordReset(os.ownerEmail,
-                        baseUrl + "/reset-password?token=" + token, now.plus(PasswordResetService.TTL));
+                        baseUrl + "/reset-password?token=" + token, now.plus(PasswordResetService.TTL),
+                        AppLocales.pick(os.locale));
             }
         }
         // Always the same response — never disclose whether the account exists.
-        return Templates.forgot(true);
+        AppMessages m = messages.forLocale(activeLocale.current());
+        return Templates.forgot(m.auth_forgot_title(), true);
     }
 
     @GET
     @Path("reset-password")
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance resetForm(@QueryParam("token") String token) {
-        return Templates.reset(token, false);
+        AppMessages m = messages.forLocale(activeLocale.current());
+        return Templates.reset(m.auth_reset_title(), token, false);
     }
 
     @POST
@@ -83,14 +97,15 @@ public class PasswordResetResource {
     @Transactional
     @Produces(MediaType.TEXT_HTML)
     public Response doReset(@FormParam("token") String token, @FormParam("password") String password) {
+        AppMessages m = messages.forLocale(activeLocale.current());
         if (password == null || password.isBlank()) {
             // Token not yet consumed — let them retry with the same link.
-            return html(Response.Status.BAD_REQUEST, Templates.reset(token, true));
+            return html(Response.Status.BAD_REQUEST, Templates.reset(m.auth_reset_title(), token, true));
         }
         AppUser user = resetService.consume(token, Instant.now());
         if (user == null) {
             // Unknown/expired/used: dead-end view (token=null) prompts a fresh request.
-            return html(Response.Status.BAD_REQUEST, Templates.reset(null, true));
+            return html(Response.Status.BAD_REQUEST, Templates.reset(m.auth_reset_title(), null, true));
         }
         user.passwordHash = passwordHasher.hash(password);
         user.mustChangePassword = false; // managed entity in this tx — flushed on commit

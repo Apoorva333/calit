@@ -61,7 +61,7 @@ class ManageBookingTest {
                 java.time.LocalDate.now().plusDays(14)).get(0);
         // Auto type, no abuse guards configured → empty Turnstile token + blank honeypot.
         Booking b = bookingService.book(1L, "manage-type", slot.start().toInstant(),
-                "Manage Me", "manage@example.com", java.util.Map.of(), "", "");
+                "Manage Me", "manage@example.com", java.util.Map.of(), "", "", "en");
         return b.manageToken;
     }
 

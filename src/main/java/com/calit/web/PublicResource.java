@@ -12,6 +12,8 @@ import com.calit.domain.BookingField;
 import com.calit.domain.MeetingType;
 import com.calit.domain.OwnerSettings;
 import com.calit.google.CalendarUnavailableException;
+import com.calit.i18n.ActiveLocale;
+import com.calit.i18n.AppMessageResolver;
 import com.calit.user.AppUser;
 import com.calit.user.CurrentOwner;
 import com.calit.user.Usernames;
@@ -43,12 +45,15 @@ import java.util.Map;
 public class PublicResource {
 
     @CheckedTemplate
+    // S107: Qute @CheckedTemplate signatures pass one arg per template variable; param count is inherent.
+    @SuppressWarnings("java:S107")
     public static class Templates {
-        public static native TemplateInstance index(boolean authenticated, String username);
+        public static native TemplateInstance index(String title, boolean authenticated, String username);
 
-        public static native TemplateInstance landing(List<MeetingType> types, String user, String ownerName);
+        public static native TemplateInstance landing(String title, List<MeetingType> types, String user, String ownerName);
 
         public static native TemplateInstance book(
+                String title,
                 String user,
                 MeetingType type,
                 java.util.List<PublicResource.DaySlots> days,
@@ -63,20 +68,22 @@ public class PublicResource {
                 String ownerName);
 
         public static native TemplateInstance confirmation(
+                String title,
                 com.calit.booking.Booking booking, com.calit.domain.MeetingType type,
                 boolean pending, String location, String whenLabel, String startUtcIso,
                 String tzBar, String tzScript);
 
         public static native TemplateInstance manage(
+                String title,
                 com.calit.booking.Booking booking, String currentLabel, String currentUtcIso,
                 java.util.List<PublicResource.DaySlots> days,
                 String tzBar, String tzScript, String calScript);
 
-        public static native TemplateInstance cancelled();
+        public static native TemplateInstance cancelled(String title);
 
-        public static native TemplateInstance notReady();
+        public static native TemplateInstance notReady(String title);
 
-        public static native TemplateInstance unavailable();
+        public static native TemplateInstance unavailable(String title);
     }
 
     @Inject
@@ -84,6 +91,12 @@ public class PublicResource {
 
     @Inject
     CurrentOwner currentOwner;
+
+    @Inject
+    ActiveLocale activeLocale;
+
+    @Inject
+    AppMessageResolver messages;
 
     @jakarta.inject.Inject
     com.calit.google.CalendarPort calendarPort;
@@ -115,28 +128,31 @@ public class PublicResource {
     public TemplateInstance index() {
         // Root is a generic product page — NOT any owner's landing. Per-owner landings live at /{user}.
         // Auth-aware: a logged-in visitor sees Settings/Log out + their dashboard, not "Sign in".
+        var m = messages.forLocale(activeLocale.current());
         boolean authenticated = !identity.isAnonymous();
         String username = authenticated ? identity.getPrincipal().getName() : null;
-        return Templates.index(authenticated, username);
+        return Templates.index(m.pub_index_title(), authenticated, username);
     }
 
     @GET
     @Path("/{user}")
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance userLanding(@PathParam("user") String user) {
+        var m = messages.forLocale(activeLocale.current());
         AppUser owner = resolveOwner(user);
         OwnerSettings settings = OwnerSettings.forOwner(owner.id);
         if (settings == null) {
-            return Templates.notReady();
+            return Templates.notReady(m.pub_not_ready_title());
         }
         // listPublic(ownerId) = that owner's active && !secret types.
-        return Templates.landing(MeetingType.listPublic(owner.id), owner.username, settings.ownerName);
+        return Templates.landing(m.pub_user_title(), MeetingType.listPublic(owner.id), owner.username, settings.ownerName);
     }
 
     @GET
     @Path("/{user}/{slug}")
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance book(@PathParam("user") String user, @PathParam("slug") String slug) {
+        var m = messages.forLocale(activeLocale.current());
         AppUser owner = resolveOwner(user); // 404 if unknown; binds CurrentOwner
         MeetingType type = MeetingType.findBySlug(owner.id, slug); // secret types reachable by direct link
         if (type == null) {
@@ -144,21 +160,22 @@ public class PublicResource {
         }
         OwnerSettings settings = OwnerSettings.forOwner(owner.id);
         if (settings == null) {
-            return Templates.notReady();
+            return Templates.notReady(m.pub_not_ready_title());
         }
         List<DaySlots> byDate;
         try {
             byDate = daySlots(type);
         } catch (CalendarUnavailableException e) {
             // Fail-closed: the owner's Google calendar can't be read, so we cannot safely offer slots.
-            return Templates.unavailable();
+            return Templates.unavailable(m.pub_unavailable_title());
         }
         // Resolved EXTRA fields (per-type-else-global), already ordered by position.
         List<BookingField> fields = BookingField.formFor(owner.id, type.id);
         // turnstileEnabled drives the widget; site key is public (rendered). The approval
         // flag (type.requiresApproval) + locationType/locationDetail are read off `type`
         // directly in the template for the button wording + location line.
-        return Templates.book(owner.username, type, byDate, fields, null,
+        String bookTitle = m.pub_book_title_prefix() + " " + type.name;
+        return Templates.book(bookTitle, owner.username, type, byDate, fields, null,
                               Layout.TZ_BAR, Layout.TZ_SCRIPT, Layout.CALENDAR_SCRIPT,
                               turnstileEnabled, turnstileSiteKey(), calendarPort.isConnected(owner.id),
                               settings.ownerName);
@@ -180,6 +197,7 @@ public class PublicResource {
                                           @RestForm String website,                 // honeypot
                                           @RestForm("cf-turnstile-response") String turnstileToken,
                                           MultivaluedMap<String, String> form) {
+        var m = messages.forLocale(activeLocale.current());
         AppUser owner = resolveOwner(user); // 404 if unknown; binds CurrentOwner
         MeetingType type = MeetingType.findBySlug(owner.id, slug);
         if (type == null) {
@@ -187,8 +205,9 @@ public class PublicResource {
         }
         OwnerSettings settings = OwnerSettings.forOwner(owner.id);
         if (settings == null) {
-            return Templates.notReady();
+            return Templates.notReady(m.pub_not_ready_title());
         }
+        String bookTitle = m.pub_book_title_prefix() + " " + type.name;
 
         // Collect every "answers.<fieldKey>" form param into the answers map (strip the prefix).
         Map<String, String> answers = new HashMap<>();
@@ -203,15 +222,17 @@ public class PublicResource {
         try {
             // book(...) enforces required fields AND the abuse guards (Turnstile + honeypot +
             // per-email/day cap) server-side; the handler just forwards the two raw inputs.
+            // Locale is resolved server-side from the request (set by LocaleResolutionFilter).
+            String locale = activeLocale.current().getLanguage();
             booking = bookingService.book(
                     owner.id, slug, Instant.parse(startUtc), inviteeName, inviteeEmail, answers,
-                    turnstileToken, website);
+                    turnstileToken, website, locale);
         } catch (BookingValidationException | AbuseException | RateLimitException
                  | BookingConflictException be) {
             // Required-field 422 OR an abuse-guard rejection (filled honeypot / failed Turnstile /
             // per-email cap) / slot conflict. Re-render the form inline with the message; do NOT
             // 500, NOT confirm. (Plan 3 has no common BookingException superclass, so catch each.)
-            return Templates.book(owner.username, type, daySlots(type), BookingField.formFor(owner.id, type.id),
+            return Templates.book(bookTitle, owner.username, type, daySlots(type), BookingField.formFor(owner.id, type.id),
                                   be.getMessage(),
                                   Layout.TZ_BAR, Layout.TZ_SCRIPT, Layout.CALENDAR_SCRIPT,
                                   turnstileEnabled, turnstileSiteKey(), calendarPort.isConnected(owner.id),
@@ -222,6 +243,7 @@ public class PublicResource {
 
     /** Renders the confirmation/request-sent page for a freshly created/rescheduled booking. */
     private TemplateInstance confirmationPage(Booking booking, MeetingType type) {
+        var m = messages.forLocale(activeLocale.current());
         // Server fallback label is owner-tz; the page also carries the booked instant as a
         // data-utc attribute so the shared script can relabel it to the viewer's zone.
         ZoneId zone = ZoneId.of(OwnerSettings.forOwner(type.ownerId).timezone);
@@ -231,9 +253,10 @@ public class PublicResource {
         // Approval types come back PENDING → "request sent" page (no Meet link yet); auto types
         // come back CONFIRMED → location/Meet confirmation.
         boolean pending = booking.status == BookingStatus.PENDING;
+        String title = pending ? m.pub_conf_title_pending() : m.pub_conf_title_confirmed();
         String location = (type.locationType == MeetingType.LocationType.GOOGLE_MEET)
                 ? booking.meetLink : type.locationDetail;
-        return Templates.confirmation(booking, type, pending, location, when, startUtcIso,
+        return Templates.confirmation(title, booking, type, pending, location, when, startUtcIso,
                                       Layout.TZ_BAR, Layout.TZ_SCRIPT);
     }
 
@@ -241,6 +264,7 @@ public class PublicResource {
     @Path("/booking/{manageToken}/manage")
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance manage(@PathParam("manageToken") String manageToken) {
+        var m = messages.forLocale(activeLocale.current());
         Booking booking = Booking.findByManageToken(manageToken); // unguessable key, not id
         if (booking == null) {
             throw new NotFoundException("No booking for token " + manageToken); // unknown token → 404
@@ -248,19 +272,19 @@ public class PublicResource {
         MeetingType type = MeetingType.findById(booking.meetingTypeId);
         OwnerSettings settings = OwnerSettings.forOwner(type.ownerId);
         if (settings == null) {
-            return Templates.notReady();
+            return Templates.notReady(m.pub_not_ready_title());
         }
         ZoneId zone = ZoneId.of(settings.timezone);
         List<DaySlots> byDate;
         try {
             byDate = daySlots(type);
         } catch (CalendarUnavailableException e) {
-            return Templates.unavailable();
+            return Templates.unavailable(m.pub_unavailable_title());
         }
         String current = booking.startUtc.atZone(zone)
                 .format(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy 'at' HH:mm (z)"));
         String currentUtcIso = booking.startUtc.toString(); // absolute instant for data-utc
-        return Templates.manage(booking, current, currentUtcIso, byDate,
+        return Templates.manage(m.pub_manage_title(), booking, current, currentUtcIso, byDate,
                                 Layout.TZ_BAR, Layout.TZ_SCRIPT, Layout.CALENDAR_SCRIPT);
     }
 
@@ -283,8 +307,9 @@ public class PublicResource {
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance cancelBooking(@PathParam("manageToken") String manageToken) {
+        var m = messages.forLocale(activeLocale.current());
         bookingService.cancel(manageToken); // keyed by the token
-        return Templates.cancelled();
+        return Templates.cancelled(m.pub_cancelled_title());
     }
 
     /** Resolve the {user} segment to an owner, 404 if unknown, and bind CurrentOwner for the request. */

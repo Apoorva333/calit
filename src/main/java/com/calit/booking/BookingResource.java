@@ -1,5 +1,6 @@
 package com.calit.booking;
 
+import com.calit.i18n.ActiveLocale;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
@@ -27,6 +28,9 @@ public class BookingResource {
     @Inject
     BookingService bookingService;
 
+    @Inject
+    ActiveLocale activeLocale;
+
     public record BookRequest(String user, String slug, String startUtc, String inviteeName, String inviteeEmail,
                               Map<String, String> answers, String turnstileToken, String honeypot) {}
 
@@ -50,8 +54,11 @@ public class BookingResource {
             throw new jakarta.ws.rs.NotFoundException("No meeting type with slug " + req.slug());
         }
         // All abuse guards (Turnstile + honeypot + per-email/day cap) are enforced inside book().
+        // Locale is resolved server-side from the request (ignore any client-supplied locale).
+        String locale = activeLocale.current().getLanguage();
         Booking b = bookingService.book(owner.id, req.slug(), Instant.parse(req.startUtc()),
-                req.inviteeName(), req.inviteeEmail(), req.answers(), req.turnstileToken(), req.honeypot());
+                req.inviteeName(), req.inviteeEmail(), req.answers(), req.turnstileToken(), req.honeypot(),
+                locale);
         return Response.status(Response.Status.CREATED).entity(b).build();
     }
 

@@ -1,6 +1,6 @@
 {@java.lang.String title}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{lang}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -33,6 +33,16 @@
   <footer class="container py-6 text-center text-xs text-base-content/50">
     <a href="https://github.com/asm0dey/calit" class="link link-hover">calit</a>
     {inject:build.version} &middot; {inject:build.commit}
+    <nav class="mt-2" aria-label="{msg:common_language}">
+      {#for o in localeOptions}
+        {#if o_index > 0}<span class="mx-1">&middot;</span>{/if}
+        {#if o.active}
+          <span class="font-semibold" aria-current="true">{o.label}</span>
+        {#else}
+          <a class="link link-hover" href="{o.href}">{o.label}</a>
+        {/if}
+      {/for}
+    </nav>
   </footer>
   <script>
     /* Persist the manual theme choice; default (no attr) falls back to OS via prefersdark. */

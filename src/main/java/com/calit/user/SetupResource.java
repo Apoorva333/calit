@@ -1,5 +1,8 @@
 package com.calit.user;
 
+import com.calit.i18n.ActiveLocale;
+import com.calit.i18n.AppMessages;
+import com.calit.i18n.AppMessageResolver;
 import io.quarkus.qute.CheckedTemplate;
 import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
@@ -24,16 +27,23 @@ public class SetupResource {
     @Inject
     PasswordHasher passwordHasher;
 
+    @Inject
+    AppMessageResolver messages;
+
+    @Inject
+    ActiveLocale activeLocale;
+
     @CheckedTemplate
     public static class Templates {
-        public static native TemplateInstance setup(boolean error);
+        public static native TemplateInstance setup(String title, boolean error);
     }
 
     @GET
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance setupForm() {
         requireUnbootstrapped();
-        return Templates.setup(false);
+        AppMessages m = messages.forLocale(activeLocale.current());
+        return Templates.setup(m.auth_setup_title(), false);
     }
 
     @POST
@@ -42,16 +52,17 @@ public class SetupResource {
     public Response createFirstUser(@FormParam("username") String username,
                                     @FormParam("password") String password) {
         requireUnbootstrapped();
+        AppMessages m = messages.forLocale(activeLocale.current());
         final String normalized;
         try {
             normalized = Usernames.validateNew(username, AppUser::usernameTaken);
         } catch (IllegalArgumentException e) {
             return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Templates.setup(true)).type(MediaType.TEXT_HTML).build();
+                    .entity(Templates.setup(m.auth_setup_title(), true)).type(MediaType.TEXT_HTML).build();
         }
         if (password == null || password.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Templates.setup(true)).type(MediaType.TEXT_HTML).build();
+                    .entity(Templates.setup(m.auth_setup_title(), true)).type(MediaType.TEXT_HTML).build();
         }
         AppUser u = AppUser.create(normalized, passwordHasher.hash(password), true);
         u.mustChangePassword = false;

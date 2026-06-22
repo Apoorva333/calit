@@ -63,6 +63,10 @@ public class Booking extends PanacheEntityBase {
     @Column(name = "manage_token", nullable = false, length = 36, unique = true)
     public String manageToken;
 
+    /** BCP-47 language tag captured from the invitee at booking time; drives invitee emails. */
+    @Column(nullable = false)
+    public String locale = "en";
+
     /**
      * Feature 10: submitted values for the owner-defined custom BookingFields
      * (fieldKey -> value). Built-in full-name/email are NOT stored here — they

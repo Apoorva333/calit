@@ -1,28 +1,29 @@
+{@java.lang.String lang}
 <!DOCTYPE html>
-<html lang="en">
-<head><title>Booking rescheduled</title></head>
+<html lang="{lang}">
+<head><title>{msg:email_reschedule_title}</title></head>
 <body>
-<p>Hi {inviteeName},</p>
-<p>Your booking has been <strong>rescheduled</strong>.</p>
+<p>{msg:email_body_greeting(inviteeName)}</p>
+<p><strong>{msg:email_reschedule_body}</strong></p>
 <ul>
-  <li><strong>Meeting:</strong> {meetingTypeName}</li>
-  <li><strong>Previous time:</strong> {oldStartTime}</li>
-  <li><strong>New time:</strong> {startTime}</li>
-  <li><strong>Duration:</strong> {durationMinutes} minutes</li>
+  <li><strong>{msg:email_body_meeting_label}</strong> {meetingTypeName}</li>
+  <li><strong>{msg:email_reschedule_previous_time}</strong> {oldStartTime}</li>
+  <li><strong>{msg:email_reschedule_new_time}</strong> {startTime}</li>
+  <li><strong>{msg:email_body_duration_label}</strong> {msg:email_body_duration_minutes(durationMinutes)}</li>
   {#if location}
-    {#if isMeetLink}<li><strong>Google Meet:</strong> <a href="{location}">{location}</a></li>
-    {#else}<li><strong>Location:</strong> {location}</li>{/if}
+    {#if isMeetLink}<li><strong>{msg:email_body_meet_label}</strong> <a href="{location}">{location}</a></li>
+    {#else}<li><strong>{msg:email_body_location_label}</strong> {location}</li>{/if}
   {/if}
 </ul>
 {#if answers}
-<p><strong>Your answers:</strong></p>
+<p><strong>{msg:email_body_your_answers_label}</strong></p>
 <ul>
   {#for line in answers}
   <li><strong>{line.label}:</strong> {line.value}</li>
   {/for}
 </ul>
 {/if}
-<p>Manage this booking: <a href="{manageUrl}">{manageUrl}</a></p>
-<p>This message was sent to the {recipientRole}.</p>
+<p><a href="{manageUrl}">{msg:email_body_manage_link_text}</a></p>
+<p>{msg:email_body_recipient_note(recipientRoleDisplay)}</p>
 </body>
 </html>
