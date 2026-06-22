@@ -2,10 +2,7 @@ package site.asm0dey.calit.user;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class UsernamesTest {
 
@@ -40,7 +37,8 @@ class UsernamesTest {
     void isReservedCoversAllReservedWords() {
         for (String w : new String[]{
                 "me", "login", "logout", "signup", "setup",
-                "booking", "api", "q", "health", "calit", "index"}) {
+                "booking", "api", "q", "health", "calit", "index",
+                "privacy", "terms"}) {
             assertTrue(Usernames.isReserved(w), w + " should be reserved");
         }
         assertFalse(Usernames.isReserved("alice"));
