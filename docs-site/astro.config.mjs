@@ -1,12 +1,14 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import starlightLinksValidator from 'starlight-links-validator';
 
 export default defineConfig({
   site: 'https://asm0dey.github.io',
   base: '/calit/',
   integrations: [
     starlight({
+      plugins: [starlightLinksValidator()],
       title: 'calit',
       description: 'Self-hosted, multi-user scheduling you actually own.',
       social: [
