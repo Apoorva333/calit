@@ -62,7 +62,7 @@ jobs:
           ignore-unfixed: true
 
   build:
-    name: Build image (${{ matrix.arch }})
+    name: Build ${{ matrix.variant }} image (${{ matrix.arch }})
     needs: [test]
     if: >-
       github.event_name == 'push' &&
@@ -73,14 +73,15 @@ jobs:
       packages: write
     strategy:
       fail-fast: false
+      # variant=jvm keeps the original fast-jar image (default tags); variant=native builds the
+      # GraalVM image (Dockerfile.native, Alpaquita musl runtime) under -native suffixed tags.
+      # Empty suffix => the jvm path is byte-identical to before.
       matrix:
         include:
-          - arch: amd64
-            runner: ubuntu-latest
-            platform: linux/amd64
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-            platform: linux/arm64
+          - { arch: amd64, runner: ubuntu-latest, platform: linux/amd64, variant: jvm, file: ./Dockerfile, suffix: "" }
+          - { arch: arm64, runner: ubuntu-24.04-arm, platform: linux/arm64, variant: jvm, file: ./Dockerfile, suffix: "" }
+          - { arch: amd64, runner: ubuntu-latest, platform: linux/amd64, variant: native, file: ./Dockerfile.native, suffix: "-native" }
+          - { arch: arm64, runner: ubuntu-24.04-arm, platform: linux/arm64, variant: native, file: ./Dockerfile.native, suffix: "-native" }
     steps:
       - name: Check out the repo
         uses: actions/checkout@v7
@@ -107,9 +108,9 @@ jobs:
           path: |
             var-cache-m2
             var-cache-bun
-          key: buildcache-${{ matrix.arch }}-${{ hashFiles('pom.xml', 'bun.lock') }}
+          key: buildcache-${{ matrix.arch }}${{ matrix.suffix }}-${{ hashFiles('pom.xml', 'bun.lock') }}
           restore-keys: |
-            buildcache-${{ matrix.arch }}-
+            buildcache-${{ matrix.arch }}${{ matrix.suffix }}-
 
       - name: Inject caches into BuildKit
         uses: reproducible-containers/buildkit-cache-dance@v3
@@ -129,13 +130,13 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: ./Dockerfile
+          file: ${{ matrix.file }}
           platforms: ${{ matrix.platform }}
           load: true
           push: false
-          tags: calit:scan-${{ matrix.arch }}
-          cache-from: type=gha,scope=${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
+          tags: calit:scan-${{ matrix.arch }}${{ matrix.suffix }}
+          cache-from: type=gha,scope=${{ matrix.arch }}${{ matrix.suffix }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}${{ matrix.suffix }}
           build-args: |
             APP_VERSION=${{ steps.buildmeta.outputs.version }}
             GIT_COMMIT=${{ steps.buildmeta.outputs.commit }}
@@ -144,7 +145,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
-          image-ref: calit:scan-${{ matrix.arch }}
+          image-ref: calit:scan-${{ matrix.arch }}${{ matrix.suffix }}
           severity: HIGH,CRITICAL
           exit-code: "1"
           ignore-unfixed: true
@@ -154,10 +155,10 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: ./Dockerfile
+          file: ${{ matrix.file }}
           platforms: ${{ matrix.platform }}
-          cache-from: type=gha,scope=${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
+          cache-from: type=gha,scope=${{ matrix.arch }}${{ matrix.suffix }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}${{ matrix.suffix }}
           outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
           build-args: |
             APP_VERSION=${{ steps.buildmeta.outputs.version }}
@@ -172,26 +173,30 @@ jobs:
       - name: Upload digest
         uses: actions/upload-artifact@v7
         with:
-          name: digests-${{ matrix.arch }}
+          name: digests-${{ matrix.variant }}-${{ matrix.arch }}
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
 
   merge:
-    name: Merge multi-arch manifest
+    name: Merge multi-arch manifest (${{ matrix.variant }})
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    outputs:
-      version: ${{ steps.meta.outputs.version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { variant: jvm, suffix: "" }
+          - { variant: native, suffix: "-native" }
     steps:
       - name: Download digests
         uses: actions/download-artifact@v8
         with:
           path: ${{ runner.temp }}/digests
-          pattern: digests-*
+          pattern: digests-${{ matrix.variant }}-*
           merge-multiple: true
 
       - name: Set up Buildx
@@ -209,6 +214,12 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
+          # Empty suffix for jvm (tags unchanged); "-native" for the GraalVM variant
+          # => edge-native, 1.10.0-native, 1.10-native, sha-<sha>-native.
+          # onlatest=true makes the auto ":latest" tag (emitted on semver git tags) carry the
+          # suffix too: jvm => :latest, native => :latest-native. Without it both variants would
+          # push a bare ":latest" and race/clobber each other.
+          flavor: suffix=${{ matrix.suffix }},onlatest=true
           tags: |
             type=edge,branch=main
             type=semver,pattern={{version}}

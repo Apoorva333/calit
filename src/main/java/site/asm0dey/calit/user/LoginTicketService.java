@@ -23,7 +23,8 @@ public class LoginTicketService {
     /** A ticket is only valid this long after issue — just enough to bridge the auto-submit form. */
     public static final Duration TTL = Duration.ofMinutes(2);
 
-    private static final SecureRandom RNG = new SecureRandom();
+    // Non-static: keep SecureRandom out of the native image heap (build-time seed is rejected).
+    private final SecureRandom RNG = new SecureRandom();
     private static final Base64.Encoder B64URL = Base64.getUrlEncoder().withoutPadding();
 
     /** Mint a ticket for {@code userId}, persist its hash, and return the raw token (shown once). */

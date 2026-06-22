@@ -1,0 +1,47 @@
+# syntax=docker/dockerfile:1@sha256:87999aa3d42bdc6bea60565083ee17e86d1f3339802f543c0d03998580f9cb89
+
+# --- CSS stage: compile Tailwind + daisyUI with Bun (no JS ships at runtime) ---
+FROM oven/bun:1@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS css
+WORKDIR /app
+COPY package.json bun.lock ./
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install --frozen-lockfile
+COPY src/main/css/ src/main/css/
+COPY src/main/resources/templates/ src/main/resources/templates/
+RUN bun run css:build
+
+# --- Build stage: BellSoft Liberica Native Image Kit on Alpaquita musl ---
+# The builder OS is musl, so native-image compiles a musl-linked binary natively:
+# no --libc=musl flag, no manual musl toolchain install (which the UBI Mandrel image needs).
+FROM bellsoft/liberica-native-image-kit-container:jdk-25-nik-25.0.3-musl AS build
+WORKDIR /build
+
+# Warm the dependency cache on the POM first so source-only edits don't re-download everything.
+COPY .mvn/ .mvn/
+COPY mvnw pom.xml ./
+RUN --mount=type=cache,target=/root/.m2 \
+    ./mvnw -B -q -DskipTests dependency:go-offline
+
+COPY src/ src/
+# Overlay the Bun-compiled stylesheet (gitignored, so not in the COPY above).
+COPY --from=css /app/src/main/resources/META-INF/resources/calit.css src/main/resources/META-INF/resources/calit.css
+# Inject build metadata so the footer shows the real version + commit instead of "dev".
+ARG APP_VERSION=dev
+ARG GIT_COMMIT=dev
+RUN printf 'git.build.version=%s\ngit.commit.id.abbrev=%s\n' "$APP_VERSION" "$GIT_COMMIT" \
+    > src/main/resources/git.properties
+# Native compile. Builder is musl → binary is musl-linked. Heavy: needs several GB RAM.
+RUN --mount=type=cache,target=/root/.m2 \
+    ./mvnw -B -DskipTests package -Dquarkus.native.enabled=true
+
+# --- Runtime stage: Alpaquita musl base (~3.9MB) — no JDK, just the native binary ---
+FROM bellsoft/alpaquita-linux-base:stream-musl AS runtime
+WORKDIR /app
+# ca-certificates: outbound TLS to Google API + SMTP. zlib: the binary links libz.so.1.
+RUN apk add --no-cache ca-certificates zlib && update-ca-certificates
+COPY --chown=1001:1001 --from=build /build/target/*-runner /app/application
+USER 1001
+EXPOSE 8080
+ENV QUARKUS_HTTP_HOST=0.0.0.0 \
+    QUARKUS_PROFILE=prod
+ENTRYPOINT ["./application"]

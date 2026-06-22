@@ -26,7 +26,9 @@ public class PasswordHasher {
     private static final int HASH_LEN = 32;
     private static final int VERSION = Argon2Parameters.ARGON2_VERSION_13; // 0x13 == 19
 
-    private static final SecureRandom RNG = new SecureRandom();
+    // Non-static so it is not captured into the GraalVM native image heap with a frozen seed
+    // (SecureRandom extends Random; build-time init is rejected). This is a runtime-built bean.
+    private final SecureRandom RNG = new SecureRandom();
     private static final Base64.Encoder B64 = Base64.getEncoder().withoutPadding();
     private static final Base64.Decoder B64D = Base64.getDecoder();
 
