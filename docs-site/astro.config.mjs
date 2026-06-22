@@ -66,6 +66,7 @@ export default defineConfig({
             { label: 'Availability & overrides', slug: 'usage/availability' },
             { label: 'Bookings & approvals', slug: 'usage/bookings' },
             { label: 'Users & admin', slug: 'usage/users-admin' },
+            { label: 'Language & localization', slug: 'usage/languages' },
           ],
         },
         {

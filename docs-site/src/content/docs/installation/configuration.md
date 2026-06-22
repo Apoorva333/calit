@@ -77,6 +77,10 @@ Booking and password-reset flows therefore never fail just because SMTP is unava
 | `SCHEDULER_GRACE_SECONDS` | Treat reminder / pending-expiry rows as due up to this many seconds early, so replicas on unsynchronised tick timers fire on time instead of a tick late. `0` = exact | `30` |
 | `PER_EMAIL_DAILY_CAP` | Maximum bookings an invitee email address may make per day (abuse protection) | `10` |
 
+## Language
+
+No configuration is required. English and German are built in and always available. See [Language & localization](/calit/usage/languages/) for how visitors and account owners select their preferred language.
+
 ## Health probes
 
 calit exposes standard MicroProfile Health endpoints — point your orchestrator or load balancer at these:
