@@ -12,7 +12,7 @@
     <div class="card bg-base-100 border border-base-300"><div class="card-body py-3 gap-1">
       <p><strong>{o.overrideDate}</strong> &middot; {#if o.meetingTypeId}type #{o.meetingTypeId}{#else}{adm:adm_dateOverrides_global}{/if}</p>
       {#if o.windows.isEmpty()}
-        <p><span class="badge badge-ghost badge-sm">{adm:adm_dateOverrides_badge_day_off}</span> (blocked)</p>
+        <p><span class="badge badge-ghost badge-sm">{adm:adm_dateOverrides_badge_day_off}</span> ({adm:adm_common_blocked})</p>
       {#else}
         <ul class="list-disc ms-5">{#for w in o.windows}<li>{w.startTime} &ndash; {w.endTime}</li>{/for}</ul>
       {/if}

@@ -58,14 +58,18 @@ public class AppLocaleDiscovery {
         List<InstanceHandle<AppMessages>> handles =
                 Arc.container().listAll(AppMessages.class);
         for (InstanceHandle<AppMessages> h : handles) {
-            for (Annotation q : h.getBean().getQualifiers()) {
-                if (q instanceof Localized localized) {
-                    String tag = localized.value();
-                    // Skip if it matches the default locale — already included below.
-                    if (!tag.equalsIgnoreCase(defaultLocale.getLanguage())) {
-                        extras.add(tag);
+            try {
+                for (Annotation q : h.getBean().getQualifiers()) {
+                    if (q instanceof Localized localized) {
+                        String tag = localized.value();
+                        // Skip if it matches the default locale — already included below.
+                        if (!tag.equalsIgnoreCase(defaultLocale.getLanguage())) {
+                            extras.add(tag);
+                        }
                     }
                 }
+            } finally {
+                h.close();
             }
         }
 

@@ -2,7 +2,7 @@ package com.calit.web;
 
 /**
  * The invitee-only timezone-picker bar + reformat script, and the booking-page calendar
- * enhancement script. Styling now comes from Pico CSS + {@code /calit.css}, not an inline string.
+ * enhancement script. Styling comes from Tailwind v4 + daisyUI 5 compiled to {@code /calit.css}.
  */
 public final class Layout {
 

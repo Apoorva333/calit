@@ -73,6 +73,8 @@ class LayoutLocaleMarkerTest {
             .then().statusCode(200)
             // TZ_SCRIPT stable marker
             .body(containsString("CALIT_TZ_REFORMAT"))
+            // CALENDAR_SCRIPT stable marker
+            .body(containsString("CALIT_CALENDAR"))
             // Both scripts now read the page language from documentElement.lang
             .body(containsString("documentElement.lang"))
             // Calendar script derives month/weekday names via Intl

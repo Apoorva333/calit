@@ -24,4 +24,11 @@ class LangResourceTest {
             .when().get("/lang/de?return=https://evil.test/x")
             .then().statusCode(303).header("Location", endsWith("/"));
     }
+    @Test void rejectsProtocolRelativeReturn() {
+        given().redirects().follow(false)
+            .when().get("/lang/de?return=//evil.com")
+            .then().statusCode(303)
+            .header("Location", endsWith("/"))
+            .cookie("calit_lang", "de");
+    }
 }

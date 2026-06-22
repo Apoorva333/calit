@@ -34,14 +34,18 @@ public class LocaleTemplateInitializer implements TemplateInstance.Initializer {
         String returnPath = "/";
         List<LocaleOption> localeOptions = Collections.emptyList();
         if (Arc.container().requestContext().isActive()) {
-            ActiveLocale active = Arc.container().instance(ActiveLocale.class).get();
-            if (active != null) {
-                locale = active.getOrNull();
-                returnPath = active.getReturnPath();
+            try (var activeHandle = Arc.container().instance(ActiveLocale.class)) {
+                ActiveLocale active = activeHandle.get();
+                if (active != null) {
+                    locale = active.getOrNull();
+                    returnPath = active.getReturnPath();
+                }
             }
-            LocaleOptions opts = Arc.container().instance(LocaleOptions.class).get();
-            if (opts != null) {
-                localeOptions = opts.options();
+            try (var optsHandle = Arc.container().instance(LocaleOptions.class)) {
+                LocaleOptions opts = optsHandle.get();
+                if (opts != null) {
+                    localeOptions = opts.options();
+                }
             }
         }
         if (locale != null) {

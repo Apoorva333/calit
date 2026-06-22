@@ -5,7 +5,7 @@ import io.quarkus.qute.i18n.MessageBundle;
 
 /**
  * Admin UI string bundle. English is the default value here; German lives in
- * src/main/resources/messages/msg_adm_de.properties keyed by method name. Missing German
+ * src/main/resources/messages/adm_de.properties keyed by method name. Missing German
  * key falls back to the English default automatically. Template namespace: {adm:key}.
  *
  * Split from AppMessages to avoid JVM method-size limits on the generated bundle resolver.
@@ -13,6 +13,11 @@ import io.quarkus.qute.i18n.MessageBundle;
  */
 @MessageBundle("adm")
 public interface AdminMessages {
+
+    // ---- Common / shared ----
+
+    @Message("blocked")
+    String adm_common_blocked();
 
     // ---- Admin nav (adminBase.html) ----
 
