@@ -380,6 +380,139 @@ public interface AppMessages {
     @Message("EEEE, d MMMM yyyy 'at' HH:mm")
     String email_datetime_pattern();
 
+    // ---- Email body — shared labels ----
+
+    /** Greeting line used in most booking emails. */
+    @Message("Hi {name},")
+    String email_body_greeting(String name);
+
+    @Message("Meeting:")
+    String email_body_meeting_label();
+
+    @Message("When:")
+    String email_body_when_label();
+
+    @Message("Duration:")
+    String email_body_duration_label();
+
+    @Message("{minutes} minutes")
+    String email_body_duration_minutes(int minutes);
+
+    @Message("Google Meet:")
+    String email_body_meet_label();
+
+    @Message("Location:")
+    String email_body_location_label();
+
+    @Message("Your answers:")
+    String email_body_your_answers_label();
+
+    @Message("Manage your booking")
+    String email_body_manage_link_text();
+
+    @Message("This message was sent to the {role}.")
+    String email_body_recipient_note(String role);
+
+    @Message("Requested time:")
+    String email_body_requested_time_label();
+
+    // ---- Email body — confirmation ----
+
+    @Message("Booking confirmed")
+    String email_confirmation_title();
+
+    @Message("Your booking is confirmed.")
+    String email_confirmation_body();
+
+    // ---- Email body — requested ----
+
+    @Message("Booking request received")
+    String email_requested_title();
+
+    @Message("Your booking request has been received and is awaiting confirmation.")
+    String email_requested_body();
+
+    // ---- Email body — reminder ----
+
+    @Message("Booking reminder")
+    String email_reminder_title();
+
+    @Message("This is a reminder of your upcoming meeting.")
+    String email_reminder_body();
+
+    // ---- Email body — cancellation ----
+
+    @Message("Booking cancelled")
+    String email_cancellation_title();
+
+    @Message("Your booking has been cancelled.")
+    String email_cancellation_body();
+
+    @Message("Was scheduled for:")
+    String email_cancellation_was_scheduled();
+
+    // ---- Email body — reschedule ----
+
+    @Message("Booking rescheduled")
+    String email_reschedule_title();
+
+    @Message("Your booking has been rescheduled.")
+    String email_reschedule_body();
+
+    @Message("Previous time:")
+    String email_reschedule_previous_time();
+
+    @Message("New time:")
+    String email_reschedule_new_time();
+
+    // ---- Email body — declined ----
+
+    @Message("Booking declined")
+    String email_declined_title();
+
+    @Message("Unfortunately your booking request was declined.")
+    String email_declined_body();
+
+    // ---- Email body — password reset ----
+
+    @Message("Reset your calit password")
+    String email_password_reset_title();
+
+    @Message("Hi,")
+    String email_password_reset_greeting();
+
+    @Message("Someone (hopefully you) asked to reset the password for your calit account.")
+    String email_password_reset_body();
+
+    @Message("Reset your password")
+    String email_password_reset_btn();
+
+    @Message("Or paste this link into your browser:")
+    String email_paste_link_hint();
+
+    @Message("This link expires in 30 minutes and can be used once. If you didn't request this, ignore this email — your password stays unchanged.")
+    String email_password_reset_expiry();
+
+    // ---- Email body — Google disconnected ----
+
+    @Message("Reconnect your Google Calendar")
+    String email_google_disconnected_title();
+
+    @Message("Hi,")
+    String email_google_disconnected_greeting();
+
+    @Message("calit can no longer access your Google Calendar account {accountEmail}.")
+    String email_google_disconnected_body(String accountEmail);
+
+    @Message("While it stays disconnected, your booking page is paused — new bookings are blocked so nobody can book over events calit can't see.")
+    String email_google_disconnected_paused();
+
+    @Message("Reconnect Google Calendar")
+    String email_google_disconnected_btn();
+
+    @Message("This usually happens when access was revoked, your password changed, or the connection sat unused for a long time. Reconnecting takes a few seconds.")
+    String email_google_disconnected_why();
+
     // ---- Auth / bootstrap pages ----
 
     // -- Login page --

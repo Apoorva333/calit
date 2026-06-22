@@ -186,4 +186,120 @@ class EmailLocaleTest {
         assertTrue(html.contains("Monday") || html.contains("at"),
                 "English owner email must use English date; got: " + html);
     }
+
+    // ---- 4. German invitee email body contains translated body strings ----
+
+    @Test
+    void germanInviteeBodyContainsGermanBodyStrings() {
+        when(calendarPort.isConnected(anyLong())).thenReturn(false);
+
+        long bookingId = QuarkusTransaction.requiringNew().call(() -> {
+            OwnerSettings s = OwnerSettings.forOwner(1L);
+            if (s == null) {
+                s = new OwnerSettings();
+                s.ownerId = 1L;
+            }
+            s.ownerName = "Owner";
+            s.ownerEmail = OWNER_EMAIL;
+            s.timezone = "Europe/Berlin";
+            s.ownerNotificationsEnabled = true;
+            s.locale = "en";
+            s.persist();
+
+            MeetingType t = new MeetingType();
+            t.ownerId = 1L;
+            t.name = "DE Body Test";
+            t.slug = "de-body-" + System.nanoTime();
+            t.durationMinutes = 45;
+            t.locationType = LocationType.PHONE;
+            t.locationDetail = "+49 30 999";
+            t.persist();
+
+            Instant start = Instant.parse("2026-06-08T10:00:00Z");
+            Booking b = new Booking();
+            b.ownerId = 1L;
+            b.meetingTypeId = t.id;
+            b.inviteeName = "Greta Haber";
+            b.inviteeEmail = INVITEE_EMAIL;
+            b.startUtc = start;
+            b.endUtc = start.plus(45, ChronoUnit.MINUTES);
+            b.status = BookingStatus.CONFIRMED;
+            b.manageToken = java.util.UUID.randomUUID().toString();
+            b.createdAt = Instant.now();
+            b.answers = Map.of();
+            b.locale = "de"; // German invitee
+            b.persist();
+            return b.id;
+        });
+
+        emailService.handleConfirmed(new BookingConfirmed(bookingId));
+
+        List<Mail> toInvitee = mailbox.getMailsSentTo(INVITEE_EMAIL);
+        assertEquals(1, toInvitee.size(), "invitee must receive one confirmation email");
+        String html = toInvitee.get(0).getHtml();
+
+        // German body strings added by task 9d
+        assertTrue(html.contains("Hallo") || html.contains("bestätigt"),
+                "German confirmation body must contain 'Hallo' or 'bestätigt'; got: " + html);
+        assertTrue(html.contains("Minuten"),
+                "German confirmation body must contain 'Minuten' (duration); got: " + html);
+    }
+
+    // ---- 5. English default locale email body contains English body strings ----
+
+    @Test
+    void englishDefaultBodyContainsEnglishBodyStrings() {
+        when(calendarPort.isConnected(anyLong())).thenReturn(false);
+
+        long bookingId = QuarkusTransaction.requiringNew().call(() -> {
+            OwnerSettings s = OwnerSettings.forOwner(1L);
+            if (s == null) {
+                s = new OwnerSettings();
+                s.ownerId = 1L;
+            }
+            s.ownerName = "Owner";
+            s.ownerEmail = OWNER_EMAIL;
+            s.timezone = "Europe/London";
+            s.ownerNotificationsEnabled = true;
+            s.locale = "en";
+            s.persist();
+
+            MeetingType t = new MeetingType();
+            t.ownerId = 1L;
+            t.name = "EN Body Test";
+            t.slug = "en-body-" + System.nanoTime();
+            t.durationMinutes = 30;
+            t.locationType = LocationType.PHONE;
+            t.locationDetail = "+44 999";
+            t.persist();
+
+            Instant start = Instant.parse("2026-06-08T14:00:00Z");
+            Booking b = new Booking();
+            b.ownerId = 1L;
+            b.meetingTypeId = t.id;
+            b.inviteeName = "Alice Smith";
+            b.inviteeEmail = INVITEE_EMAIL;
+            b.startUtc = start;
+            b.endUtc = start.plus(30, ChronoUnit.MINUTES);
+            b.status = BookingStatus.CONFIRMED;
+            b.manageToken = java.util.UUID.randomUUID().toString();
+            b.createdAt = Instant.now();
+            b.answers = Map.of();
+            b.locale = "en"; // English invitee
+            b.persist();
+            return b.id;
+        });
+
+        emailService.handleConfirmed(new BookingConfirmed(bookingId));
+
+        List<Mail> toInvitee = mailbox.getMailsSentTo(INVITEE_EMAIL);
+        assertEquals(1, toInvitee.size(), "invitee must receive one confirmation email");
+        String html = toInvitee.get(0).getHtml();
+
+        // English body strings from task 9d
+        assertTrue(html.contains("Hi ") || html.contains("confirmed"),
+                "English confirmation body must contain 'Hi' or 'confirmed'; got: " + html);
+        assertTrue(html.contains("minutes"),
+                "English confirmation body must contain 'minutes' (duration); got: " + html);
+    }
 }

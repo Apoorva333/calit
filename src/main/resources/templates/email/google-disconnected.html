@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><title>Reconnect your Google Calendar</title></head>
+<head><title>{msg:email_google_disconnected_title}</title></head>
 <body>
-<p>Hi,</p>
-<p>calit can no longer access your Google Calendar account <strong>{accountEmail}</strong>.</p>
-<p>While it stays disconnected, your booking page is paused — new bookings are blocked so nobody can book over events calit can't see.</p>
-<p><a href="{reconnectUrl}">Reconnect Google Calendar</a></p>
-<p>Or paste this link into your browser:<br>{reconnectUrl}</p>
-<p>This usually happens when access was revoked, your password changed, or the connection sat unused for a long time. Reconnecting takes a few seconds.</p>
+<p>{msg:email_google_disconnected_greeting}</p>
+<p>{msg:email_google_disconnected_body(accountEmail)}</p>
+<p>{msg:email_google_disconnected_paused}</p>
+<p><a href="{reconnectUrl}">{msg:email_google_disconnected_btn}</a></p>
+<p>{msg:email_paste_link_hint}<br>{reconnectUrl}</p>
+<p>{msg:email_google_disconnected_why}</p>
 </body>
 </html>

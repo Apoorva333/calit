@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><title>Booking cancelled</title></head>
+<head><title>{msg:email_cancellation_title}</title></head>
 <body>
-<p>Hi {inviteeName},</p>
-<p>Your booking has been <strong>cancelled</strong>.</p>
+<p>{msg:email_body_greeting(inviteeName)}</p>
+<p><strong>{msg:email_cancellation_body}</strong></p>
 <ul>
-  <li><strong>Meeting:</strong> {meetingTypeName}</li>
-  <li><strong>Was scheduled for:</strong> {startTime}</li>
-  <li><strong>Duration:</strong> {durationMinutes} minutes</li>
+  <li><strong>{msg:email_body_meeting_label}</strong> {meetingTypeName}</li>
+  <li><strong>{msg:email_cancellation_was_scheduled}</strong> {startTime}</li>
+  <li><strong>{msg:email_body_duration_label}</strong> {msg:email_body_duration_minutes(durationMinutes)}</li>
 </ul>
-<p>This message was sent to the {recipientRole}.</p>
+<p>{msg:email_body_recipient_note(recipientRole)}</p>
 </body>
 </html>
