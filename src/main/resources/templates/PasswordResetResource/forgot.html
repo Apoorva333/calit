@@ -1,21 +1,22 @@
+{@java.lang.String title}
 {@java.lang.Boolean sent}
-{#include base title="Forgot password"}
+{#include base title=title}
   <div class="card bg-base-100 border border-base-300 shadow-sm max-w-sm mx-auto">
     <div class="card-body">
-      <h1 class="text-2xl font-bold">Forgot password</h1>
+      <h1 class="text-2xl font-bold">{msg:auth_forgot_h1}</h1>
       {#if sent}
         <div role="alert" class="alert alert-success mt-2">
-          If that account exists, we've emailed a link to reset its password. The link expires in 30 minutes.
+          {msg:auth_forgot_sent_notice}
         </div>
-        <a href="/login" class="btn btn-outline btn-block mt-2">Back to sign in</a>
+        <a href="/login" class="btn btn-outline btn-block mt-2">{msg:auth_forgot_back_to_login}</a>
       {#else}
-        <p class="text-base-content/70">Enter your username and we'll email a reset link to the account's address.</p>
+        <p class="text-base-content/70">{msg:auth_forgot_instruction}</p>
         <form method="post" action="/forgot-password" class="mt-2">
           <input type="hidden" name="{inject:csrf.parameterName}" value="{inject:csrf.token}">
           <fieldset class="fieldset">
-            <label class="label" for="username">Username</label>
+            <label class="label" for="username">{msg:auth_forgot_username_label}</label>
             <input id="username" class="input w-full" type="text" name="username" required autofocus>
-            <button type="submit" class="btn btn-primary btn-block mt-2">Email reset link</button>
+            <button type="submit" class="btn btn-primary btn-block mt-2">{msg:auth_forgot_submit}</button>
           </fieldset>
         </form>
       {/if}

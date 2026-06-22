@@ -379,4 +379,144 @@ public interface AppMessages {
     /** strftime-like pattern used to format booking date/time in email bodies. */
     @Message("EEEE, d MMMM yyyy 'at' HH:mm")
     String email_datetime_pattern();
+
+    // ---- Auth / bootstrap pages ----
+
+    // -- Login page --
+    @Message("Sign in — calit")
+    String auth_login_title();
+
+    @Message("Sign in")
+    String auth_login_h1();
+
+    @Message("Owner access to calit admin.")
+    String auth_login_subtitle();
+
+    @Message("Invalid credentials — try again.")
+    String auth_login_invalid_credentials();
+
+    @Message("Username")
+    String auth_login_username_label();
+
+    @Message("Password")
+    String auth_login_password_label();
+
+    @Message("Remember me on this device")
+    String auth_login_remember_me();
+
+    @Message("Sign in")
+    String auth_login_submit();
+
+    @Message("Forgot password?")
+    String auth_login_forgot_password();
+
+    @Message("or")
+    String auth_login_or_divider();
+
+    @Message("Sign in with Google")
+    String auth_login_google_btn();
+
+    @Message("No account is linked to that Google account, and sign-ups are disabled.")
+    String auth_login_notice_google_signup_disabled();
+
+    @Message("That Google email matches more than one account; sign in with your password instead.")
+    String auth_login_notice_google_ambiguous();
+
+    @Message("Google sign-in could not be completed. Please try again.")
+    String auth_login_notice_google_generic();
+
+    // -- Signup page --
+    @Message("Sign up — calit")
+    String auth_signup_title();
+
+    @Message("Sign up")
+    String auth_signup_h1();
+
+    @Message("Username")
+    String auth_signup_username_label();
+
+    @Message("Password")
+    String auth_signup_password_label();
+
+    @Message("Create account")
+    String auth_signup_submit();
+
+    @Message("Already have an account? Log in")
+    String auth_signup_login_link();
+
+    // -- Forgot password page --
+    @Message("Forgot password — calit")
+    String auth_forgot_title();
+
+    @Message("Forgot password")
+    String auth_forgot_h1();
+
+    @Message("If that account exists, we've emailed a link to reset its password. The link expires in 30 minutes.")
+    String auth_forgot_sent_notice();
+
+    @Message("Back to sign in")
+    String auth_forgot_back_to_login();
+
+    @Message("Enter your username and we'll email a reset link to the account's address.")
+    String auth_forgot_instruction();
+
+    @Message("Username")
+    String auth_forgot_username_label();
+
+    @Message("Email reset link")
+    String auth_forgot_submit();
+
+    // -- Reset password page --
+    @Message("Reset password — calit")
+    String auth_reset_title();
+
+    @Message("Reset password")
+    String auth_reset_h1();
+
+    @Message("Enter a new password.")
+    String auth_reset_enter_new_password();
+
+    @Message("New password")
+    String auth_reset_new_password_label();
+
+    @Message("Set new password")
+    String auth_reset_submit();
+
+    @Message("This reset link is invalid or has expired.")
+    String auth_reset_invalid_link();
+
+    @Message("Request a new link")
+    String auth_reset_request_new_link();
+
+    // -- Setup (first-run bootstrap) page --
+    @Message("Set up calit")
+    String auth_setup_title();
+
+    @Message("Create the first user")
+    String auth_setup_h1();
+
+    @Message("This first account is the site administrator.")
+    String auth_setup_subtitle();
+
+    @Message("Username invalid, reserved, or taken — try another.")
+    String auth_setup_error();
+
+    @Message("Username")
+    String auth_setup_username_label();
+
+    @Message("Password")
+    String auth_setup_password_label();
+
+    @Message("Create administrator")
+    String auth_setup_submit();
+
+    // -- Google bridge page --
+    @Message("Signing you in…")
+    String auth_bridge_title();
+
+    @Message("Signing you in…")
+    String auth_bridge_progress();
+
+    @Message("Continue signing in")
+    String auth_bridge_noscript_btn();
 }

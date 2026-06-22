@@ -1,5 +1,8 @@
 package com.calit.web;
 
+import com.calit.i18n.ActiveLocale;
+import com.calit.i18n.AppMessages;
+import com.calit.i18n.Messages;
 import io.quarkus.qute.CheckedTemplate;
 import io.quarkus.qute.TemplateInstance;
 import io.quarkus.security.identity.SecurityIdentity;
@@ -18,11 +21,17 @@ public class LoginResource {
 
     @CheckedTemplate
     public static class Templates {
-        public static native TemplateInstance login(boolean error, boolean googleEnabled, String notice);
+        public static native TemplateInstance login(String title, boolean error, boolean googleEnabled, String notice);
     }
 
     @Inject
     SecurityIdentity identity;
+
+    @Inject
+    Messages messages;
+
+    @Inject
+    ActiveLocale activeLocale;
 
     @org.eclipse.microprofile.config.inject.ConfigProperty(name = "google.oauth.client-id", defaultValue = "")
     String googleClientId;
@@ -36,18 +45,19 @@ public class LoginResource {
             return Response.seeOther(URI.create("/me")).build();
         }
         boolean googleEnabled = googleClientId != null && !googleClientId.isBlank();
-        return Response.ok(Templates.login(error, googleEnabled, noticeMessage(notice))).build();
+        AppMessages m = messages.forLocale(activeLocale.current());
+        return Response.ok(Templates.login(m.auth_login_title(), error, googleEnabled, noticeMessage(m, notice))).build();
     }
 
-    /** Map a notice code from the Google sign-in flow to a human message, or null for none. */
-    private static String noticeMessage(String notice) {
+    /** Map a notice code from the Google sign-in flow to a localized human message, or null for none. */
+    private static String noticeMessage(AppMessages m, String notice) {
         if (notice == null) {
             return null;
         }
         return switch (notice) {
-            case "google_signup_disabled" -> "No account is linked to that Google account, and sign-ups are disabled.";
-            case "google_ambiguous" -> "That Google email matches more than one account; sign in with your password instead.";
-            case "google" -> "Google sign-in could not be completed. Please try again.";
+            case "google_signup_disabled" -> m.auth_login_notice_google_signup_disabled();
+            case "google_ambiguous" -> m.auth_login_notice_google_ambiguous();
+            case "google" -> m.auth_login_notice_google_generic();
             default -> null;
         };
     }

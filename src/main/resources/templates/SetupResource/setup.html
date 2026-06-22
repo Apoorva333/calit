@@ -1,18 +1,19 @@
+{@java.lang.String title}
 {@java.lang.Boolean error}
-{#include base title="Set up calit"}
+{#include base title=title}
   <div class="card bg-base-100 border border-base-300 shadow-sm max-w-sm mx-auto">
     <div class="card-body">
-      <h1 class="text-2xl font-bold">Create the first user</h1>
-      <p class="text-base-content/70">This first account is the site administrator.</p>
-      {#if error}<div role="alert" class="alert alert-error mt-2">Username invalid, reserved, or taken — try another.</div>{/if}
+      <h1 class="text-2xl font-bold">{msg:auth_setup_h1}</h1>
+      <p class="text-base-content/70">{msg:auth_setup_subtitle}</p>
+      {#if error}<div role="alert" class="alert alert-error mt-2">{msg:auth_setup_error}</div>{/if}
       <form method="post" action="/setup" class="mt-2">
         <input type="hidden" name="{inject:csrf.parameterName}" value="{inject:csrf.token}">
         <fieldset class="fieldset">
-          <label class="label" for="username">Username</label>
+          <label class="label" for="username">{msg:auth_setup_username_label}</label>
           <input id="username" class="input w-full" type="text" name="username" required autofocus>
-          <label class="label" for="password">Password</label>
+          <label class="label" for="password">{msg:auth_setup_password_label}</label>
           <input id="password" class="input w-full" type="password" name="password" required>
-          <button type="submit" class="btn btn-primary btn-block mt-2">Create administrator</button>
+          <button type="submit" class="btn btn-primary btn-block mt-2">{msg:auth_setup_submit}</button>
         </fieldset>
       </form>
     </div>
