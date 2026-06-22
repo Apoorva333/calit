@@ -24,7 +24,7 @@
           <button type="button" class="btn btn-ghost btn-sm btn-square copy-link-btn" data-copy-link="{baseUrl}/{username}/{t.slug}" aria-label="{adm:adm_meetingTypes_copy_link_aria}" title="{adm:adm_meetingTypes_copy_link_aria}">
             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
           </button>
-          <a href="/me/meeting-types/{t.id}" role="button" class="btn btn-outline btn-sm">{adm:adm_meetingTypes_btn_edit}</a>
+          <a href="/me/meeting-types/{t.id}" class="btn btn-outline btn-sm">{adm:adm_meetingTypes_btn_edit}</a>
           <form method="post" action="/me/meeting-types/{t.id}/toggle">
             <input type="hidden" name="{inject:csrf.parameterName}" value="{inject:csrf.token}">
             <button type="submit" class="btn btn-ghost btn-sm">{#if t.active}{adm:adm_meetingTypes_btn_deactivate}{#else}{adm:adm_meetingTypes_btn_activate}{/if}</button>
