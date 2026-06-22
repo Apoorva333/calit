@@ -7,6 +7,19 @@ This changelog is maintained manually. The canonical release notes, including
 asset downloads, are on
 [GitHub Releases](https://github.com/asm0dey/calit/releases).
 
+## 1.11.0
+
+An optional GraalVM **native** container image with a much smaller runtime footprint,
+published alongside the default JVM image.
+
+- **Native image variant (`-native` tags).** Every published tag now has a GraalVM
+  native counterpart — `:latest-native`, `:edge-native`, `:1.11.0-native`, etc. — built
+  ahead-of-time and run on a minimal Alpaquita musl base with no JRE. Compared to the JVM
+  image it is roughly half the size (~115 MB vs ~205 MB), uses far less memory at idle
+  (~60 MB vs ~300 MB), and starts in well under a second. It is functionally identical and
+  multi-arch (amd64 + arm64); the JVM image remains the default. Pick whichever fits your
+  host — see [Docker Compose install](/calit/installation/docker-compose/#native-image-lower-footprint).
+
 ## 1.10.0
 
 Hebrew (right-to-left) localization, plus a round of booking-email improvements:
