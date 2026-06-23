@@ -7,6 +7,16 @@ This changelog is maintained manually. The canonical release notes, including
 asset downloads, are on
 [GitHub Releases](https://github.com/asm0dey/calit/releases).
 
+## 1.11.1
+
+A small fix for the native image.
+
+- **Native image footer shows the real version again.** The page footer on the
+  native (`-native`) image displayed `dev dev` instead of the release version and
+  commit. The native build was compiling out the build-stamped `git.properties`;
+  it is now explicitly bundled. The JVM image was unaffected. No configuration or
+  upgrade steps are needed — pull `:1.11.1-native` (or `:latest-native`).
+
 ## 1.11.0
 
 An optional GraalVM **native** container image with a much smaller runtime footprint,
