@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class IcsBuilderTest {
@@ -59,5 +60,47 @@ class IcsBuilderTest {
         assertTrue(ics.contains("SEQUENCE:0"), "REQUEST needs a SEQUENCE");
         assertTrue(ics.contains("STATUS:CONFIRMED"), "event needs a STATUS");
         assertTrue(ics.contains("BEGIN:VEVENT\r\n"), "CRLF line endings preserved");
+    }
+
+    @Test
+    void cancelMethodEmitsCancelStatusAndSequence() {
+        String ics = IcsBuilder.build(
+                "tok-9", "Discovery Call", null,
+                new IcsBuilder.Party("Owner Name", "owner@example.com"),
+                new IcsBuilder.Party("guest@example.com", "guest@example.com"),
+                Instant.parse("2026-06-08T09:00:00Z"), Instant.parse("2026-06-08T09:30:00Z"),
+                "CANCEL", 3, true);
+
+        assertTrue(ics.contains("METHOD:CANCEL"), "cancel must be an iTIP CANCEL");
+        assertTrue(ics.contains("STATUS:CANCELLED"), "cancelled event status");
+        assertTrue(ics.contains("SEQUENCE:3"), "sequence carried through");
+        assertTrue(ics.contains("UID:tok-9"), "same UID so the client matches the prior event");
+        assertTrue(ics.contains("mailto:guest@example.com"), "guest is the attendee");
+    }
+
+    @Test
+    void requestOverloadWithSequenceEmitsRequestAndConfirmed() {
+        String ics = IcsBuilder.build(
+                "tok-9", "Discovery Call", "https://meet.google.com/abc",
+                new IcsBuilder.Party("Owner Name", "owner@example.com"),
+                new IcsBuilder.Party("guest@example.com", "guest@example.com"),
+                Instant.parse("2026-06-08T09:00:00Z"), Instant.parse("2026-06-08T09:30:00Z"),
+                "REQUEST", 1, true);
+
+        assertTrue(ics.contains("METHOD:REQUEST"));
+        assertTrue(ics.contains("STATUS:CONFIRMED"));
+        assertTrue(ics.contains("SEQUENCE:1"));
+    }
+
+    @Test
+    void attendeeRsvpFalseEmitsRsvpFalse() {
+        String ics = IcsBuilder.build(
+                "tok-g", "Discovery Call", null,
+                new IcsBuilder.Party("Owner Name", "owner@example.com"),
+                new IcsBuilder.Party("guest@example.com", "guest@example.com"),
+                Instant.parse("2026-06-08T09:00:00Z"), Instant.parse("2026-06-08T09:30:00Z"),
+                "REQUEST", 0, false);
+        assertTrue(ics.contains("RSVP=FALSE"), "guest invite suppresses the calendar RSVP buttons");
+        assertFalse(ics.contains("RSVP=TRUE"));
     }
 }
