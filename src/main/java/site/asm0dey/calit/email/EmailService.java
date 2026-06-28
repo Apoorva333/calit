@@ -819,18 +819,19 @@ public class EmailService {
         String location,
         String method
     ) {
-        return IcsBuilder.build(
-            l.booking.manageToken,
-            l.meetingType.name,
-            location,
-            new IcsBuilder.Party(l.owner.ownerName, l.owner.ownerEmail),
-            new IcsBuilder.Party(g.email, g.email),
-            l.booking.startUtc,
-            l.booking.endUtc,
-            method,
-            l.booking.icsSequence,
-            false
-        ).getBytes(StandardCharsets.UTF_8);
+        return IcsBuilder.build(IcsEvent.builder()
+                        .uid(l.booking.manageToken)
+                        .summary(l.meetingType.name)
+                        .location(location)
+                        .organizer(new IcsBuilder.Party(l.owner.ownerName, l.owner.ownerEmail))
+                        .attendee(new IcsBuilder.Party(g.email, g.email))
+                        .start(l.booking.startUtc)
+                        .end(l.booking.endUtc)
+                        .method(method)
+                        .sequence(l.booking.icsSequence)
+                        .attendeeRsvp(false)
+                        .build())
+                .getBytes(StandardCharsets.UTF_8);
     }
 
     private String declineGuestUrl(BookingGuest g) {
@@ -882,15 +883,16 @@ public class EmailService {
             !calendarPort.isConnected(l.owner.ownerId);
         boolean sendOwner = l.owner.ownerNotificationsEnabled;
 
-        byte[] ics = IcsBuilder.build(
-            l.booking.manageToken,
-            l.meetingType.name,
-            icsLocation,
-            new IcsBuilder.Party(l.owner.ownerName, l.owner.ownerEmail),
-            new IcsBuilder.Party(l.booking.inviteeName, l.booking.inviteeEmail),
-            l.booking.startUtc,
-            l.booking.endUtc
-        ).getBytes(StandardCharsets.UTF_8);
+        byte[] ics = IcsBuilder.build(IcsEvent.builder()
+                .uid(l.booking.manageToken)
+                .summary(l.meetingType.name)
+                .location(icsLocation)
+                .organizer(new IcsBuilder.Party(l.owner.ownerName, l.owner.ownerEmail))
+                .attendee(new IcsBuilder.Party(l.booking.inviteeName, l.booking.inviteeEmail))
+                .start(l.booking.startUtc)
+                .end(l.booking.endUtc)
+                .build())
+                .getBytes(StandardCharsets.UTF_8);
 
         if (sendInvitee) {
             sink.deliver(

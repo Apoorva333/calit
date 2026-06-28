@@ -11,14 +11,15 @@ class IcsBuilderTest {
 
     @Test
     void buildsVeventWithStartEndSummaryLocationOrganizerUid() {
-        String ics = IcsBuilder.build(
-                "tok-123",
-                "Discovery Call",
-                "https://meet.google.com/abc-defg-hij",
-                new IcsBuilder.Party("Owner Name", "owner@example.com"),
-                new IcsBuilder.Party("Invitee Name", "invitee@example.com"),
-                Instant.parse("2026-06-08T09:00:00Z"),
-                Instant.parse("2026-06-08T09:30:00Z"));
+        String ics = IcsBuilder.build(IcsEvent.builder()
+                .uid("tok-123")
+                .summary("Discovery Call")
+                .location("https://meet.google.com/abc-defg-hij")
+                .organizer(new IcsBuilder.Party("Owner Name", "owner@example.com"))
+                .attendee(new IcsBuilder.Party("Invitee Name", "invitee@example.com"))
+                .start(Instant.parse("2026-06-08T09:00:00Z"))
+                .end(Instant.parse("2026-06-08T09:30:00Z"))
+                .build());
 
         assertTrue(ics.startsWith("BEGIN:VCALENDAR"), "must be a VCALENDAR");
         assertTrue(ics.contains("BEGIN:VEVENT"));
@@ -34,23 +35,30 @@ class IcsBuilderTest {
 
     @Test
     void omitsLocationLineWhenNull() {
-        String ics = IcsBuilder.build(
-                "tok-x", "Phone Call", null,
-                new IcsBuilder.Party("Owner Name", "owner@example.com"),
-                new IcsBuilder.Party("Invitee Name", "invitee@example.com"),
-                Instant.parse("2026-06-08T09:00:00Z"),
-                Instant.parse("2026-06-08T09:30:00Z"));
+        String ics = IcsBuilder.build(IcsEvent.builder()
+                .uid("tok-x")
+                .summary("Phone Call")
+                .location(null)
+                .organizer(new IcsBuilder.Party("Owner Name", "owner@example.com"))
+                .attendee(new IcsBuilder.Party("Invitee Name", "invitee@example.com"))
+                .start(Instant.parse("2026-06-08T09:00:00Z"))
+                .end(Instant.parse("2026-06-08T09:30:00Z"))
+                .build());
         assertTrue(ics.contains("BEGIN:VEVENT"));
         assertTrue(!ics.contains("LOCATION:"), "no LOCATION line when location is null/blank");
     }
 
     @Test
     void requestHasAttendeeAndOrganizer() {
-        String ics = IcsBuilder.build(
-                "uid-1", "Intro call", "https://meet.google.com/abc-defg-hij",
-                new IcsBuilder.Party("Olivia Owner", "owner@example.com"),
-                new IcsBuilder.Party("Sam Invitee", "sam@example.com"),
-                Instant.parse("2026-07-01T09:00:00Z"), Instant.parse("2026-07-01T09:30:00Z"));
+        String ics = IcsBuilder.build(IcsEvent.builder()
+                .uid("uid-1")
+                .summary("Intro call")
+                .location("https://meet.google.com/abc-defg-hij")
+                .organizer(new IcsBuilder.Party("Olivia Owner", "owner@example.com"))
+                .attendee(new IcsBuilder.Party("Sam Invitee", "sam@example.com"))
+                .start(Instant.parse("2026-07-01T09:00:00Z"))
+                .end(Instant.parse("2026-07-01T09:30:00Z"))
+                .build());
 
         assertTrue(ics.contains("METHOD:REQUEST"), "must be an iTIP REQUEST");
         assertTrue(ics.contains("ATTENDEE;") && ics.contains("mailto:sam@example.com"),
@@ -64,12 +72,18 @@ class IcsBuilderTest {
 
     @Test
     void cancelMethodEmitsCancelStatusAndSequence() {
-        String ics = IcsBuilder.build(
-                "tok-9", "Discovery Call", null,
-                new IcsBuilder.Party("Owner Name", "owner@example.com"),
-                new IcsBuilder.Party("guest@example.com", "guest@example.com"),
-                Instant.parse("2026-06-08T09:00:00Z"), Instant.parse("2026-06-08T09:30:00Z"),
-                "CANCEL", 3, true);
+        String ics = IcsBuilder.build(IcsEvent.builder()
+                .uid("tok-9")
+                .summary("Discovery Call")
+                .location(null)
+                .organizer(new IcsBuilder.Party("Owner Name", "owner@example.com"))
+                .attendee(new IcsBuilder.Party("guest@example.com", "guest@example.com"))
+                .start(Instant.parse("2026-06-08T09:00:00Z"))
+                .end(Instant.parse("2026-06-08T09:30:00Z"))
+                .method("CANCEL")
+                .sequence(3)
+                .attendeeRsvp(true)
+                .build());
 
         assertTrue(ics.contains("METHOD:CANCEL"), "cancel must be an iTIP CANCEL");
         assertTrue(ics.contains("STATUS:CANCELLED"), "cancelled event status");
@@ -80,12 +94,18 @@ class IcsBuilderTest {
 
     @Test
     void requestOverloadWithSequenceEmitsRequestAndConfirmed() {
-        String ics = IcsBuilder.build(
-                "tok-9", "Discovery Call", "https://meet.google.com/abc",
-                new IcsBuilder.Party("Owner Name", "owner@example.com"),
-                new IcsBuilder.Party("guest@example.com", "guest@example.com"),
-                Instant.parse("2026-06-08T09:00:00Z"), Instant.parse("2026-06-08T09:30:00Z"),
-                "REQUEST", 1, true);
+        String ics = IcsBuilder.build(IcsEvent.builder()
+                .uid("tok-9")
+                .summary("Discovery Call")
+                .location("https://meet.google.com/abc")
+                .organizer(new IcsBuilder.Party("Owner Name", "owner@example.com"))
+                .attendee(new IcsBuilder.Party("guest@example.com", "guest@example.com"))
+                .start(Instant.parse("2026-06-08T09:00:00Z"))
+                .end(Instant.parse("2026-06-08T09:30:00Z"))
+                .method("REQUEST")
+                .sequence(1)
+                .attendeeRsvp(true)
+                .build());
 
         assertTrue(ics.contains("METHOD:REQUEST"));
         assertTrue(ics.contains("STATUS:CONFIRMED"));
@@ -94,12 +114,18 @@ class IcsBuilderTest {
 
     @Test
     void attendeeRsvpFalseEmitsRsvpFalse() {
-        String ics = IcsBuilder.build(
-                "tok-g", "Discovery Call", null,
-                new IcsBuilder.Party("Owner Name", "owner@example.com"),
-                new IcsBuilder.Party("guest@example.com", "guest@example.com"),
-                Instant.parse("2026-06-08T09:00:00Z"), Instant.parse("2026-06-08T09:30:00Z"),
-                "REQUEST", 0, false);
+        String ics = IcsBuilder.build(IcsEvent.builder()
+                .uid("tok-g")
+                .summary("Discovery Call")
+                .location(null)
+                .organizer(new IcsBuilder.Party("Owner Name", "owner@example.com"))
+                .attendee(new IcsBuilder.Party("guest@example.com", "guest@example.com"))
+                .start(Instant.parse("2026-06-08T09:00:00Z"))
+                .end(Instant.parse("2026-06-08T09:30:00Z"))
+                .method("REQUEST")
+                .sequence(0)
+                .attendeeRsvp(false)
+                .build());
         assertTrue(ics.contains("RSVP=FALSE"), "guest invite suppresses the calendar RSVP buttons");
         assertFalse(ics.contains("RSVP=TRUE"));
     }

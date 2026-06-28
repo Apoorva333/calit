@@ -27,60 +27,35 @@ public final class IcsBuilder {
     }
 
     /**
-     * @param uid       stable unique id (we pass the booking's manageToken so updates match)
-     * @param summary   event title (the meeting type name)
-     * @param location  Meet link or locationDetail; null/blank emits no LOCATION line
-     * @param organizer the owner — emitted as ORGANIZER with a CN
-     * @param attendee  the invitee — emitted as ATTENDEE with a CN (required for a valid REQUEST)
-     * @param start     meeting start (UTC instant)
-     * @param end       meeting end (UTC instant)
+     * Renders a single booking as an RFC 5545 VCALENDAR/VEVENT string. All event properties are
+     * sourced from the supplied {@link IcsEvent}; use {@link IcsEvent#builder()} to construct one.
+     *
+     * @param e the event descriptor; method defaults to "REQUEST", sequence to 0, attendeeRsvp to true
      */
-    /** Invitee/owner invitation — RSVP requested (client shows Yes/No), METHOD:REQUEST, SEQUENCE 0. */
-    public static String build(String uid, String summary, String location,
-                               Party organizer, Party attendee,
-                               Instant start, Instant end) {
-        return build(uid, summary, location, organizer, attendee, start, end, "REQUEST", 0, true);
-    }
-
-    /**
-     * @param uid          stable unique id (we pass the booking's manageToken so updates match)
-     * @param summary      event title (the meeting type name)
-     * @param location     Meet link or locationDetail; null/blank emits no LOCATION line
-     * @param organizer    the owner — emitted as ORGANIZER with a CN
-     * @param attendee     the invitee — emitted as ATTENDEE with a CN (required for a valid REQUEST)
-     * @param start        meeting start (UTC instant)
-     * @param end          meeting end (UTC instant)
-     * @param method       "REQUEST" (invite/update) or "CANCEL" (removal)
-     * @param sequence     iTIP SEQUENCE — monotonic per UID so updates/cancels supersede
-     * @param attendeeRsvp true emits RSVP=TRUE (calendar shows Yes/No); false emits RSVP=FALSE
-     *                     (guests respond only via calit's decline link, not a calendar reply)
-     */
-    public static String build(String uid, String summary, String location,
-                               Party organizer, Party attendee,
-                               Instant start, Instant end, String method, int sequence, boolean attendeeRsvp) {
-        boolean cancel = "CANCEL".equals(method);
+    public static String build(IcsEvent e) {
+        boolean cancel = "CANCEL".equals(e.method());
         StringBuilder sb = new StringBuilder();
         sb.append("BEGIN:VCALENDAR\r\n");
         sb.append("VERSION:2.0\r\n");
         sb.append("PRODID:-//calit//EN\r\n");
-        sb.append("METHOD:").append(escape(method)).append("\r\n");
+        sb.append("METHOD:").append(escape(e.method())).append("\r\n");
         sb.append("BEGIN:VEVENT\r\n");
-        sb.append("UID:").append(escape(uid)).append("\r\n");
-        sb.append("SEQUENCE:").append(sequence).append("\r\n");
+        sb.append("UID:").append(escape(e.uid())).append("\r\n");
+        sb.append("SEQUENCE:").append(e.sequence()).append("\r\n");
         sb.append("STATUS:").append(cancel ? "CANCELLED" : "CONFIRMED").append("\r\n");
         sb.append("DTSTAMP:").append(ICS_UTC.format(Instant.now())).append("\r\n");
-        sb.append("DTSTART:").append(ICS_UTC.format(start)).append("\r\n");
-        sb.append("DTEND:").append(ICS_UTC.format(end)).append("\r\n");
-        sb.append("SUMMARY:").append(escape(summary)).append("\r\n");
-        if (location != null && !location.isBlank()) {
-            sb.append("LOCATION:").append(escape(location)).append("\r\n");
+        sb.append("DTSTART:").append(ICS_UTC.format(e.start())).append("\r\n");
+        sb.append("DTEND:").append(ICS_UTC.format(e.end())).append("\r\n");
+        sb.append("SUMMARY:").append(escape(e.summary())).append("\r\n");
+        if (e.location() != null && !e.location().isBlank()) {
+            sb.append("LOCATION:").append(escape(e.location())).append("\r\n");
         }
-        sb.append("ORGANIZER;CN=").append(cn(organizer.name()))
-                .append(":mailto:").append(escape(organizer.email())).append("\r\n");
+        sb.append("ORGANIZER;CN=").append(cn(e.organizer().name()))
+                .append(":mailto:").append(escape(e.organizer().email())).append("\r\n");
         sb.append("ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=")
-                .append(attendeeRsvp ? "TRUE" : "FALSE")
-                .append(";CN=").append(cn(attendee.name()))
-                .append(":mailto:").append(escape(attendee.email())).append("\r\n");
+                .append(e.attendeeRsvp() ? "TRUE" : "FALSE")
+                .append(";CN=").append(cn(e.attendee().name()))
+                .append(":mailto:").append(escape(e.attendee().email())).append("\r\n");
         sb.append("END:VEVENT\r\n");
         sb.append("END:VCALENDAR\r\n");
         return sb.toString();

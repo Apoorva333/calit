@@ -12,14 +12,15 @@ class IcsBuilderEscapeTest {
 
     @Test
     void organizerAndUidCannotInjectNewIcsLines() {
-        String ics = IcsBuilder.build(
-                "uid\r\nX-EVIL:1",
-                "Meeting",
-                null,
-                new IcsBuilder.Party("Organizer Name", "organizer@x.com\r\nATTENDEE:mailto:victim@y.com"),
-                new IcsBuilder.Party("Attendee Name", "attendee@example.com"),
-                Instant.parse("2099-01-01T10:00:00Z"),
-                Instant.parse("2099-01-01T10:30:00Z"));
+        String ics = IcsBuilder.build(IcsEvent.builder()
+                .uid("uid\r\nX-EVIL:1")
+                .summary("Meeting")
+                .location(null)
+                .organizer(new IcsBuilder.Party("Organizer Name", "organizer@x.com\r\nATTENDEE:mailto:victim@y.com"))
+                .attendee(new IcsBuilder.Party("Attendee Name", "attendee@example.com"))
+                .start(Instant.parse("2099-01-01T10:00:00Z"))
+                .end(Instant.parse("2099-01-01T10:30:00Z"))
+                .build());
 
         // RFC 5545 line folding is on CRLF. The attacker payloads must never become their own
         // physical line: the CR is stripped and the LF is escaped to the literal text "\n", so the
