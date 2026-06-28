@@ -80,7 +80,7 @@ class IcsBuilderTest {
                 .attendee(new IcsBuilder.Party("guest@example.com", "guest@example.com"))
                 .start(Instant.parse("2026-06-08T09:00:00Z"))
                 .end(Instant.parse("2026-06-08T09:30:00Z"))
-                .method("CANCEL")
+                .method(IcsMethod.CANCEL)
                 .sequence(3)
                 .attendeeRsvp(true)
                 .build());
@@ -102,7 +102,7 @@ class IcsBuilderTest {
                 .attendee(new IcsBuilder.Party("guest@example.com", "guest@example.com"))
                 .start(Instant.parse("2026-06-08T09:00:00Z"))
                 .end(Instant.parse("2026-06-08T09:30:00Z"))
-                .method("REQUEST")
+                .method(IcsMethod.REQUEST)
                 .sequence(1)
                 .attendeeRsvp(true)
                 .build());
@@ -122,7 +122,7 @@ class IcsBuilderTest {
                 .attendee(new IcsBuilder.Party("guest@example.com", "guest@example.com"))
                 .start(Instant.parse("2026-06-08T09:00:00Z"))
                 .end(Instant.parse("2026-06-08T09:30:00Z"))
-                .method("REQUEST")
+                .method(IcsMethod.REQUEST)
                 .sequence(0)
                 .attendeeRsvp(false)
                 .build());

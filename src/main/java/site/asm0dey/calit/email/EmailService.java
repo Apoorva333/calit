@@ -696,7 +696,7 @@ public class EmailService {
         Locale locale = AppLocales.pick(l.booking.locale);
         String start = format(l.booking.startUtc, l.zone, locale);
         for (BookingGuest g : guests) {
-            byte[] ics = guestIcs(l, g, location, "REQUEST");
+            byte[] ics = guestIcs(l, g, location, IcsMethod.REQUEST);
             String body = guestInvite
                 .instance()
                 .setLocale(locale)
@@ -731,7 +731,7 @@ public class EmailService {
                 g.email,
                 subject,
                 guestCancelBody(l, g, locale),
-                guestIcs(l, g, null, "CANCEL")
+                guestIcs(l, g, null, IcsMethod.CANCEL)
             );
         }
     }
@@ -750,7 +750,7 @@ public class EmailService {
                 .forLocale(locale)
                 .email_cancelled_subject(l.meetingType.name),
             guestCancelBody(l, guest, locale),
-            guestIcs(l, guest, null, "CANCEL")
+            guestIcs(l, guest, null, IcsMethod.CANCEL)
         );
     }
 
@@ -770,7 +770,7 @@ public class EmailService {
                 .forLocale(locale)
                 .email_cancelled_subject(l.meetingType.name),
             guestCancelBody(l, guest, locale),
-            guestIcs(l, guest, null, "CANCEL")
+            guestIcs(l, guest, null, IcsMethod.CANCEL)
         );
         // 2) notify the invitee so they can reschedule
         String inviteeBody = guestDeclinedNotice
@@ -824,7 +824,7 @@ public class EmailService {
         Loaded l,
         BookingGuest g,
         String location,
-        String method
+        IcsMethod method
     ) {
         return IcsBuilder.build(IcsEvent.builder()
                         .uid(l.booking.manageToken)

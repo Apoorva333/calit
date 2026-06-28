@@ -10,7 +10,7 @@ import java.time.Instant;
 public record IcsEvent(String uid, String summary, String location,
                        IcsBuilder.Party organizer, IcsBuilder.Party attendee,
                        Instant start, Instant end,
-                       String method, int sequence, boolean attendeeRsvp) {
+                       IcsMethod method, int sequence, boolean attendeeRsvp) {
 
     public static Builder builder() {
         return new Builder();
@@ -24,7 +24,7 @@ public record IcsEvent(String uid, String summary, String location,
         private IcsBuilder.Party attendee;
         private Instant start;
         private Instant end;
-        private String method = "REQUEST";
+        private IcsMethod method = IcsMethod.REQUEST;
         private int sequence = 0;
         private boolean attendeeRsvp = true;
 
@@ -35,7 +35,7 @@ public record IcsEvent(String uid, String summary, String location,
         public Builder attendee(IcsBuilder.Party attendee) { this.attendee = attendee; return this; }
         public Builder start(Instant start) { this.start = start; return this; }
         public Builder end(Instant end) { this.end = end; return this; }
-        public Builder method(String method) { this.method = method; return this; }
+        public Builder method(IcsMethod method) { this.method = method; return this; }
         public Builder sequence(int sequence) { this.sequence = sequence; return this; }
         public Builder attendeeRsvp(boolean attendeeRsvp) { this.attendeeRsvp = attendeeRsvp; return this; }
 

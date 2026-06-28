@@ -28,8 +28,9 @@
     });
   }
   function add() {
-    var v = entry.value.trim().replace(/[,\s]+$/, '');
-    if (v && list.indexOf(v) === -1) list.push(v);
+    var v = entry.value.trim();
+    if (v.charAt(v.length - 1) === ',') v = v.slice(0, -1).trim();
+    if (v && !list.includes(v)) list.push(v);
     entry.value = ''; sync();
   }
   entry.addEventListener('keydown', function (e) {

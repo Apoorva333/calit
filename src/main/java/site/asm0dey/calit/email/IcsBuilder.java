@@ -33,12 +33,12 @@ public final class IcsBuilder {
      * @param e the event descriptor; method defaults to "REQUEST", sequence to 0, attendeeRsvp to true
      */
     public static String build(IcsEvent e) {
-        boolean cancel = "CANCEL".equals(e.method());
+        boolean cancel = e.method() == IcsMethod.CANCEL;
         StringBuilder sb = new StringBuilder();
         sb.append("BEGIN:VCALENDAR\r\n");
         sb.append("VERSION:2.0\r\n");
         sb.append("PRODID:-//calit//EN\r\n");
-        sb.append("METHOD:").append(escape(e.method())).append("\r\n");
+        sb.append("METHOD:").append(e.method().name()).append("\r\n");
         sb.append("BEGIN:VEVENT\r\n");
         sb.append("UID:").append(escape(e.uid())).append("\r\n");
         sb.append("SEQUENCE:").append(e.sequence()).append("\r\n");

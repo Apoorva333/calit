@@ -252,13 +252,15 @@ public class BookingService {
         }
         java.util.LinkedHashMap<String, String> byLower = new java.util.LinkedHashMap<>();
         for (String raw : guestEmails) {
-            if (raw == null) continue;
-            String email = raw.trim();
-            if (email.isEmpty() || email.length() > 254) continue;
-            if (email.equalsIgnoreCase(inviteeEmail)) continue;   // invitee already gets every mail
-            if (!isPlausibleEmail(email)) continue;               // drop malformed silently
-            byLower.putIfAbsent(email.toLowerCase(), email);
-            if (byLower.size() >= MAX_GUESTS_PER_BOOKING) break;
+            String email = raw == null ? "" : raw.trim();
+            // Drop blanks/over-length, the invitee's own address (they already get every mail), and
+            // malformed addresses — silently, so one bad entry never fails the booking. Cap at the max.
+            boolean acceptable = !email.isEmpty() && email.length() <= 254
+                    && !email.equalsIgnoreCase(inviteeEmail)
+                    && isPlausibleEmail(email);
+            if (acceptable && byLower.size() < MAX_GUESTS_PER_BOOKING) {
+                byLower.putIfAbsent(email.toLowerCase(), email);
+            }
         }
         return List.copyOf(byLower.values());
     }
