@@ -36,6 +36,20 @@ The confirmation email includes unique links the invitee can use to:
 
 These actions work via a secure token; no login is required. The attached `.ics` calendar invite is a standard iTIP request, so it loads as an event card in Gmail and other mail clients.
 
+## Guests
+
+The invitee can bring guests along. On the booking form — and again when rescheduling — there is a **Guests** field: type an email address and press Enter (or Tab) to turn it into a chip. Add up to **10** guests per booking. The invitee's own address and any malformed or duplicate entries are dropped automatically, so a typo never blocks the booking.
+
+Guests get their own calendar invite and stay in sync with the meeting:
+
+- **Created** — when the booking is confirmed (or approved), each guest receives an email with an `.ics` invite that adds the meeting to their calendar.
+- **Rescheduled** — moving the meeting sends every guest an updated invite that supersedes the old time in their calendar.
+- **Cancelled** — cancelling the meeting (or declining an approval request that guests were already invited to) sends each guest a cancellation that removes the event from their calendar.
+
+Guests **cannot** reschedule or cancel the meeting — only the invitee can. A guest who can't attend uses the **decline** link in their own invitation email: it removes them from the meeting, sends them a cancellation, and notifies the invitee (who may then want to reschedule). The guest invite deliberately has no calendar "Yes/No" buttons, so this decline link is the single, reliable way for a guest to bow out.
+
+When the invitee reschedules, the **Guests** field is pre-filled with the current list. Adding a chip invites a new guest, removing one sends that guest a cancellation, and the rest receive the updated time.
+
 ## Reminders
 
 calit sends a reminder email to the invitee before each confirmed meeting. The lead time is controlled by `REMINDER_LEAD_MINUTES` (default: `1440`, i.e. 24 hours before the meeting).

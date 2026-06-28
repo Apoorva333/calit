@@ -7,6 +7,16 @@ This changelog is maintained manually. The canonical release notes, including
 asset downloads, are on
 [GitHub Releases](https://github.com/asm0dey/calit/releases).
 
+## Unreleased
+
+- **Invitee guests.** Invitees can now add guests to a booking — a chips field on
+  the booking form (and on the reschedule page) takes up to 10 guest emails. Guests
+  receive their own calendar invite and stay in sync: they get an `.ics` invitation
+  when the meeting is created, an update when it is rescheduled, and a cancellation
+  when it is cancelled. Guests cannot reschedule or cancel the meeting; a guest who
+  can't attend uses a **decline** link in their invitation, which removes them and
+  notifies the invitee. No configuration or migration steps beyond the usual upgrade.
+
 ## 1.11.1
 
 A small fix for the native image.
