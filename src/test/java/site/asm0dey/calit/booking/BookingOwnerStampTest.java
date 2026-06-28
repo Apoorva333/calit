@@ -58,7 +58,7 @@ class BookingOwnerStampTest {
                 .plusDays(2).withHour(10).withMinute(0).withSecond(0).withNano(0);
 
         Booking b = bookingService.book(t.ownerId, t.slug, slot.toInstant(),
-                "Invitee", "invitee@x.com", Map.of(), null, null, "en");
+                "Invitee", "invitee@x.com", Map.of(), null, null, "en", java.util.List.of());
 
         assertEquals(t.ownerId, b.ownerId, "booking.ownerId must equal the meeting type's owner");
     }

@@ -40,6 +40,9 @@ public class BookingService {
     private final TurnstileVerifier turnstileVerifier;
     private final long perEmailDailyCap;
 
+    /** Max guests an invitee may attach to one booking. ponytail: a constant, not a config knob. */
+    public static final int MAX_GUESTS_PER_BOOKING = 10;
+
     @Inject
     public BookingService(SlotService slotService, CalendarPort calendarPort,
                           TurnstileVerifier turnstileVerifier,
@@ -68,6 +71,12 @@ public class BookingService {
 
     @Inject
     Event<BookingCancelled> bookingCancelledEvent;
+
+    @Inject
+    Event<GuestDeclined> guestDeclinedEvent;
+
+    @Inject
+    Event<GuestRemoved> guestRemovedEvent;
 
     public List<TimeSlot> availableSlots(MeetingType type, LocalDate from, LocalDate to) {
         return availableSlots(type, from, to, null);
@@ -136,7 +145,7 @@ public class BookingService {
     public Booking book(Long ownerId, String meetingTypeSlug, Instant startUtc,
                         String inviteeName, String inviteeEmail,
                         Map<String, String> answers, String turnstileToken, String honeypot,
-                        String locale) {
+                        String locale, List<String> guestEmails) {
         validateInviteeEmail(inviteeEmail);
         validateInputBounds(inviteeName, answers);
         MeetingType type = MeetingType.findBySlug(ownerId, meetingTypeSlug);
@@ -197,6 +206,8 @@ public class BookingService {
             throw ex;
         }
 
+        persistGuests(booking, guestEmails);
+
         if (type.requiresApproval) {
             // Feature 14: PENDING request — NO Google event yet; the owner approves/declines later.
             bookingRequestedEvent.fire(new BookingRequested(booking.id));
@@ -213,6 +224,43 @@ public class BookingService {
 
         bookingConfirmedEvent.fire(new BookingConfirmed(booking.id));
         return booking;
+    }
+
+    /**
+     * Normalizes + persists the invitee-supplied guest emails as INVITED rows. Trims, lower-cases for
+     * de-dup, drops blanks / the invitee's own address / anything that fails {@link #isPlausibleEmail},
+     * and caps at {@link #MAX_GUESTS_PER_BOOKING}. Bad entries are dropped silently (one typo must not
+     * fail the whole booking). owner_id is copied from the booking for the multi-tenancy invariant.
+     */
+    private void persistGuests(Booking booking, List<String> guestEmails) {
+        for (String email : normalizeGuestEmails(guestEmails, booking.inviteeEmail)) {
+            BookingGuest g = new BookingGuest();
+            g.ownerId = booking.ownerId;
+            g.bookingId = booking.id;
+            g.email = email;
+            g.status = GuestStatus.INVITED;
+            g.declineToken = UUID.randomUUID().toString();
+            g.createdAt = Instant.now();
+            g.persist();
+        }
+    }
+
+    /** Cleaned, de-duped (case-insensitive), capped, invitee-excluded guest list. Preserves order. */
+    private static List<String> normalizeGuestEmails(List<String> guestEmails, String inviteeEmail) {
+        if (guestEmails == null || guestEmails.isEmpty()) {
+            return List.of();
+        }
+        java.util.LinkedHashMap<String, String> byLower = new java.util.LinkedHashMap<>();
+        for (String raw : guestEmails) {
+            if (raw == null) continue;
+            String email = raw.trim();
+            if (email.isEmpty() || email.length() > 254) continue;
+            if (email.equalsIgnoreCase(inviteeEmail)) continue;   // invitee already gets every mail
+            if (!isPlausibleEmail(email)) continue;               // drop malformed silently
+            byLower.putIfAbsent(email.toLowerCase(), email);
+            if (byLower.size() >= MAX_GUESTS_PER_BOOKING) break;
+        }
+        return List.copyOf(byLower.values());
     }
 
     /**
@@ -368,6 +416,17 @@ public class BookingService {
 
     @Transactional
     public Booking reschedule(String manageToken, Instant newStartUtc) {
+        return reschedule(manageToken, newStartUtc, null);
+    }
+
+    /**
+     * Reschedules a booking by its manage token. When {@code guestEmails} is non-null the active guest
+     * set is reconciled to it (added guests -> INVITED + GuestRemoved/invite emails downstream; dropped
+     * guests -> REMOVED + cancel email; kept guests get the reschedule .ics via BookingRescheduled).
+     * A null {@code guestEmails} leaves guests untouched (the JSON API + the 2-arg overload).
+     */
+    @Transactional
+    public Booking reschedule(String manageToken, Instant newStartUtc, List<String> guestEmails) {
         Booking booking = Booking.findByManageToken(manageToken);
         if (booking == null
                 || booking.status == BookingStatus.CANCELLED
@@ -383,6 +442,8 @@ public class BookingService {
         Instant oldStart = booking.startUtc;
         booking.startUtc = newStartUtc;
         booking.endUtc = newEnd;
+        // Bump the iTIP SEQUENCE so guest .ics updates/cancels supersede the prior event.
+        booking.icsSequence = booking.icsSequence + 1;
 
         boolean reApproval = type.requiresApproval;
         String priorEventId = booking.googleEventId;
@@ -392,6 +453,10 @@ public class BookingService {
             booking.googleEventId = null;
             booking.meetLink = null;
         }
+
+        // Reconcile guests (if the caller supplied a list) inside the same transaction. Collect the
+        // ids of guests removed so we can fire cancel emails after commit.
+        List<Long> removedGuestIds = reconcileGuests(booking, guestEmails);
 
         // NFR cross-node guard: flush so the no-overlap exclusion constraint is checked against
         // the new range; a concurrent overlap is surfaced as the same 409 as a double-book.
@@ -403,6 +468,11 @@ public class BookingService {
                         "Slot " + newStartUtc + " is not available for token " + manageToken);
             }
             throw ex;
+        }
+
+        // Cancel emails for guests the invitee removed (fired regardless of approval/auto).
+        for (Long guestId : removedGuestIds) {
+            guestRemovedEvent.fire(new GuestRemoved(booking.id, guestId));
         }
 
         if (reApproval) {
@@ -419,6 +489,52 @@ public class BookingService {
         return booking;
     }
 
+    /**
+     * Reconciles the booking's guests to {@code guestEmails}. Returns the ids of guests transitioned to
+     * REMOVED (so the caller can fire cancel emails after commit). A null list is a no-op (returns empty).
+     */
+    private List<Long> reconcileGuests(Booking booking, List<String> guestEmails) {
+        if (guestEmails == null) {
+            return List.of();
+        }
+        List<String> wanted = normalizeGuestEmails(guestEmails, booking.inviteeEmail);
+        java.util.Set<String> wantedLower = new java.util.HashSet<>();
+        for (String e : wanted) wantedLower.add(e.toLowerCase());
+
+        // Existing rows for this booking, keyed by lowercase email.
+        java.util.Map<String, BookingGuest> existing = new java.util.HashMap<>();
+        for (BookingGuest g : BookingGuest.<BookingGuest>allForBooking(booking.id)) {
+            existing.put(g.email.toLowerCase(), g);
+        }
+
+        // Add or re-activate wanted guests.
+        for (String email : wanted) {
+            BookingGuest g = existing.get(email.toLowerCase());
+            if (g == null) {
+                g = new BookingGuest();
+                g.ownerId = booking.ownerId;
+                g.bookingId = booking.id;
+                g.email = email;
+                g.declineToken = UUID.randomUUID().toString();
+                g.createdAt = Instant.now();
+                g.status = GuestStatus.INVITED;
+                g.persist();
+            } else if (g.status != GuestStatus.INVITED) {
+                g.status = GuestStatus.INVITED; // re-invited a previously removed/declined guest
+            }
+        }
+
+        // Remove active guests no longer wanted.
+        List<Long> removed = new ArrayList<>();
+        for (BookingGuest g : existing.values()) {
+            if (g.status == GuestStatus.INVITED && !wantedLower.contains(g.email.toLowerCase())) {
+                g.status = GuestStatus.REMOVED;
+                removed.add(g.id);
+            }
+        }
+        return removed;
+    }
+
     @Transactional
     public void cancel(String manageToken) {
         Booking booking = Booking.findByManageToken(manageToken);
@@ -430,5 +546,18 @@ public class BookingService {
             calendarPort.deleteEvent(booking.ownerId, booking.googleEventId);
         }
         bookingCancelledEvent.fire(new BookingCancelled(booking.id));
+    }
+
+    @Transactional
+    public void declineGuest(String declineToken) {
+        BookingGuest guest = BookingGuest.findByDeclineToken(declineToken);
+        if (guest == null) {
+            throw new NotFoundException("No guest for token " + declineToken);
+        }
+        if (guest.status == GuestStatus.DECLINED) {
+            return; // idempotent: a second decline click is a no-op
+        }
+        guest.status = GuestStatus.DECLINED;
+        guestDeclinedEvent.fire(new GuestDeclined(guest.bookingId, guest.id));
     }
 }

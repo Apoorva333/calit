@@ -218,7 +218,7 @@ public class PublicResource {
             String locale = activeLocale.current().getLanguage();
             booking = bookingService.book(
                     owner.id, slug, Instant.parse(startUtc), inviteeName, inviteeEmail, answers,
-                    turnstileToken, website, locale);
+                    turnstileToken, website, locale, java.util.List.of());
         } catch (BookingValidationException | AbuseException | RateLimitException
                  | BookingConflictException be) {
             // Required-field 422 OR an abuse-guard rejection (filled honeypot / failed Turnstile /

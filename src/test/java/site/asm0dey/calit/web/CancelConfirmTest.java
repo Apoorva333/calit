@@ -63,7 +63,7 @@ class CancelConfirmTest {
 
         var slot = bookingService.availableSlots(t, now(), now().plusDays(14)).getFirst();
         Booking b = bookingService.book(1L, "cancel-confirm-type", slot.start().toInstant(),
-                "Test Invitee", "invitee@example.com", java.util.Map.of(), "", "", "en");
+                "Test Invitee", "invitee@example.com", java.util.Map.of(), "", "", "en", java.util.List.of());
         return b.manageToken;
     }
 

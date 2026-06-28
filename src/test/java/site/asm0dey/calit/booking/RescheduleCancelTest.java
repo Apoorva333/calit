@@ -48,7 +48,7 @@ class RescheduleCancelTest {
         when(calendarPort.createEvent(anyLong(), anyString(), anyString(), any(), any(), any(), anyBoolean(), any()))
                 .thenReturn(new CreatedEvent("evt-r", "https://meet.google.com/r-r-r", "h"));
 
-        Booking b = bookingService.book(1L, "resched", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "", "en");
+        Booking b = bookingService.book(1L, "resched", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "", "en", List.of());
 
         // Reschedule is keyed by the invitee's manage-token, not the numeric id.
         bookingService.reschedule(b.manageToken, SLOT_10);
@@ -78,7 +78,7 @@ class RescheduleCancelTest {
         // Book PENDING, then approve so it has a CONFIRMED Google event to delete on reschedule.
         when(calendarPort.createEvent(anyLong(), anyString(), anyString(), any(), any(), any(), anyBoolean(), any()))
                 .thenReturn(new CreatedEvent("evt-ra", "https://meet.google.com/ra-1-2", "h"));
-        Booking b = bookingService.book(1L, "resched-approval", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "", "en");
+        Booking b = bookingService.book(1L, "resched-approval", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "", "en", List.of());
         bookingService.approve(b.id);
 
         bookingService.reschedule(b.manageToken, SLOT_10);
@@ -102,7 +102,7 @@ class RescheduleCancelTest {
         when(calendarPort.createEvent(anyLong(), anyString(), anyString(), any(), any(), any(), anyBoolean(), any()))
                 .thenReturn(new CreatedEvent("evt-c", "https://meet.google.com/c-c-c", "h"));
 
-        Booking b = bookingService.book(1L, "cancel", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "", "en");
+        Booking b = bookingService.book(1L, "cancel", SLOT_09, "Sam", "sam@example.com", Map.of(), "tok", "", "en", List.of());
         assertTrue(bookingService.availableSlots(t, DAY, DAY).stream()
                 .noneMatch(s -> s.start().toLocalTime().equals(LocalTime.of(9, 0))));
 

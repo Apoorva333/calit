@@ -19,7 +19,7 @@ class InviteeEmailValidationTest {
     void rejectsCrlfInjectionInEmail() {
         assertThrows(BookingValidationException.class, () ->
                 bookingService.book(1L, "intro", Instant.parse("2099-01-01T10:00:00Z"),
-                        "Mallory", "a@b.com\r\nBcc: attacker@evil.com", Map.of(), null, null, "en"));
+                        "Mallory", "a@b.com\r\nBcc: attacker@evil.com", Map.of(), null, null, "en", java.util.List.of()));
     }
 
     @Test
@@ -27,14 +27,14 @@ class InviteeEmailValidationTest {
         String huge = "x".repeat(250) + "@b.com";
         assertThrows(BookingValidationException.class, () ->
                 bookingService.book(1L, "intro", Instant.parse("2099-01-01T10:00:00Z"),
-                        "Mallory", huge, Map.of(), null, null, "en"));
+                        "Mallory", huge, Map.of(), null, null, "en", java.util.List.of()));
     }
 
     @Test
     void rejectsMalformedEmail() {
         assertThrows(BookingValidationException.class, () ->
                 bookingService.book(1L, "intro", Instant.parse("2099-01-01T10:00:00Z"),
-                        "Mallory", "not-an-email", Map.of(), null, null, "en"));
+                        "Mallory", "not-an-email", Map.of(), null, null, "en", java.util.List.of()));
     }
 
     @Test
@@ -42,7 +42,7 @@ class InviteeEmailValidationTest {
         String longName = "n".repeat(201);
         assertThrows(BookingValidationException.class, () ->
                 bookingService.book(1L, "intro", Instant.parse("2099-01-01T10:00:00Z"),
-                        longName, "a@b.com", Map.of(), null, null, "en"));
+                        longName, "a@b.com", Map.of(), null, null, "en", java.util.List.of()));
     }
 
     @Test
@@ -50,6 +50,6 @@ class InviteeEmailValidationTest {
         String longAnswer = "x".repeat(2001);
         assertThrows(BookingValidationException.class, () ->
                 bookingService.book(1L, "intro", Instant.parse("2099-01-01T10:00:00Z"),
-                        "Bob", "a@b.com", Map.of("note", longAnswer), null, null, "en"));
+                        "Bob", "a@b.com", Map.of("note", longAnswer), null, null, "en", java.util.List.of()));
     }
 }

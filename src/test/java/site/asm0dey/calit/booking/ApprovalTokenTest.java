@@ -98,7 +98,7 @@ class ApprovalTokenTest {
         seedSettings();
         approvalType("approve"); // requiresApproval = true
         Booking b = bookingService.book(1L, "approve", SLOT, "Sam", "sam@example.com",
-                Map.of(), "tok", "", "en");
+                Map.of(), "tok", "", "en", java.util.List.of());
         assertNotNull(b.approvalToken, "approval-required booking must mint an approvalToken");
     }
 
@@ -108,7 +108,7 @@ class ApprovalTokenTest {
         seedSettings();
         autoType("auto"); // requiresApproval = false
         Booking b = bookingService.book(1L, "auto", SLOT, "Sam", "sam@example.com",
-                Map.of(), "tok", "", "en");
+                Map.of(), "tok", "", "en", java.util.List.of());
         assertNull(b.approvalToken, "auto-confirmed booking needs no approvalToken");
     }
 }

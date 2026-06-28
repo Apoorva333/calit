@@ -53,7 +53,7 @@ public class BookingResource {
         String locale = activeLocale.current().getLanguage();
         Booking b = bookingService.book(owner.id, req.slug(), Instant.parse(req.startUtc()),
                 req.inviteeName(), req.inviteeEmail(), req.answers(), req.turnstileToken(), req.honeypot(),
-                locale);
+                locale, java.util.List.of());
         return Response.status(Response.Status.CREATED).entity(b).build();
     }
 

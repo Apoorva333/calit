@@ -57,7 +57,7 @@ class BookingLocaleTest {
                 .plusDays(2).withHour(10).withMinute(0).withSecond(0).withNano(0);
 
         Booking b = bookingService.book(t.ownerId, t.slug, slot.toInstant(),
-                "Erika", "erika@example.de", Map.of(), null, null, "de");
+                "Erika", "erika@example.de", Map.of(), null, null, "de", java.util.List.of());
 
         assertEquals("de", b.locale);
     }
@@ -70,7 +70,7 @@ class BookingLocaleTest {
                 .plusDays(2).withHour(11).withMinute(0).withSecond(0).withNano(0);
 
         Booking b = bookingService.book(t.ownerId, t.slug, slot.toInstant(),
-                "Xavier", "xavier@example.com", Map.of(), null, null, "xx");
+                "Xavier", "xavier@example.com", Map.of(), null, null, "xx", java.util.List.of());
 
         assertEquals("en", b.locale);
     }
@@ -83,7 +83,7 @@ class BookingLocaleTest {
                 .plusDays(2).withHour(12).withMinute(0).withSecond(0).withNano(0);
 
         Booking b = bookingService.book(t.ownerId, t.slug, slot.toInstant(),
-                "Nadia", "nadia@example.com", Map.of(), null, null, null);
+                "Nadia", "nadia@example.com", Map.of(), null, null, null, java.util.List.of());
 
         assertEquals("en", b.locale);
     }

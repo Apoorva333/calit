@@ -60,7 +60,7 @@ class AdminPendingTest {
         var slot = bookingService.availableSlots(t, now(),
                 now().plusDays(14)).getFirst();
         Booking b = bookingService.book(1L, slug, slot.start().toInstant(),
-                "Pending Pat", "pat@example.com", java.util.Map.of(), "", "", "en");
+                "Pending Pat", "pat@example.com", java.util.Map.of(), "", "", "en", List.of());
         return b.id; // status == PENDING
     }
 

@@ -73,7 +73,7 @@ class ApprovalLinkTest {
         assertFalse(slots.isEmpty(), "no available slots seeded — check AvailabilityRule setup");
         var slot = slots.get(0);
         Booking b = bookingService.book(1L, slug, slot.start().toInstant(),
-                "Test User", "test@example.com", Map.of(), "", "", "en");
+                "Test User", "test@example.com", Map.of(), "", "", "en", List.of());
         // Reload to get the persisted approvalToken
         Booking loaded = Booking.findById(b.id);
         return new BookingRef(loaded.id, loaded.approvalToken);
