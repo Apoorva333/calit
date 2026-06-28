@@ -1,0 +1,43 @@
+{@java.lang.String initial}
+<label class="label" for="guest-entry">{msg:pub_book_guests_label}</label>
+<div id="guests-chips" class="flex flex-wrap gap-2 mb-2"></div>
+<input id="guest-entry" class="input w-full" type="email" autocomplete="off"
+       placeholder="{msg:pub_book_guests_hint}">
+{! Source of truth: pre-filled with existing guests so a no-JS reschedule still submits them.
+   The script below clears the visible field and lets chips own this value. !}
+<input type="hidden" name="guests" id="guests-data" value="{initial ?: ''}">
+<script>
+(function () {
+  var entry = document.getElementById('guest-entry');
+  var data = document.getElementById('guests-data');
+  var chips = document.getElementById('guests-chips');
+  if (!entry || !data || !chips) return;
+  var list = (data.value || '').split(/[,\s]+/).filter(Boolean);
+  function sync() { data.value = list.join(','); render(); }
+  function render() {
+    chips.textContent = '';
+    list.forEach(function (email, i) {
+      var chip = document.createElement('span');
+      chip.className = 'badge badge-neutral gap-1';
+      chip.textContent = email;
+      var x = document.createElement('button');
+      x.type = 'button'; x.className = 'btn btn-xs btn-circle btn-ghost'; x.textContent = '×';
+      x.addEventListener('click', function () { list.splice(i, 1); sync(); });
+      chip.appendChild(x);
+      chips.appendChild(chip);
+    });
+  }
+  function add() {
+    var v = entry.value.trim().replace(/[,\s]+$/, '');
+    if (v && list.indexOf(v) === -1) list.push(v);
+    entry.value = ''; sync();
+  }
+  entry.addEventListener('keydown', function (e) {
+    if ((e.key === 'Enter' || e.key === 'Tab' || e.key === ',') && entry.value.trim()) {
+      e.preventDefault(); add();
+    }
+  });
+  entry.addEventListener('blur', add);
+  render();
+})();
+</script>

@@ -11,6 +11,7 @@
 {@java.lang.String turnstileSiteKey}
 {@java.lang.Boolean googleConnected}
 {@java.lang.String ownerName}
+{@java.lang.String initialGuests}
 {#include base title=title bodyClass="book-page"}
   {#head}
     {#if turnstileEnabled}
@@ -75,6 +76,7 @@
                 <input id="inviteeName" class="input w-full" type="text" name="inviteeName" required>
                 <label class="label" for="inviteeEmail">{msg:pub_book_your_email}</label>
                 <input id="inviteeEmail" class="input w-full" type="email" name="inviteeEmail" required>
+                {#include PublicResource/_guestschips initial=initialGuests /}
                 {#for f in fields}
                   <label class="label" for="f-{f.fieldKey}">{f.label}</label>
                   {#if f.type.name == 'LONG_TEXT'}

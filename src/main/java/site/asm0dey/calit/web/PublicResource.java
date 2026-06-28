@@ -53,7 +53,8 @@ public class PublicResource {
                 boolean turnstileEnabled,
                 String turnstileSiteKey,
                 boolean googleConnected,
-                String ownerName);
+                String ownerName,
+                String initialGuests);
 
         public static native TemplateInstance confirmation(
                 String title,
@@ -65,7 +66,14 @@ public class PublicResource {
                 String title,
                 site.asm0dey.calit.booking.Booking booking, String currentLabel, String currentUtcIso,
                 java.util.List<PublicResource.DaySlots> days,
-                String tzBar, String tzScript, String calScript);
+                String tzBar, String tzScript, String calScript, String initialGuests);
+
+        public static native TemplateInstance guestDeclineConfirm(
+                String title, site.asm0dey.calit.booking.Booking booking,
+                site.asm0dey.calit.domain.MeetingType type, String guestEmail,
+                String guestDeclineToken, String tzScript);
+
+        public static native TemplateInstance guestDeclined(String title);
 
         public static native TemplateInstance cancelConfirm(
                 String title, site.asm0dey.calit.booking.Booking booking,
@@ -170,11 +178,21 @@ public class PublicResource {
         return Templates.book(bookTitle, owner.username, type, byDate, fields, null,
                               Layout.TZ_BAR, Layout.TZ_SCRIPT, Layout.CALENDAR_SCRIPT,
                               turnstileEnabled, turnstileSiteKey(), calendarPort.isConnected(owner.id),
-                              settings.ownerName);
+                              settings.ownerName, "");
     }
 
     private String turnstileSiteKey() {
         return turnstileSiteKeyConfig.orElse("");
+    }
+
+    /** Splits the optional "guests" form field on commas/whitespace into a clean email list. */
+    private static List<String> parseGuests(MultivaluedMap<String, String> form) {
+        String raw = form.getFirst("guests");
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        return java.util.Arrays.stream(raw.split("[,\\s]+"))
+                .map(String::trim).filter(s -> !s.isBlank()).toList();
     }
 
     @POST
@@ -218,7 +236,7 @@ public class PublicResource {
             String locale = activeLocale.current().getLanguage();
             booking = bookingService.book(
                     owner.id, slug, Instant.parse(startUtc), inviteeName, inviteeEmail, answers,
-                    turnstileToken, website, locale, java.util.List.of());
+                    turnstileToken, website, locale, parseGuests(form));
         } catch (BookingValidationException | AbuseException | RateLimitException
                  | BookingConflictException be) {
             // Required-field 422 OR an abuse-guard rejection (filled honeypot / failed Turnstile /
@@ -228,7 +246,7 @@ public class PublicResource {
                                   be.getMessage(),
                                   Layout.TZ_BAR, Layout.TZ_SCRIPT, Layout.CALENDAR_SCRIPT,
                                   turnstileEnabled, turnstileSiteKey(), calendarPort.isConnected(owner.id),
-                                  settings.ownerName);
+                                  settings.ownerName, "");
         }
         return confirmationPage(booking, type);
     }
@@ -276,8 +294,10 @@ public class PublicResource {
         String current = booking.startUtc.atZone(zone)
                 .format(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy 'at' HH:mm (z)"));
         String currentUtcIso = booking.startUtc.toString(); // absolute instant for data-utc
+        String guestsCsv = BookingGuest.activeForBooking(booking.id).stream()
+                .map(g -> g.email).collect(java.util.stream.Collectors.joining(","));
         return Templates.manage(m.pub_manage_title(), booking, current, currentUtcIso, byDate,
-                                Layout.TZ_BAR, Layout.TZ_SCRIPT, Layout.CALENDAR_SCRIPT);
+                                Layout.TZ_BAR, Layout.TZ_SCRIPT, Layout.CALENDAR_SCRIPT, guestsCsv);
     }
 
     @POST
@@ -285,11 +305,12 @@ public class PublicResource {
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance rescheduleBooking(@PathParam("manageToken") String manageToken,
-                                              @RestForm String startUtc) {
+                                              @RestForm String startUtc,
+                                              MultivaluedMap<String, String> form) {
         // startUtc is the absolute UTC instant the invitee chose; the viewer's display zone
         // never altered it (the picker only relabels). reschedule(...) is keyed by the token.
         // For approval types Plan 3 returns the booking to PENDING; auto types stay CONFIRMED.
-        Booking booking = bookingService.reschedule(manageToken, Instant.parse(startUtc));
+        Booking booking = bookingService.reschedule(manageToken, Instant.parse(startUtc), parseGuests(form));
         MeetingType type = MeetingType.findById(booking.meetingTypeId);
         return confirmationPage(booking, type);
     }
@@ -319,6 +340,34 @@ public class PublicResource {
         var m = messages.forLocale(activeLocale.current());
         bookingService.cancel(manageToken); // keyed by the token
         return Templates.cancelled(m.pub_cancelled_title());
+    }
+
+    @GET
+    @Path("/guest/{declineToken}/decline")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance guestDeclineConfirm(@PathParam("declineToken") String declineToken) {
+        var m = messages.forLocale(activeLocale.current());
+        BookingGuest guest = BookingGuest.findByDeclineToken(declineToken); // unguessable key
+        if (guest == null) {
+            throw new NotFoundException("No guest for token " + declineToken);
+        }
+        if (guest.status != GuestStatus.INVITED) {
+            return Templates.guestDeclined(m.pub_guest_declined_title()); // already declined/removed
+        }
+        Booking booking = Booking.findById(guest.bookingId);
+        MeetingType type = MeetingType.findById(booking.meetingTypeId);
+        return Templates.guestDeclineConfirm(m.pub_guest_decline_confirm_title(), booking, type,
+                guest.email, declineToken, Layout.TZ_SCRIPT);
+    }
+
+    @POST
+    @Path("/guest/{declineToken}/decline")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance guestDecline(@PathParam("declineToken") String declineToken) {
+        var m = messages.forLocale(activeLocale.current());
+        bookingService.declineGuest(declineToken); // keyed by the token; idempotent
+        return Templates.guestDeclined(m.pub_guest_declined_title());
     }
 
     /** Resolve the {user} segment to an owner, 404 if unknown, and bind CurrentOwner for the request. */

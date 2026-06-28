@@ -223,6 +223,44 @@ public interface AppMessages {
     @Message("Book —")
     String pub_book_title_prefix();
 
+    @Message("Guests (optional)")
+    String pub_book_guests_label();
+
+    @Message("Type an email and press Enter")
+    String pub_book_guests_hint();
+
+    // ---- Guest decline pages ----
+
+    @Message("Decline invitation")
+    String pub_guest_decline_confirm_title();
+
+    @Message("Decline this invitation?")
+    String pub_guest_decline_confirm_h1();
+
+    @Message("Invitation for:")
+    String pub_guest_decline_invitation_for();
+
+    @Message("You'll be removed from this meeting and won't receive further updates.")
+    String pub_guest_decline_confirm_desc();
+
+    @Message("Decline")
+    String pub_guest_decline_confirm_btn();
+
+    @Message("Keep my spot")
+    String pub_guest_decline_keep_btn();
+
+    @Message("Invitation declined")
+    String pub_guest_declined_title();
+
+    @Message("You've declined")
+    String pub_guest_declined_h1();
+
+    @Message("You've been removed from this meeting. The organizer has been notified.")
+    String pub_guest_declined_desc();
+
+    @Message("Done")
+    String pub_guest_declined_btn();
+
     @Message("← All meeting types")
     String pub_book_back();
 
