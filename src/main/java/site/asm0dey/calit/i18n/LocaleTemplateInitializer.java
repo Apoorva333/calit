@@ -48,12 +48,11 @@ public class LocaleTemplateInitializer implements TemplateInstance.Initializer {
                 }
             }
         }
+        Locale effective = (locale != null) ? locale : AppLocales.DEFAULT;
         if (locale != null) {
             instance.setLocale(locale);
-            instance.data("lang", locale.toLanguageTag());
-        } else {
-            instance.data("lang", AppLocales.DEFAULT.toLanguageTag());
         }
+        instance.data("lang", effective.toLanguageTag());
         instance.data("returnPath", returnPath);
         instance.data("localeOptions", localeOptions);
     }
