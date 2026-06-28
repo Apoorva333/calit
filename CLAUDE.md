@@ -61,6 +61,12 @@ Every tenant row carries `owner_id`. `CurrentOwner` is `@RequestScoped` holder s
 
 Qute `@CheckedTemplate` (static native `TemplateInstance` methods in resource's inner `Templates` class) → `src/main/resources/templates/<ResourceName>/`. `maven.compiler.parameters=true` required so Qute sees template param names. UI is **Tailwind v4 + daisyUI 5** (custom `calit-light` theme) compiled to self-hosted `/calit.css` — no runtime CDN. (Some Java comments still mention "Pico CSS"; Pico removed.)
 
+### Internationalization (i18n)
+
+User-facing strings are type-safe `@Message` keys: UI bundle `AppMessages` (`{msg:key}`, namespace `msg`) and admin bundle `AdminMessages` (`adm`). The English text is the `@Message` default on the method; translations live in `src/main/resources/messages/{msg,adm}_{de,he}.properties`, keyed by method name. A missing key silently falls back to the English default.
+
+**Every new or changed user-facing string MUST be translated in the same change** — add the `de` **and** `he` value to the matching `messages/*.properties` file alongside the new `@Message` default. Do not lean on the English fallback. If you genuinely can't provide a translation (e.g. no confident Hebrew), open a GitHub issue labelled for translation and reference it in the PR — the key still ships with its English default, but the gap is tracked, never silent. Keep `{placeholder}` names identical across all locales. Quick parity check: every `String key()` in a bundle interface must have a matching `key=` line in each locale file.
+
 ## Database / migrations
 
 Flyway migrations `V1…V10` in `src/main/resources/db/migration/`, applied at boot (`quarkus.flyway.migrate-at-start=true`). Hibernate **validate-only** (`schema-management.strategy=validate`) — never creates schema; migrations own it. **Never edit applied migration** (Flyway checksum validation fails — even comment changes break it). Add new `V*.sql` for every change.
