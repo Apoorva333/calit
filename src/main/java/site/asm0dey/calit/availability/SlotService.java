@@ -40,8 +40,8 @@ public class SlotService {
                 int duration = type.durationMinutes;
                 // Work in minute-of-day to avoid LocalTime.plusMinutes() wrapping past midnight,
                 // which (e.g. a window ending 23:30 with a 30-min duration) would loop forever.
-                int startMin = window.start().toSecondOfDay() / 60;
-                int endMin = window.end().toSecondOfDay() / 60;
+                var startMin = window.start().toSecondOfDay() / 60;
+                var endMin = window.end().toSecondOfDay() / 60;
                 for (var s = startMin; s + duration <= endMin; s += step) {
                     var start = LocalTime.ofSecondOfDay(s * 60L);
                     var end = LocalTime.ofSecondOfDay((s + duration) * 60L);

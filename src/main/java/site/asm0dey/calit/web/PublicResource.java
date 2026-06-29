@@ -445,7 +445,7 @@ public class PublicResource {
         Map<String, DaySlots> byIso = new LinkedHashMap<>();
         for (TimeSlot slot : bookingService.availableSlots(type, from, to)) {
             String isoDate = slot.start().toLocalDate().toString();
-            DaySlots day = byIso.computeIfAbsent(
+            var day = byIso.computeIfAbsent(
                     isoDate, k -> new DaySlots(k, slot.start().format(DATE_FMT), new java.util.ArrayList<>()));
             day.slots()
                     .add(new SlotView(

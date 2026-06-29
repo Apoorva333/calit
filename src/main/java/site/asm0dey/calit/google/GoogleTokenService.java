@@ -142,7 +142,7 @@ public class GoogleTokenService {
      */
     @Transactional
     public void exchangeCode(Long ownerId, String code, Instant now) {
-        TokenResponse resp = requestToken("authorization_code", code, now);
+        var resp = requestToken("authorization_code", code, now);
         if (resp.googleSub() == null) {
             throw new IllegalStateException("Google id_token missing 'sub'; check the openid scope.");
         }

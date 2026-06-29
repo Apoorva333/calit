@@ -35,7 +35,7 @@ public class CalendarSelectionService {
 
     @Transactional
     public void save(Long ownerId, List<Selection> selections) {
-        long writeTargets = selections.stream().filter(Selection::writeTarget).count();
+        var writeTargets = selections.stream().filter(Selection::writeTarget).count();
         if (writeTargets > 1) {
             throw new IllegalArgumentException("At most one write-target calendar is allowed");
         }

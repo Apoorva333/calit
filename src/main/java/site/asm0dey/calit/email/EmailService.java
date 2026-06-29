@@ -217,7 +217,7 @@ public class EmailService {
     void handleRequested(BookingRequested e) {
         Loaded l = load(e.bookingId());
         if (l == null) return;
-        String location = resolveLocation(l);
+        var location = resolveLocation(l);
         Locale inviteeLocale = AppLocales.pick(l.booking.locale);
         Locale ownerLocale = AppLocales.pick(l.owner.locale);
         String inviteeStart = format(l.booking.startUtc, l.zone, inviteeLocale);
@@ -256,7 +256,7 @@ public class EmailService {
     void handleConfirmed(BookingConfirmed e) {
         Loaded l = load(e.bookingId());
         if (l == null) return;
-        String location = resolveLocation(l);
+        var location = resolveLocation(l);
         Locale inviteeLocale = AppLocales.pick(l.booking.locale);
         Locale ownerLocale = AppLocales.pick(l.owner.locale);
         String inviteeStart = format(l.booking.startUtc, l.zone, inviteeLocale);
@@ -294,7 +294,7 @@ public class EmailService {
     void handleApproved(BookingApproved e) {
         Loaded l = load(e.bookingId());
         if (l == null) return;
-        String location = resolveLocation(l);
+        var location = resolveLocation(l);
         Locale inviteeLocale = AppLocales.pick(l.booking.locale);
         Locale ownerLocale = AppLocales.pick(l.owner.locale);
         String inviteeStart = format(l.booking.startUtc, l.zone, inviteeLocale);
@@ -377,7 +377,7 @@ public class EmailService {
 
     /** Renders the declined email and enqueues it in the CALLER's transaction (atomic with the claim). */
     public void enqueueDeclined(Long bookingId) {
-        Loaded l = read(bookingId);
+        var l = read(bookingId);
         if (l == null) return;
         deliverDeclined(l, EmailService::enqueueToOutbox);
     }
@@ -385,7 +385,7 @@ public class EmailService {
     void handleRescheduled(BookingRescheduled e) {
         Loaded l = load(e.bookingId());
         if (l == null) return;
-        String location = resolveLocation(l);
+        var location = resolveLocation(l);
         Locale inviteeLocale = AppLocales.pick(l.booking.locale);
         Locale ownerLocale = AppLocales.pick(l.owner.locale);
         String inviteeNewStart = format(l.booking.startUtc, l.zone, inviteeLocale);
@@ -465,7 +465,7 @@ public class EmailService {
 
     /** Renders + delivers the reminder email through the given sink (direct or outbox). */
     private void deliverReminder(Loaded l, MailSink sink) {
-        String location = resolveLocation(l);
+        var location = resolveLocation(l);
         Locale inviteeLocale = AppLocales.pick(l.booking.locale);
         Locale ownerLocale = AppLocales.pick(l.owner.locale);
         String inviteeStart = format(l.booking.startUtc, l.zone, inviteeLocale);
@@ -501,7 +501,7 @@ public class EmailService {
 
     /** Renders the reminder email and enqueues it in the CALLER's transaction (atomic with the claim). */
     public void enqueueReminder(Long bookingId) {
-        Loaded l = read(bookingId);
+        var l = read(bookingId);
         if (l == null) return;
         deliverReminder(l, EmailService::enqueueToOutbox);
     }
