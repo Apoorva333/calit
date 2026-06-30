@@ -58,7 +58,8 @@ class RescheduleCancelTest {
         assertEquals(BookingStatus.CONFIRMED, loaded.status);
         assertEquals(SLOT_10, loaded.startUtc);
         assertEquals(SLOT_10.plusSeconds(3600), loaded.endUtc);
-        verify(calendarPort, times(1)).updateEvent(anyLong(), eq("evt-r"), eq(SLOT_10), eq(SLOT_10.plusSeconds(3600)));
+        verify(calendarPort, times(1))
+                .updateEvent(anyLong(), eq("evt-r"), eq(SLOT_10), eq(SLOT_10.plusSeconds(3600)), any());
 
         // Old 09:00 time is free again; new 10:00 time is now taken.
         List<TimeSlot> avail = bookingService.availableSlots(t, DAY, DAY);
@@ -91,7 +92,7 @@ class RescheduleCancelTest {
         assertNull(loaded.googleEventId, "the prior event is deleted on re-request");
         assertNull(loaded.meetLink);
         verify(calendarPort, times(1)).deleteEvent(anyLong(), eq("evt-ra"));
-        verify(calendarPort, never()).updateEvent(anyLong(), any(), any(), any());
+        verify(calendarPort, never()).updateEvent(anyLong(), any(), any(), any(), any());
     }
 
     @Test

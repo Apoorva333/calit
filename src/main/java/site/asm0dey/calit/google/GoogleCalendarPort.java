@@ -225,13 +225,18 @@ public class GoogleCalendarPort implements CalendarPort {
 
     @Override
     @Transactional
-    public void updateEvent(Long ownerId, String eventId, Instant start, Instant end) {
+    public void updateEvent(Long ownerId, String eventId, Instant start, Instant end, List<String> attendeeEmails) {
         var ctx = writeContext(ownerId);
         GoogleCalendar target = ctx.target();
         GoogleCredential cred = ctx.cred();
         Event patch = new Event().setStart(eventTime(ownerId, start)).setEnd(eventTime(ownerId, end));
+        if (attendeeEmails != null && !attendeeEmails.isEmpty()) {
+            patch.setAttendees(attendeeEmails.stream()
+                    .map(email -> new EventAttendee().setEmail(email))
+                    .toList());
+        }
         try {
-            // sendUpdates=all so Google emails the attendees the rescheduled time.
+            // sendUpdates=all so Google emails attendees the new time and notifies anyone added/removed.
             client(cred)
                     .events()
                     .patch(target.googleCalendarId, eventId, patch)

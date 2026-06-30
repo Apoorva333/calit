@@ -485,7 +485,7 @@ public class BookingService {
             bookingRequestedEvent.fire(new BookingRequested(booking.id)); // re-approval request
         } else {
             if (calendarPort.isConnected(type.ownerId) && booking.googleEventId != null) {
-                calendarPort.updateEvent(type.ownerId, booking.googleEventId, newStartUtc, newEnd);
+                calendarPort.updateEvent(type.ownerId, booking.googleEventId, newStartUtc, newEnd, null);
             }
             bookingRescheduledEvent.fire(new BookingRescheduled(booking.id, oldStart));
         }
