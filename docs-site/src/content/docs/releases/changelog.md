@@ -9,6 +9,30 @@ asset downloads, are on
 
 ## Unreleased
 
+## 1.14.0
+
+Google-native guest invites — when Google is connected, Google is the single
+calendar source for everyone on a booking.
+
+- **Guests now appear on the Google Calendar event.** When the owner has Google
+  connected, invitee-added guests are added as attendees on the Google event
+  (previously only the invitee and owner were), so they show up in the participant
+  list and receive Google's own invitation. Guest changes stay in sync: declining a
+  guest or rescheduling re-syncs the event's attendees, and a removed guest gets
+  Google's cancellation.
+- **No duplicate calendar entries when Google is connected.** calit no longer
+  attaches its own `.ics` to booking emails when Google is connected — Google sends
+  the authoritative invite/update/cancellation. calit still emails everyone so its
+  **Reschedule** (invitee) and **Decline** (guest) links, which Google's native
+  invite doesn't carry, still reach them. When Google is **not** connected, calit's
+  `.ics` remains the only calendar source, unchanged.
+- **Tidier emails.** Removed the redundant "This message was sent to the …" footer
+  line from all booking emails.
+
+Known limitation: because guests are now Google attendees, Google shows them its own
+Accept/Decline buttons; a guest who responds in Google instead of via calit's decline
+link won't update calit's guest list. No configuration or migration steps.
+
 ## 1.13.0
 
 Owner-side booking management, plus a friendlier email sender name.
