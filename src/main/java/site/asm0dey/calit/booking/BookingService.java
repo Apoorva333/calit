@@ -284,11 +284,27 @@ public class BookingService {
                 "Booked via calit.",
                 booking.startUtc,
                 booking.endUtc,
-                List.of(booking.inviteeEmail, owner.ownerEmail),
+                attendeeEmails(booking, owner),
                 type.locationType == LocationType.GOOGLE_MEET,
                 type.locationDetail);
         booking.googleEventId = created.googleEventId();
         booking.meetLink = created.meetLink();
+    }
+
+    /**
+     * The full Google attendee set for this booking: invitee + owner + currently-active (INVITED) guests.
+     * ponytail: guests here also gain Google's native Accept/Decline RSVP, which calit can't observe — the
+     * calit decline link stays authoritative; a Google-side RSVP won't update BookingGuest.status. No Google
+     * API suppresses native RSVP, so this is accepted.
+     */
+    private static List<String> attendeeEmails(Booking booking, OwnerSettings owner) {
+        List<String> emails = new ArrayList<>();
+        emails.add(booking.inviteeEmail);
+        emails.add(owner.ownerEmail);
+        for (BookingGuest g : BookingGuest.<BookingGuest>activeForBooking(booking.id)) {
+            emails.add(g.email);
+        }
+        return emails;
     }
 
     /**
@@ -485,7 +501,9 @@ public class BookingService {
             bookingRequestedEvent.fire(new BookingRequested(booking.id)); // re-approval request
         } else {
             if (calendarPort.isConnected(type.ownerId) && booking.googleEventId != null) {
-                calendarPort.updateEvent(type.ownerId, booking.googleEventId, newStartUtc, newEnd);
+                OwnerSettings owner = OwnerSettings.forOwner(type.ownerId);
+                calendarPort.updateEvent(
+                        type.ownerId, booking.googleEventId, newStartUtc, newEnd, attendeeEmails(booking, owner));
             }
             bookingRescheduledEvent.fire(new BookingRescheduled(booking.id, oldStart));
         }
@@ -561,6 +579,18 @@ public class BookingService {
             return; // idempotent: a second decline click is a no-op
         }
         guest.status = GuestStatus.DECLINED;
+        // Re-sync the Google attendee list (now excludes this guest, since activeForBooking returns only INVITED).
+        // Google emails the removed guest a cancellation via sendUpdates=all.
+        Booking booking = Booking.findById(guest.bookingId);
+        if (booking != null && calendarPort.isConnected(guest.ownerId) && booking.googleEventId != null) {
+            OwnerSettings owner = OwnerSettings.forOwner(guest.ownerId);
+            calendarPort.updateEvent(
+                    guest.ownerId,
+                    booking.googleEventId,
+                    booking.startUtc,
+                    booking.endUtc,
+                    attendeeEmails(booking, owner));
+        }
         guestDeclinedEvent.fire(new GuestDeclined(guest.bookingId, guest.id));
     }
 }

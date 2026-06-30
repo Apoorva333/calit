@@ -93,10 +93,10 @@ class EmailServiceTest {
         assertHasIcsAttachment(m);
     }
 
-    // ---- Confirmed + Google connected: invitee gets NO app mail; owner still does ----
+    // ---- Confirmed + Google connected: invitee + owner both get link email, but NO .ics ----
 
     @Test
-    void confirmedWhenGoogleConnectedSuppressesInviteeButOwnerStillGetsMail() {
+    void confirmedWhenGoogleConnectedSendsLinkEmailToInviteeAndOwnerWithoutIcs() {
         when(calendarPort.isConnected(anyLong())).thenReturn(true);
         long bookingId = seed(
                 b -> {
@@ -109,12 +109,19 @@ class EmailServiceTest {
 
         emailService.handleConfirmed(new BookingConfirmed(bookingId));
 
-        assertTrue(
-                mailbox.getMailsSentTo(INVITEE_EMAIL).isEmpty(),
-                "connected -> Google emails the invitee, app must not");
+        assertEquals(
+                1, mailbox.getMailsSentTo(INVITEE_EMAIL).size(), "connected -> invitee still gets calit link email");
         assertEquals(1, mailbox.getMailsSentTo(OWNER_EMAIL).size(), "owner still gets the app mail");
-        assertEquals(1, mailbox.getTotalMessagesSent());
-        assertHasIcsAttachment(mailbox.getMailsSentTo(OWNER_EMAIL).getFirst());
+        assertEquals(2, mailbox.getTotalMessagesSent());
+        assertTrue(
+                mailbox.getMailsSentTo(INVITEE_EMAIL)
+                        .getFirst()
+                        .getAttachments()
+                        .isEmpty(),
+                "no .ics when Google notifies");
+        assertTrue(
+                mailbox.getMailsSentTo(OWNER_EMAIL).getFirst().getAttachments().isEmpty(),
+                "no .ics when Google notifies");
     }
 
     // ---- BookingRequested (PENDING): always to invitee + owner, regardless of Google ----
@@ -134,16 +141,14 @@ class EmailServiceTest {
 
         emailService.handleRequested(new BookingRequested(bookingId));
 
-        assertEquals(
-                1,
-                mailbox.getMailsSentTo(INVITEE_EMAIL).size(),
-                "requested is an always-send exception (no Google event)");
+        assertEquals(1, mailbox.getMailsSentTo(INVITEE_EMAIL).size(), "invitee always gets the request notice");
         assertEquals(1, mailbox.getMailsSentTo(OWNER_EMAIL).size());
         assertEquals(2, mailbox.getTotalMessagesSent());
         Mail m = mailbox.getMailsSentTo(INVITEE_EMAIL).getFirst();
         assertTrue(m.getSubject().toLowerCase().contains("request"));
         assertTrue(m.getHtml().contains("Need a demo"));
-        assertHasIcsAttachment(m);
+        // No .ics when Google is connected (Google notifies natively)
+        assertTrue(m.getAttachments().isEmpty(), "no .ics when Google connected");
     }
 
     // ---- BookingDeclined: always to invitee, regardless of Google ----
@@ -169,6 +174,7 @@ class EmailServiceTest {
         assertEquals(1, mailbox.getMailsSentTo(OWNER_EMAIL).size());
         Mail m = mailbox.getMailsSentTo(INVITEE_EMAIL).getFirst();
         assertTrue(m.getSubject().toLowerCase().contains("declin"));
+        assertTrue(m.getAttachments().isEmpty(), "no .ics when Google connected (no calendar event was ever created)");
     }
 
     // ---- ownerNotificationsEnabled = false: owner gets nothing; invitee per rules ----
@@ -193,7 +199,7 @@ class EmailServiceTest {
     }
 
     @Test
-    void ownerOptedOutAndGoogleConnectedSendsNothing() {
+    void ownerOptedOutAndGoogleConnectedSendsOnlyLinkEmailToInvitee() {
         when(calendarPort.isConnected(anyLong())).thenReturn(true);
         long bookingId = seed(
                 b -> {
@@ -206,8 +212,15 @@ class EmailServiceTest {
 
         emailService.handleConfirmed(new BookingConfirmed(bookingId));
 
-        assertEquals(
-                0, mailbox.getTotalMessagesSent(), "connected (invitee suppressed) + owner opted out -> zero mail");
+        assertTrue(mailbox.getMailsSentTo(OWNER_EMAIL).isEmpty(), "owner opted out -> no owner mail");
+        assertEquals(1, mailbox.getMailsSentTo(INVITEE_EMAIL).size(), "invitee always gets the calit link email");
+        assertEquals(1, mailbox.getTotalMessagesSent());
+        assertTrue(
+                mailbox.getMailsSentTo(INVITEE_EMAIL)
+                        .getFirst()
+                        .getAttachments()
+                        .isEmpty(),
+                "no .ics when Google connected");
     }
 
     // ---- Non-Meet location (PHONE) renders locationDetail, not a link ----
@@ -231,10 +244,10 @@ class EmailServiceTest {
         assertFalse(m.getHtml().contains("meet.google.com"), "no meet link for PHONE type");
     }
 
-    // ---- Reschedule follows the fallback rule too ----
+    // ---- Reschedule when connected: invitee + owner both get a link email, but NO .ics ----
 
     @Test
-    void rescheduleWhenConnectedSuppressesInviteeOwnerStillGets() {
+    void rescheduleWhenConnectedSendsLinkEmailToInviteeAndOwnerWithoutIcs() {
         when(calendarPort.isConnected(anyLong())).thenReturn(true);
         var newStart = Instant.parse("2026-06-10T09:00:00Z");
         long bookingId = seedAt(
@@ -250,13 +263,23 @@ class EmailServiceTest {
 
         emailService.handleRescheduled(new BookingRescheduled(bookingId, oldStart));
 
-        assertTrue(mailbox.getMailsSentTo(INVITEE_EMAIL).isEmpty());
+        assertEquals(
+                1, mailbox.getMailsSentTo(INVITEE_EMAIL).size(), "connected -> invitee still gets calit link email");
         assertEquals(1, mailbox.getMailsSentTo(OWNER_EMAIL).size());
         assertTrue(mailbox.getMailsSentTo(OWNER_EMAIL)
                 .getFirst()
                 .getSubject()
                 .toLowerCase()
                 .contains("reschedul"));
+        assertTrue(
+                mailbox.getMailsSentTo(INVITEE_EMAIL)
+                        .getFirst()
+                        .getAttachments()
+                        .isEmpty(),
+                "no .ics when Google notifies");
+        assertTrue(
+                mailbox.getMailsSentTo(OWNER_EMAIL).getFirst().getAttachments().isEmpty(),
+                "no .ics when Google notifies");
     }
 
     // ---- Cancellation: fallback rule, no location/meet link in body ----
@@ -361,6 +384,26 @@ class EmailServiceTest {
         assertNull(
                 mailbox.getMailsSentTo("u@example.com").getFirst().getFrom(),
                 "no per-message From -> falls back to config default");
+    }
+
+    @Test
+    void inviteeGetsLinkEmailWithoutIcsWhenGoogleConnected() {
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        long bookingId = seed(
+                b -> {
+                    b.status = BookingStatus.CONFIRMED;
+                    b.meetLink = "https://meet.google.com/link-test";
+                },
+                true,
+                LocationType.GOOGLE_MEET,
+                null);
+        emailService.handleConfirmed(new BookingConfirmed(bookingId));
+
+        List<Mail> toInvitee = mailbox.getMailsSentTo(INVITEE_EMAIL);
+        assertEquals(1, toInvitee.size(), "invitee still gets the calit notice (carries the manage link)");
+        Mail m = toInvitee.getFirst();
+        assertTrue(m.getHtml().contains("/manage"), "manage/reschedule link present");
+        assertTrue(m.getAttachments().isEmpty(), "no .ics when Google notifies");
     }
 
     // --- attachment assertion: every app-sent mail carries an .ics ---

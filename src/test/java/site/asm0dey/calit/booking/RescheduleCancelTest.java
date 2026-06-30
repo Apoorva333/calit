@@ -58,7 +58,8 @@ class RescheduleCancelTest {
         assertEquals(BookingStatus.CONFIRMED, loaded.status);
         assertEquals(SLOT_10, loaded.startUtc);
         assertEquals(SLOT_10.plusSeconds(3600), loaded.endUtc);
-        verify(calendarPort, times(1)).updateEvent(anyLong(), eq("evt-r"), eq(SLOT_10), eq(SLOT_10.plusSeconds(3600)));
+        verify(calendarPort, times(1))
+                .updateEvent(anyLong(), eq("evt-r"), eq(SLOT_10), eq(SLOT_10.plusSeconds(3600)), any());
 
         // Old 09:00 time is free again; new 10:00 time is now taken.
         List<TimeSlot> avail = bookingService.availableSlots(t, DAY, DAY);
@@ -91,7 +92,7 @@ class RescheduleCancelTest {
         assertNull(loaded.googleEventId, "the prior event is deleted on re-request");
         assertNull(loaded.meetLink);
         verify(calendarPort, times(1)).deleteEvent(anyLong(), eq("evt-ra"));
-        verify(calendarPort, never()).updateEvent(anyLong(), any(), any(), any());
+        verify(calendarPort, never()).updateEvent(anyLong(), any(), any(), any(), any());
     }
 
     @Test
@@ -118,6 +119,40 @@ class RescheduleCancelTest {
         // 09:00 slot is bookable again.
         assertTrue(bookingService.availableSlots(t, DAY, DAY).stream()
                 .anyMatch(s -> s.start().toLocalTime().equals(LocalTime.of(9, 0))));
+    }
+
+    @Test
+    @TestTransaction
+    void rescheduleSyncsAttendeesWhenGuestRemoved() {
+        seedSettings();
+        meetingTypeWithMondayWindow("resched-guest", false);
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
+        when(calendarPort.createEvent(anyLong(), anyString(), anyString(), any(), any(), any(), anyBoolean(), any()))
+                .thenReturn(new CreatedEvent("evt-rg", null, "https://calendar.google.com/evt-rg"));
+
+        Booking b = bookingService.book(
+                1L,
+                "resched-guest",
+                SLOT_09,
+                "Sam",
+                "sam@example.com",
+                Map.of(),
+                "tok-rg",
+                "",
+                "en",
+                List.of("g1@example.com"));
+
+        // reschedule to SLOT_10 with NO guests → g1 removed
+        bookingService.reschedule(b.manageToken, SLOT_10, List.of());
+
+        verify(calendarPort, times(1))
+                .updateEvent(
+                        anyLong(),
+                        eq("evt-rg"),
+                        eq(SLOT_10),
+                        eq(SLOT_10.plusSeconds(3600)),
+                        eq(List.of("sam@example.com", "owner@example.com")));
     }
 
     // --- helpers ---
