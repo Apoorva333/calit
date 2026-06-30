@@ -507,7 +507,8 @@ public class EmailService {
         deliverReminder(l, EmailService::enqueueToOutbox);
     }
 
-    // --- guest fan-out: guests are notified ONLY by calit .ics (no Google path), always. ---
+    // --- guest fan-out: guests always get a calit mail; .ics is attached only when Google is NOT
+    //     connected (when connected, guests are Google event attendees and Google sends the invite). ---
 
     /** REQUEST .ics + invite body to every active guest, in the booking (invitee's) locale. */
     private void sendGuestInvites(Loaded l, String location, String subject) {
