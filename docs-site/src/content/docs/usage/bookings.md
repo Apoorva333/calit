@@ -24,7 +24,16 @@ You can act on a pending request two ways:
 - **From the owner console** — the **Pending** page at `/me/pending` lists every request with Approve / Decline buttons.
 - **Straight from the request email** — the notification you receive carries one-click **Approve** and **Decline** links. Clicking one opens the owner console; if you are not signed in, you log in first and are returned to the action automatically. These links only work for you, the signed-in owner of the booking — they are not usable by anyone the email is forwarded to.
 
-Owner and invitee receive different copies of every booking email: yours is addressed to you and names the invitee, theirs is addressed to them. Each side only sees the links relevant to it.
+Owner and invitee receive different copies of every booking email: yours is addressed to you and names the invitee, theirs is addressed to them. Each side only sees the links relevant to it. Booking emails are sent with a friendly sender name — **`<Your name> via calit`** — so recipients recognise who the meeting is with, while the underlying address stays your configured `MAIL_FROM`.
+
+## Managing a confirmed booking as the owner
+
+You can reschedule or cancel any confirmed booking — not just approve or decline pending ones.
+
+- **From the owner console** — each upcoming booking on your dashboard (`/me`) has a **Manage** link. It opens a page where you can **reschedule** (pick a new slot from your own availability — the same picker invitees use) or **cancel** the booking. Both notify the invitee (and any guests) automatically.
+- **Straight from the email** — your copy of the confirmation, reschedule, and reminder emails carries a **Reschedule or cancel** link to that same page. Opening it signs you in first if needed and returns you to the booking. The link only works for you, the signed-in owner — it is not usable by anyone the email is forwarded to.
+
+Rescheduling keeps the booking's guests; the manage page lists them read-only (guest membership is managed by the invitee, not the owner).
 
 ## Invitee self-service links
 

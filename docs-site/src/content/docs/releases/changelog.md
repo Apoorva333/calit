@@ -9,6 +9,22 @@ asset downloads, are on
 
 ## Unreleased
 
+## 1.13.0
+
+Owner-side booking management, plus a friendlier email sender name.
+
+- **Owners can reschedule and cancel bookings.** Every upcoming booking on the
+  owner dashboard (`/me`) now has a **Manage** link to a page that reschedules
+  (from your own availability slots) or cancels the booking, notifying the invitee
+  and guests. The same **Reschedule or cancel** link appears in your copy of the
+  confirmation, reschedule, and reminder emails; it is login-gated and only works
+  for the signed-in owner. Rescheduling preserves the booking's guests.
+- **Friendlier email sender name.** Booking emails are now sent from
+  **`<Owner name> via calit`** instead of a bare address that some clients rendered
+  as "Notify". The underlying `MAIL_FROM` address and the `.ics` organizer are
+  unchanged, so SPF/DKIM and Gmail invite rendering are unaffected. No configuration
+  or migration steps.
+
 ## 1.12.1
 
 A fix for booking invites in Gmail.
