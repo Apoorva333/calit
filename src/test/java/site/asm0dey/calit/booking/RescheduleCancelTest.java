@@ -121,6 +121,40 @@ class RescheduleCancelTest {
                 .anyMatch(s -> s.start().toLocalTime().equals(LocalTime.of(9, 0))));
     }
 
+    @Test
+    @TestTransaction
+    void rescheduleSyncsAttendeesWhenGuestRemoved() {
+        seedSettings();
+        meetingTypeWithMondayWindow("resched-guest", false);
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
+        when(calendarPort.createEvent(anyLong(), anyString(), anyString(), any(), any(), any(), anyBoolean(), any()))
+                .thenReturn(new CreatedEvent("evt-rg", null, "https://calendar.google.com/evt-rg"));
+
+        Booking b = bookingService.book(
+                1L,
+                "resched-guest",
+                SLOT_09,
+                "Sam",
+                "sam@example.com",
+                Map.of(),
+                "tok-rg",
+                "",
+                "en",
+                List.of("g1@example.com"));
+
+        // reschedule to SLOT_10 with NO guests → g1 removed
+        bookingService.reschedule(b.manageToken, SLOT_10, List.of());
+
+        verify(calendarPort, times(1))
+                .updateEvent(
+                        anyLong(),
+                        eq("evt-rg"),
+                        eq(SLOT_10),
+                        eq(SLOT_10.plusSeconds(3600)),
+                        eq(List.of("sam@example.com", "owner@example.com")));
+    }
+
     // --- helpers ---
 
     private void seedSettings() {

@@ -501,7 +501,9 @@ public class BookingService {
             bookingRequestedEvent.fire(new BookingRequested(booking.id)); // re-approval request
         } else {
             if (calendarPort.isConnected(type.ownerId) && booking.googleEventId != null) {
-                calendarPort.updateEvent(type.ownerId, booking.googleEventId, newStartUtc, newEnd, null);
+                OwnerSettings owner = OwnerSettings.forOwner(type.ownerId);
+                calendarPort.updateEvent(
+                        type.ownerId, booking.googleEventId, newStartUtc, newEnd, attendeeEmails(booking, owner));
             }
             bookingRescheduledEvent.fire(new BookingRescheduled(booking.id, oldStart));
         }
@@ -577,6 +579,18 @@ public class BookingService {
             return; // idempotent: a second decline click is a no-op
         }
         guest.status = GuestStatus.DECLINED;
+        // Re-sync the Google attendee list (now excludes this guest, since activeForBooking returns only INVITED).
+        // Google emails the removed guest a cancellation via sendUpdates=all.
+        Booking booking = Booking.findById(guest.bookingId);
+        if (booking != null && calendarPort.isConnected(guest.ownerId) && booking.googleEventId != null) {
+            OwnerSettings owner = OwnerSettings.forOwner(guest.ownerId);
+            calendarPort.updateEvent(
+                    guest.ownerId,
+                    booking.googleEventId,
+                    booking.startUtc,
+                    booking.endUtc,
+                    attendeeEmails(booking, owner));
+        }
         guestDeclinedEvent.fire(new GuestDeclined(guest.bookingId, guest.id));
     }
 }

@@ -223,6 +223,43 @@ class BookingServiceGuestTest {
         assertEquals(GuestStatus.DECLINED, BookingGuest.<BookingGuest>findById(ana.id).status);
     }
 
+    @Test
+    @TestTransaction
+    void decliningAGuestPatchesGoogleAttendeesWithoutThatGuest() {
+        seedSettings();
+        meetingTypeWithMondayWindow("guest-decline-sync", LocationType.GOOGLE_MEET, false);
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
+        when(calendarPort.createEvent(anyLong(), anyString(), anyString(), any(), any(), any(), anyBoolean(), any()))
+                .thenReturn(new CreatedEvent("evt-d", null, "https://calendar.google.com/evt-d"));
+
+        Booking b = bookingService.book(
+                1L,
+                "guest-decline-sync",
+                SLOT_09,
+                "Sam",
+                "sam@example.com",
+                Map.of(),
+                "tok-d",
+                "",
+                "en",
+                List.of("g1@example.com", "g2@example.com"));
+
+        BookingGuest g1 = BookingGuest.<BookingGuest>allForBooking(b.id).stream()
+                .filter(g -> g.email.equals("g1@example.com"))
+                .findFirst()
+                .orElseThrow();
+        bookingService.declineGuest(g1.declineToken);
+
+        verify(calendarPort, times(1))
+                .updateEvent(
+                        anyLong(),
+                        eq("evt-d"),
+                        eq(SLOT_09),
+                        eq(SLOT_09.plusSeconds(3600)),
+                        eq(List.of("sam@example.com", "owner@example.com", "g2@example.com")));
+    }
+
     // --- helpers ---
 
     private void seedSettings() {
