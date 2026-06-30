@@ -163,14 +163,6 @@ public class EmailService {
         mailSender.send(null, toEmail, messages.forLocale(locale).email_google_disconnected_subject(), body, null);
     }
 
-    /** Which invitee-delivery rule a kind follows. */
-    private enum InviteeRule {
-        /** Always send to invitee (no Google event exists for this state). */
-        ALWAYS,
-        /** Send to invitee only when Google is NOT connected (Google notifies otherwise). */
-        FALLBACK,
-    }
-
     /** Where a rendered mail goes: either a direct SMTP send or an outbox enqueue. */
     @FunctionalInterface
     private interface MailSink {
@@ -235,7 +227,6 @@ public class EmailService {
         String inviteeStart = format(l.booking.startUtc, l.zone, inviteeLocale);
         String ownerStart = format(l.booking.startUtc, l.zone, ownerLocale);
         sendForKindLocaleAware(
-                InviteeRule.ALWAYS,
                 l,
                 location,
                 messages.forLocale(inviteeLocale).email_requested_subject(l.meetingType.name),
@@ -274,7 +265,6 @@ public class EmailService {
         String inviteeStart = format(l.booking.startUtc, l.zone, inviteeLocale);
         String ownerStart = format(l.booking.startUtc, l.zone, ownerLocale);
         sendForKindLocaleAware(
-                InviteeRule.FALLBACK,
                 l,
                 location,
                 messages.forLocale(inviteeLocale).email_confirmed_subject(l.meetingType.name),
@@ -314,7 +304,6 @@ public class EmailService {
         String ownerStart = format(l.booking.startUtc, l.zone, ownerLocale);
         // Same body as confirmed (now confirmed after approval); only subject differs.
         sendForKindLocaleAware(
-                InviteeRule.FALLBACK,
                 l,
                 location,
                 messages.forLocale(inviteeLocale).email_approved_subject(l.meetingType.name),
@@ -366,7 +355,6 @@ public class EmailService {
         String ownerStart = format(l.booking.startUtc, l.zone, ownerLocale);
         // No Google event ever existed -> always notify the invitee. No answers, no location link.
         sendForKindLocaleAware(
-                InviteeRule.ALWAYS,
                 l,
                 resolveLocation(l),
                 messages.forLocale(inviteeLocale).email_declined_subject(l.meetingType.name),
@@ -407,7 +395,6 @@ public class EmailService {
         String inviteeOldStart = format(e.oldStartUtc(), l.zone, inviteeLocale);
         String ownerOldStart = format(e.oldStartUtc(), l.zone, ownerLocale);
         sendForKindLocaleAware(
-                InviteeRule.FALLBACK,
                 l,
                 location,
                 messages.forLocale(inviteeLocale).email_rescheduled_subject(l.meetingType.name),
@@ -446,9 +433,8 @@ public class EmailService {
         Locale ownerLocale = AppLocales.pick(l.owner.locale);
         String inviteeStart = format(l.booking.startUtc, l.zone, inviteeLocale);
         String ownerStart = format(l.booking.startUtc, l.zone, ownerLocale);
-        // No location/meet link in the cancellation body; .ics still attached describing the removed event.
+        // No location/meet link in the cancellation body; .ics attached when Google is not connected.
         sendForKindLocaleAware(
-                InviteeRule.FALLBACK,
                 l,
                 resolveLocation(l),
                 messages.forLocale(inviteeLocale).email_cancelled_subject(l.meetingType.name),
@@ -486,7 +472,6 @@ public class EmailService {
         String inviteeStart = format(l.booking.startUtc, l.zone, inviteeLocale);
         String ownerStart = format(l.booking.startUtc, l.zone, ownerLocale);
         sendForKindLocaleAware(
-                InviteeRule.FALLBACK,
                 l,
                 location,
                 messages.forLocale(inviteeLocale).email_reminder_subject(l.meetingType.name),
@@ -532,7 +517,7 @@ public class EmailService {
         Locale locale = AppLocales.pick(l.booking.locale);
         String start = format(l.booking.startUtc, l.zone, locale);
         for (BookingGuest g : guests) {
-            byte[] ics = guestIcs(l, g, location, IcsMethod.REQUEST);
+            byte[] ics = calendarPort.isConnected(l.owner.ownerId) ? null : guestIcs(l, g, location, IcsMethod.REQUEST);
             String body = guestInvite
                     .instance()
                     .setLocale(locale)
@@ -564,7 +549,7 @@ public class EmailService {
                     g.email,
                     subject,
                     guestCancelBody(l, g, locale),
-                    guestIcs(l, g, null, IcsMethod.CANCEL));
+                    calendarPort.isConnected(l.owner.ownerId) ? null : guestIcs(l, g, null, IcsMethod.CANCEL));
         }
     }
 
@@ -579,7 +564,7 @@ public class EmailService {
                 guest.email,
                 messages.forLocale(locale).email_cancelled_subject(l.meetingType.name),
                 guestCancelBody(l, guest, locale),
-                guestIcs(l, guest, null, IcsMethod.CANCEL));
+                calendarPort.isConnected(l.owner.ownerId) ? null : guestIcs(l, guest, null, IcsMethod.CANCEL));
     }
 
     void handleGuestDeclined(GuestDeclined e) {
@@ -589,13 +574,13 @@ public class EmailService {
         if (guest == null) return;
         Locale locale = AppLocales.pick(l.booking.locale);
         String start = format(l.booking.startUtc, l.zone, locale);
-        // 1) cancel .ics to the departing guest
+        // 1) cancel .ics to the departing guest (omit .ics when Google natively notifies)
         mailSender.send(
                 fromName(l),
                 guest.email,
                 messages.forLocale(locale).email_cancelled_subject(l.meetingType.name),
                 guestCancelBody(l, guest, locale),
-                guestIcs(l, guest, null, IcsMethod.CANCEL));
+                calendarPort.isConnected(l.owner.ownerId) ? null : guestIcs(l, guest, null, IcsMethod.CANCEL));
         // 2) notify the invitee so they can reschedule
         String inviteeBody = guestDeclinedNotice
                 .instance()
@@ -663,48 +648,49 @@ public class EmailService {
      * body renderings according to their respective locales.
      */
     private void sendForKindLocaleAware(
-            InviteeRule rule,
             Loaded l,
             String icsLocation,
             String inviteeSubject,
             String ownerSubject,
             UnaryOperator<String> bodyForRole) {
-        sendForKindLocaleAware(rule, l, icsLocation, inviteeSubject, ownerSubject, bodyForRole, mailSender::send);
+        sendForKindLocaleAware(l, icsLocation, inviteeSubject, ownerSubject, bodyForRole, mailSender::send);
     }
 
     /**
      * Renders the body (per recipient role) and delivers it through {@code sink} to the selected
-     * recipients, each with the .ics, using per-recipient locale for subject and body.
-     * Owner included iff {@code ownerNotificationsEnabled}; invitee per {@code rule} and
-     * {@code calendarPort.isConnected()}. No mail if the recipient set is empty.
+     * recipients using per-recipient locale for subject and body. Invitee is always notified — the
+     * calit email carries manage/cancel links that Google's calendar invite does not. Owner included
+     * iff {@code ownerNotificationsEnabled}. When Google is connected it natively notifies invitee
+     * + owner (they are event attendees), so calit attaches NO .ics. When NOT connected, calit's
+     * .ics is the only calendar source.
      */
     private void sendForKindLocaleAware(
-            InviteeRule rule,
             Loaded l,
             String icsLocation,
             String inviteeSubject,
             String ownerSubject,
             UnaryOperator<String> bodyForRole,
             MailSink sink) {
-        var sendInvitee = rule == InviteeRule.ALWAYS || !calendarPort.isConnected(l.owner.ownerId);
-        boolean sendOwner = l.owner.ownerNotificationsEnabled;
+        // Invariant: when Google is connected it natively notifies invitee + owner (they are event
+        // attendees), so calit attaches NO .ics. We still send the email — it carries the manage/cancel
+        // links Google's invite does not. When NOT connected, calit's .ics is the only calendar source.
+        boolean googleNotifies = calendarPort.isConnected(l.owner.ownerId);
+        byte[] ics = googleNotifies
+                ? null
+                : IcsBuilder.build(IcsEvent.builder()
+                                .uid(l.booking.manageToken)
+                                .summary(l.meetingType.name)
+                                .location(icsLocation)
+                                .organizer(new IcsBuilder.Party(l.owner.ownerName, mailFrom))
+                                .attendee(new IcsBuilder.Party(l.booking.inviteeName, l.booking.inviteeEmail))
+                                .start(l.booking.startUtc)
+                                .end(l.booking.endUtc)
+                                .build())
+                        .getBytes(StandardCharsets.UTF_8);
         var from = fromName(l);
 
-        byte[] ics = IcsBuilder.build(IcsEvent.builder()
-                        .uid(l.booking.manageToken)
-                        .summary(l.meetingType.name)
-                        .location(icsLocation)
-                        .organizer(new IcsBuilder.Party(l.owner.ownerName, mailFrom))
-                        .attendee(new IcsBuilder.Party(l.booking.inviteeName, l.booking.inviteeEmail))
-                        .start(l.booking.startUtc)
-                        .end(l.booking.endUtc)
-                        .build())
-                .getBytes(StandardCharsets.UTF_8);
-
-        if (sendInvitee) {
-            sink.deliver(from, l.booking.inviteeEmail, inviteeSubject, bodyForRole.apply(INVITEE_ROLE), ics);
-        }
-        if (sendOwner) {
+        sink.deliver(from, l.booking.inviteeEmail, inviteeSubject, bodyForRole.apply(INVITEE_ROLE), ics);
+        if (l.owner.ownerNotificationsEnabled) {
             sink.deliver(from, l.owner.ownerEmail, ownerSubject, bodyForRole.apply(OWNER_ROLE), ics);
         }
     }
