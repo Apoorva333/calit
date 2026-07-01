@@ -35,7 +35,7 @@ Owner and invitee receive different copies of every booking email: yours is addr
 
 You can reschedule or cancel any confirmed booking — not just approve or decline pending ones.
 
-- **From the owner console** — each upcoming booking on your dashboard (`/me`) has a **Manage** link. It opens a page where you can **reschedule** (pick a new slot from your own availability — the same picker invitees use) or **cancel** the booking. Both notify the invitee (and any guests) automatically.
+- **From the owner console** — each upcoming booking on your dashboard (`/me`) has a **Manage** link. It opens a page where you can **reschedule** (pick a new slot from your own availability — the same picker invitees use) or **cancel** the booking. Both notify the invitee (and any guests) automatically, and the notification names **you, the host**, as the one who made the change (a change the invitee makes is attributed to them instead).
 - **Straight from the email** — your copy of the confirmation, reschedule, and reminder emails carries a **Reschedule or cancel** link to that same page. Opening it signs you in first if needed and returns you to the booking. The link only works for you, the signed-in owner — it is not usable by anyone the email is forwarded to.
 
 Rescheduling keeps the booking's guests; the manage page lists them read-only (guest membership is managed by the invitee, not the owner).
