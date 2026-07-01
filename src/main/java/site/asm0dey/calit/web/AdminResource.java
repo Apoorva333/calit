@@ -977,7 +977,7 @@ public class AdminResource {
         // and an empty list would remove them. Keyed by the booking's own manageToken.
         List<String> guests =
                 BookingGuest.activeForBooking(b.id).stream().map(g -> g.email).toList();
-        bookingService.reschedule(b.manageToken, Instant.parse(startUtc), guests);
+        bookingService.reschedule(b.manageToken, Instant.parse(startUtc), guests, true); // host-initiated
         return dashboard(); // re-render /me; rescheduled booking reflects its new time (or moves to pending queue)
     }
 
@@ -987,7 +987,7 @@ public class AdminResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance ownerCancel(@PathParam("id") Long id) {
         Booking b = requireOwnedBooking(id);
-        bookingService.cancel(b.manageToken); // keyed by the booking's own token; fires BookingCancelled
+        bookingService.cancel(b.manageToken, true); // host-initiated; keyed by the booking's own token
         return dashboard(); // re-render /me; the cancelled booking drops off the upcoming list
     }
 

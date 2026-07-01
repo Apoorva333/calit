@@ -150,7 +150,7 @@ class EmailServiceGuestTest {
     void rescheduledSendsGuestDeclineLinkNoIcsWhenGoogleConnected() {
         long bookingId = seedWithGuest(GuestStatus.INVITED);
 
-        emailService.handleRescheduled(new BookingRescheduled(bookingId, Instant.parse("2026-06-07T09:00:00Z")));
+        emailService.handleRescheduled(new BookingRescheduled(bookingId, Instant.parse("2026-06-07T09:00:00Z"), false));
 
         List<Mail> toGuest = mailbox.getMailsSentTo(GUEST_EMAIL);
         assertEquals(1, toGuest.size(), "guest gets an updated invite on reschedule");
@@ -165,7 +165,7 @@ class EmailServiceGuestTest {
     void cancelledSendsGuestCancel() {
         long bookingId = seedWithGuest(GuestStatus.INVITED);
 
-        emailService.handleCancelled(new BookingCancelled(bookingId));
+        emailService.handleCancelled(new BookingCancelled(bookingId, false));
 
         assertEquals(1, mailbox.getMailsSentTo(GUEST_EMAIL).size(), "active guest gets a cancellation");
         Mail guestMail = mailbox.getMailsSentTo(GUEST_EMAIL).getFirst();

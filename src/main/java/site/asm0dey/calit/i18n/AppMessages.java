@@ -583,8 +583,16 @@ public interface AppMessages {
     @Message("{name} rescheduled their booking.")
     String email_reschedule_body_owner(String name);
 
+    /** Invitee copy when the host drove the reschedule; {name} is the owner's display name. */
+    @Message("{name} rescheduled your booking.")
+    String email_reschedule_body_by_owner(String name);
+
     @Message("{name}'s booking was cancelled.")
     String email_cancellation_body_owner(String name);
+
+    /** Invitee copy when the host drove the cancellation; {name} is the owner's display name. */
+    @Message("{name} cancelled your booking.")
+    String email_cancellation_body_by_owner(String name);
 
     @Message("Reminder: upcoming meeting with {name}.")
     String email_reminder_body_owner(String name);
