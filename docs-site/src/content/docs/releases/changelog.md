@@ -9,6 +9,17 @@ asset downloads, are on
 
 ## Unreleased
 
+## 1.14.1
+
+Reschedule and cancellation emails now name the right person.
+
+- **Host-initiated reschedules and cancellations are attributed correctly.** When
+  the owner rescheduled or cancelled a booking (from **/me** or an owner email link),
+  the notifications still read "*{guest} rescheduled their booking*" — blaming the
+  guest for something the host did. The wording now follows who actually acted: a
+  host-initiated change tells the guest "*{owner} rescheduled/cancelled your booking*"
+  and gives the host a neutral notice, while guest-initiated changes are unchanged.
+
 ## 1.14.0
 
 Google-native guest invites — when Google is connected, Google is the single
