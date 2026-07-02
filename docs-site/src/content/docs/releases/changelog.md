@@ -9,6 +9,11 @@ asset downloads, are on
 
 ## Unreleased
 
+## 1.15.0
+
+Both the host and the invitee can now edit a booking after it's made — its name,
+description, and guest list — not just reschedule or cancel it.
+
 - **Edit a booking's name, description, and guests after booking.** From the
   **Manage** page — both the host (**/me** → a booking's Manage link) and the
   invitee (their manage link) — you can now rename a meeting, set or clear its
