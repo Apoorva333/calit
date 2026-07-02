@@ -39,7 +39,9 @@ public class BookingService {
     private final TurnstileVerifier turnstileVerifier;
     private final long perEmailDailyCap;
 
-    /** Max guests an invitee may attach to one booking. ponytail: a constant, not a config knob. */
+    /**
+     * Max guests an invitee may attach to one booking. ponytail: a constant, not a config knob.
+     */
     public static final int MAX_GUESTS_PER_BOOKING = 10;
 
     @Inject
@@ -77,6 +79,9 @@ public class BookingService {
 
     @Inject
     Event<GuestRemoved> guestRemovedEvent;
+
+    @Inject
+    Event<BookingDetailsChanged> bookingDetailsChangedEvent;
 
     public List<TimeSlot> availableSlots(MeetingType type, LocalDate from, LocalDate to) {
         return availableSlots(type, from, to, null);
@@ -249,7 +254,9 @@ public class BookingService {
         }
     }
 
-    /** Cleaned, de-duped (case-insensitive), capped, invitee-excluded guest list. Preserves order. */
+    /**
+     * Cleaned, de-duped (case-insensitive), capped, invitee-excluded guest list. Preserves order.
+     */
     private static List<String> normalizeGuestEmails(List<String> guestEmails, String inviteeEmail) {
         if (guestEmails == null || guestEmails.isEmpty()) {
             return List.of();
@@ -280,8 +287,8 @@ public class BookingService {
         OwnerSettings owner = OwnerSettings.forOwner(type.ownerId);
         CreatedEvent created = calendarPort.createEvent(
                 type.ownerId,
-                type.name + " with " + booking.inviteeName,
-                "Booked via calit.",
+                googleSummary(type, booking),
+                googleDescription(type, booking),
                 booking.startUtc,
                 booking.endUtc,
                 attendeeEmails(booking, owner),
@@ -289,6 +296,22 @@ public class BookingService {
                 type.locationDetail);
         booking.googleEventId = created.googleEventId();
         booking.meetLink = created.meetLink();
+    }
+
+    /**
+     * Google event SUMMARY for a booking: "{effective title} with {invitee}".
+     */
+    private static String googleSummary(MeetingType type, Booking booking) {
+        return booking.effectiveTitle(type) + " with " + booking.inviteeName;
+    }
+
+    /**
+     * Google event DESCRIPTION: the booking's effective description, or "" when none. Empty (not null) so a
+     * PATCH actively clears a removed description (a null field is omitted from the patch and would linger).
+     */
+    private static String googleDescription(MeetingType type, Booking booking) {
+        String d = booking.effectiveDescription(type);
+        return d == null ? "" : d;
     }
 
     /**
@@ -386,7 +409,9 @@ public class BookingService {
         }
     }
 
-    /** True if {@code ex} (or a cause) is the no-overlap exclusion-constraint violation. */
+    /**
+     * True if {@code ex} (or a cause) is the no-overlap exclusion-constraint violation.
+     */
     private boolean isNoOverlapViolation(Throwable ex) {
         for (var t = ex; t != null; t = t.getCause()) {
             if (t instanceof ConstraintViolationException cve
@@ -397,7 +422,9 @@ public class BookingService {
         return false;
     }
 
-    /** Throws BookingConflictException unless an available slot starts exactly at {@code startUtc}. */
+    /**
+     * Throws BookingConflictException unless an available slot starts exactly at {@code startUtc}.
+     */
     private void assertSlotAvailable(MeetingType type, Instant startUtc, Long excludeBookingId) {
         ZoneId zone = ZoneId.of(OwnerSettings.forOwner(type.ownerId).timezone);
         var day = startUtc.atZone(zone).toLocalDate();
@@ -459,6 +486,13 @@ public class BookingService {
         if (booking == null || booking.status == BookingStatus.CANCELLED || booking.status == BookingStatus.DECLINED) {
             throw new NotFoundException("No active booking for token " + manageToken);
         }
+
+        // No-op: same time and guests untouched (web callers pass null) -> nothing to do. Avoids a spurious
+        // SEQUENCE bump + reschedule email when the invitee re-picks the current slot.
+        if (newStartUtc.equals(booking.startUtc) && guestEmails == null) {
+            return booking;
+        }
+
         MeetingType type = MeetingType.findById(booking.meetingTypeId);
         Instant newEnd = newStartUtc.plusSeconds(60L * type.durationMinutes);
 
@@ -501,6 +535,23 @@ public class BookingService {
             guestRemovedEvent.fire(new GuestRemoved(booking.id, guestId));
         }
 
+        applyRescheduleOutcome(booking, type, oldStart, priorEventId, reApproval, byOwner);
+        return booking;
+    }
+
+    /**
+     * Post-commit calendar sync + domain event for a reschedule. Re-approval types drop any prior Google
+     * event and re-enter the approval queue (BookingRequested); auto types patch the existing event's time
+     * (when connected) and fire BookingRescheduled. Split out of {@link #reschedule} to keep that method's
+     * cognitive complexity in check.
+     */
+    private void applyRescheduleOutcome(
+            Booking booking,
+            MeetingType type,
+            Instant oldStart,
+            String priorEventId,
+            boolean reApproval,
+            boolean byOwner) {
         if (reApproval) {
             if (calendarPort.isConnected(type.ownerId) && priorEventId != null) {
                 calendarPort.deleteEvent(type.ownerId, priorEventId);
@@ -510,11 +561,106 @@ public class BookingService {
             if (calendarPort.isConnected(type.ownerId) && booking.googleEventId != null) {
                 OwnerSettings owner = OwnerSettings.forOwner(type.ownerId);
                 calendarPort.updateEvent(
-                        type.ownerId, booking.googleEventId, newStartUtc, newEnd, attendeeEmails(booking, owner));
+                        type.ownerId,
+                        booking.googleEventId,
+                        booking.startUtc,
+                        booking.endUtc,
+                        attendeeEmails(booking, owner));
             }
             bookingRescheduledEvent.fire(new BookingRescheduled(booking.id, oldStart, byOwner));
         }
+    }
+
+    /**
+     * Edits a booking's meeting name, description, and guest list by its manage token — usable by both the
+     * host (byOwner=true) and the invitee (byOwner=false). {@code title}/{@code description} are trimmed;
+     * blank stores null so the meeting type's value shows through (bounded: title ≤ 200, description ≤ 2000).
+     * {@code guestEmails} reconciles the active guest set exactly (empty list removes all). If nothing
+     * actually changed (normalized title/description/guest-set all equal current) this is a NO-OP: it
+     * returns without bumping the SEQUENCE, patching Google, or emailing anyone. On a real change it bumps
+     * the iTIP SEQUENCE, patches the Google event (name/description + attendees), fires GuestRemoved per
+     * dropped guest and BookingDetailsChanged so EmailService re-notifies invitee + owner + guests. Never
+     * changes status or time.
+     */
+    @Transactional
+    public Booking updateDetails(
+            String manageToken, String title, String description, List<String> guestEmails, boolean byOwner) {
+        Booking booking = Booking.findByManageToken(manageToken);
+        if (booking == null || booking.status == BookingStatus.CANCELLED || booking.status == BookingStatus.DECLINED) {
+            throw new NotFoundException("No active booking for token " + manageToken);
+        }
+        MeetingType type = MeetingType.findById(booking.meetingTypeId);
+
+        var newTitle = blankToNull(title);
+        var newDescription = blankToNull(description);
+        validateDetailBounds(newTitle, newDescription);
+        List<String> wanted = normalizeGuestEmails(guestEmails, booking.inviteeEmail);
+
+        // No-op guard: nothing changed → no notification storm, no SEQUENCE churn.
+        if (java.util.Objects.equals(newTitle, booking.title)
+                && java.util.Objects.equals(newDescription, booking.description)
+                && sameGuestSet(booking, wanted)) {
+            return booking;
+        }
+
+        booking.title = newTitle;
+        booking.description = newDescription;
+        // Bump SEQUENCE so an updated .ics supersedes the prior one in the recipient's calendar.
+        booking.icsSequence = booking.icsSequence + 1;
+
+        List<Long> removedGuestIds = reconcileGuests(booking, guestEmails);
+        booking.persistAndFlush();
+
+        for (Long guestId : removedGuestIds) {
+            guestRemovedEvent.fire(new GuestRemoved(booking.id, guestId));
+        }
+
+        if (calendarPort.isConnected(type.ownerId) && booking.googleEventId != null) {
+            OwnerSettings owner = OwnerSettings.forOwner(type.ownerId);
+            calendarPort.updateEventDetails(
+                    type.ownerId,
+                    booking.googleEventId,
+                    googleSummary(type, booking),
+                    googleDescription(type, booking),
+                    attendeeEmails(booking, owner));
+        }
+
+        bookingDetailsChangedEvent.fire(new BookingDetailsChanged(booking.id, byOwner));
         return booking;
+    }
+
+    /**
+     * Trim; null for null/blank so a cleared override falls back to the meeting type's value.
+     */
+    private static String blankToNull(String s) {
+        return (s == null || s.isBlank()) ? null : s.trim();
+    }
+
+    /**
+     * Enforce the same input-bounds discipline as validateInputBounds (SEC-INPUT): title ≤ 200, desc ≤ 2000.
+     */
+    private static void validateDetailBounds(String title, String description) {
+        if (title != null && title.length() > 200) {
+            throw new BookingValidationException("Meeting name is too long.");
+        }
+        if (description != null && description.length() > 2000) {
+            throw new BookingValidationException("Description is too long.");
+        }
+    }
+
+    /**
+     * True iff the booking's current active guest set equals {@code wanted} (case-insensitive).
+     */
+    private static boolean sameGuestSet(Booking booking, List<String> wanted) {
+        java.util.Set<String> current = new java.util.HashSet<>();
+        for (BookingGuest g : BookingGuest.<BookingGuest>activeForBooking(booking.id)) {
+            current.add(g.email.toLowerCase());
+        }
+        java.util.Set<String> want = new java.util.HashSet<>();
+        for (String e : wanted) {
+            want.add(e.toLowerCase());
+        }
+        return current.equals(want);
     }
 
     /**
@@ -568,7 +714,9 @@ public class BookingService {
         cancel(manageToken, false);
     }
 
-    /** {@code byOwner} true when the host cancelled (from /me or an owner email link) -> initiator-aware wording. */
+    /**
+     * {@code byOwner} true when the host cancelled (from /me or an owner email link) -> initiator-aware wording.
+     */
     @Transactional
     public void cancel(String manageToken, boolean byOwner) {
         Booking booking = Booking.findByManageToken(manageToken);

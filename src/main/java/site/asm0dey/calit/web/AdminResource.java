@@ -111,7 +111,11 @@ public class AdminResource {
                 String tzBar,
                 String tzScript,
                 String calScript,
-                String title);
+                String title,
+                String titleValue,
+                String descriptionValue,
+                String titlePlaceholder,
+                String descPlaceholder);
 
         public static native TemplateInstance approvalResult(
                 Long pendingCount, boolean isAdmin, String title, String h1, String desc);
@@ -945,7 +949,11 @@ public class AdminResource {
     @Path("/bookings/{id}/manage")
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance manageBooking(@PathParam("id") Long id) {
-        Booking b = requireOwnedBooking(id);
+        return renderManage(requireOwnedBooking(id));
+    }
+
+    /** Render the owner's Manage hub for a booking (shared by GET manage and POST edit-details). */
+    private TemplateInstance renderManage(Booking b) {
         MeetingType type = MeetingType.findById(b.meetingTypeId);
         ZoneId zone = ZoneId.of(OwnerSettings.forOwner(type.ownerId).timezone);
         String current =
@@ -964,7 +972,11 @@ public class AdminResource {
                 Layout.TZ_BAR,
                 Layout.TZ_SCRIPT,
                 Layout.CALENDAR_SCRIPT,
-                m().adm_dashboard_h2());
+                m().adm_dashboard_h2(),
+                b.title == null ? "" : b.title, // raw override (empty when none) — never the effective value
+                b.description == null ? "" : b.description,
+                type.name, // placeholder = default name
+                type.description == null ? "" : type.description);
     }
 
     @POST
@@ -973,11 +985,8 @@ public class AdminResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance ownerReschedule(@PathParam("id") Long id, @RestForm String startUtc) {
         Booking b = requireOwnedBooking(id);
-        // Preserve the booking's current guests -- reschedule reconciles against the passed list,
-        // and an empty list would remove them. Keyed by the booking's own manageToken.
-        List<String> guests =
-                BookingGuest.activeForBooking(b.id).stream().map(g -> g.email).toList();
-        bookingService.reschedule(b.manageToken, Instant.parse(startUtc), guests, true); // host-initiated
+        // Time only -- guests untouched (null). Host edits guests via /me/bookings/{id}/edit-details.
+        bookingService.reschedule(b.manageToken, Instant.parse(startUtc), null, true); // host-initiated
         return dashboard(); // re-render /me; rescheduled booking reflects its new time (or moves to pending queue)
     }
 
@@ -989,6 +998,36 @@ public class AdminResource {
         Booking b = requireOwnedBooking(id);
         bookingService.cancel(b.manageToken, true); // host-initiated; keyed by the booking's own token
         return dashboard(); // re-render /me; the cancelled booking drops off the upcoming list
+    }
+
+    @POST
+    @Path("/bookings/{id}/edit-details")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    // Transactional so the reload below shares updateDetails' persistence context instead of
+    // hitting this request's long-lived non-transactional EntityManager, which would still hold
+    // the pre-update entity in its L1 cache and serve stale data back to renderManage.
+    @Transactional
+    public TemplateInstance ownerEditDetails(
+            @PathParam("id") Long id,
+            @RestForm String title,
+            @RestForm String description,
+            MultivaluedMap<String, String> form) {
+        Booking b = requireOwnedBooking(id); // owner-scoped
+        bookingService.updateDetails(b.manageToken, title, description, parseGuests(form), true); // host-initiated
+        return renderManage(requireOwnedBooking(id)); // reload committed state → back to the hub
+    }
+
+    // ponytail: an 8-line CSV splitter duplicated from PublicResource; not worth a shared util.
+    private static List<String> parseGuests(MultivaluedMap<String, String> form) {
+        String raw = form.getFirst("guests");
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        return java.util.Arrays.stream(raw.split("[,\\s]+"))
+                .map(String::trim)
+                .filter(s -> !s.isBlank())
+                .toList();
     }
 
     @POST

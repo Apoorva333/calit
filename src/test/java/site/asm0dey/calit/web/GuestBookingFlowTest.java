@@ -162,7 +162,7 @@ class GuestBookingFlowTest {
     }
 
     @Test
-    void rescheduleEditsGuestList() {
+    void editDetailsEditsGuestList() {
         when(calendarPort.isConnected(anyLong())).thenReturn(false);
         when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
         seed();
@@ -180,14 +180,11 @@ class GuestBookingFlowTest {
 
         Booking b = Booking.find("inviteeEmail", "sam@example.com").firstResult();
         String manageToken = b.manageToken;
-        // A new slot (the manage page lists fresh slots); reuse the booking form's first slot as a free one.
-        var newSlot = firstSlot();
 
         given().contentType("application/x-www-form-urlencoded")
-                .formParam("startUtc", newSlot)
                 .formParam("guests", "ana@example.com, cyd@example.com") // drop bob, add cyd
                 .when()
-                .post("/booking/" + manageToken + "/reschedule")
+                .post("/booking/" + manageToken + "/edit-details")
                 .then()
                 .statusCode(200);
 
