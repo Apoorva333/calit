@@ -9,6 +9,16 @@ asset downloads, are on
 
 ## Unreleased
 
+## 1.15.1
+
+A follow-up fix to the 1.15.0 booking editor.
+
+- **A too-long meeting name or description now shows a clear error instead of
+  silently failing.** Longer text — especially in non-Latin scripts like Hebrew,
+  or with emoji — could be rejected by the server with an opaque low-level error
+  before the form's own length check ran. The size limit was raised so the normal
+  "too long" validation always applies.
+
 ## 1.15.0
 
 Both the host and the invitee can now edit a booking after it's made — its name,
