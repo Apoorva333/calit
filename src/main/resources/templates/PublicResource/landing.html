@@ -1,5 +1,5 @@
 {@java.lang.String title}
-{@java.util.List<site.asm0dey.calit.domain.MeetingType> types}
+{@java.util.List<site.asm0dey.calit.web.PublicResource$LandingType> types}
 {@java.lang.String user}
 {@java.lang.String ownerName}
 {#include base title=title}
@@ -13,14 +13,14 @@
       <div class="alert">{msg:pub_user_no_types}</div>
     {#else}
       <div class="grid gap-4 sm:grid-cols-2">
-        {#for t in types}
+        {#for lt in types}
           <div class="card bg-base-100 border border-base-300 transition-shadow hover:shadow-lg">
             <div class="card-body">
-              <h2 class="card-title">{t.name}</h2>
-              <p class="text-sm text-base-content/70">{t.durationMinutes} min &middot; {t.locationType.display}</p>
-              {#if t.description}<p class="text-sm text-base-content/70">{t.description}</p>{/if}
+              <h2 class="card-title">{lt.type.name}</h2>
+              <p class="text-sm text-base-content/70">{lt.type.durationMinutes} min &middot; {lt.type.locationType.display}</p>
+              {#if lt.type.description}<p class="text-sm text-base-content/70">{lt.type.description}</p>{/if}
               <div class="card-actions mt-2">
-                <a class="btn btn-primary btn-block" href="/{user}/{t.slug}">{msg:pub_user_choose_time} &rarr;</a>
+                <a class="btn btn-primary btn-block" href="{lt.bookUrl}">{msg:pub_user_choose_time} &rarr;</a>
               </div>
             </div>
           </div>

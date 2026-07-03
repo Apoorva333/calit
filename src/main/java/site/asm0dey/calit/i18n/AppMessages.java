@@ -437,6 +437,17 @@ public interface AppMessages {
     @Message("The owner hasn't finished setting up calit. Please check back soon.")
     String pub_not_ready_desc();
 
+    // ---- Host-pending page (hostPending.html) ----
+
+    @Message("Not bookable yet")
+    String pub_host_pending_title();
+
+    @Message("This meeting isn't bookable yet")
+    String pub_host_pending_h1();
+
+    @Message("This meeting has a co-host who hasn't confirmed yet. Please check back soon.")
+    String pub_host_pending_desc();
+
     // ---- Email subjects ----
 
     @Message("Booking request received: {meetingTypeName}")

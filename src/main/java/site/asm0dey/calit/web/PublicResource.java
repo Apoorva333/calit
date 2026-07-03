@@ -38,7 +38,7 @@ public class PublicResource {
         public static native TemplateInstance index(String title, boolean authenticated, String username);
 
         public static native TemplateInstance landing(
-                String title, List<MeetingType> types, String user, String ownerName);
+                String title, List<PublicResource.LandingType> types, String user, String ownerName);
 
         public static native TemplateInstance book(
                 String title,
@@ -101,10 +101,16 @@ public class PublicResource {
         public static native TemplateInstance notReady(String title);
 
         public static native TemplateInstance unavailable(String title);
+
+        /** Alias resolves to a multi-host type that isn't fully bookable yet (a co-host hasn't accepted). */
+        public static native TemplateInstance hostPending(String title);
     }
 
     @Inject
     BookingService bookingService;
+
+    @Inject
+    MeetingHosts meetingHosts;
 
     @Inject
     CurrentOwner currentOwner;
@@ -140,6 +146,13 @@ public class PublicResource {
     /** One day's worth of selectable slots: ISO date (for the JS calendar), a human label, and the slots. */
     public record DaySlots(String isoDate, String label, List<SlotView> slots) {}
 
+    /**
+     * One landing-page entry: the type plus the URL it should be booked at. Own types book at
+     * `/{user}/{slug}`; co-hosted types book at the CANONICAL `/{creatorUsername}/{slug}` so every
+     * host's landing links to the same, single booking URL.
+     */
+    public record LandingType(MeetingType type, String bookUrl) {}
+
     @GET
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance index() {
@@ -161,9 +174,13 @@ public class PublicResource {
         if (settings == null) {
             return Templates.notReady(m.pub_not_ready_title());
         }
-        // listPublic(ownerId) = that owner's active && !secret types.
-        return Templates.landing(
-                m.pub_user_title(), MeetingType.listPublic(owner.id), owner.username, settings.ownerName);
+        // listPublicIncludingCohosted(ownerId) = that owner's own active && !secret types PLUS
+        // multi-host types where they are an ACCEPTED co-host. Co-hosted entries link to the
+        // canonical /{creatorUsername}/{slug} — every host's landing points at the same URL.
+        List<LandingType> types = MeetingType.listPublicIncludingCohosted(owner.id).stream()
+                .map(t -> new LandingType(t, "/" + bookUsernameFor(t, owner) + "/" + t.slug))
+                .toList();
+        return Templates.landing(m.pub_user_title(), types, owner.username, settings.ownerName);
     }
 
     @GET
@@ -171,14 +188,24 @@ public class PublicResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance book(@PathParam("user") String user, @PathParam("slug") String slug) {
         var m = messages.forLocale(activeLocale.current());
-        AppUser owner = resolveOwner(user); // 404 if unknown; binds CurrentOwner
-        MeetingType type = MeetingType.findBySlug(owner.id, slug); // secret types reachable by direct link
+        AppUser urlUser = resolveOwner(user); // 404 if unknown; binds CurrentOwner (may be a co-host alias)
+        // resolveForAlias: urlUser's own type wins, else a multi-host type urlUser is an ACCEPTED
+        // co-host of (secret types still reachable by direct link, as before).
+        MeetingType type = MeetingType.resolveForAlias(urlUser.id, slug);
         if (type == null) {
             throw new NotFoundException("No meeting type with slug " + slug);
         }
-        OwnerSettings settings = OwnerSettings.forOwner(owner.id);
+        // Owner/slot/booking context is always the type's CREATOR, regardless of which alias URL
+        // was used to reach it.
+        AppUser creator = AppUser.findById(type.ownerId);
+        currentOwner.set(creator);
+        OwnerSettings settings = OwnerSettings.forOwner(type.ownerId);
         if (settings == null) {
             return Templates.notReady(m.pub_not_ready_title());
+        }
+        if (!meetingHosts.bookable(type)) {
+            // A co-host invite is still PENDING (or a host got disabled) — no aliases can book yet.
+            return Templates.hostPending(m.pub_host_pending_title());
         }
         List<DaySlots> byDate;
         try {
@@ -188,14 +215,14 @@ public class PublicResource {
             return Templates.unavailable(m.pub_unavailable_title());
         }
         // Resolved EXTRA fields (per-type-else-global), already ordered by position.
-        List<BookingField> fields = BookingField.formFor(owner.id, type.id);
+        List<BookingField> fields = BookingField.formFor(type.ownerId, type.id);
         // turnstileEnabled drives the widget; site key is public (rendered). The approval
         // flag (type.requiresApproval) + locationType/locationDetail are read off `type`
         // directly in the template for the button wording + location line.
         String bookTitle = m.pub_book_title_prefix() + " " + type.name;
         return Templates.book(
                 bookTitle,
-                owner.username,
+                urlUser.username, // keeps the form posting back to the alias URL it was reached at
                 type,
                 byDate,
                 fields,
@@ -205,13 +232,22 @@ public class PublicResource {
                 Layout.CALENDAR_SCRIPT,
                 turnstileEnabled,
                 turnstileSiteKey(),
-                calendarPort.isConnected(owner.id),
+                calendarPort.isConnected(type.ownerId),
                 settings.ownerName,
                 "");
     }
 
     private String turnstileSiteKey() {
         return turnstileSiteKeyConfig.orElse("");
+    }
+
+    /** The username a landing entry should book at: the owner's own for their types, else the creator's. */
+    private static String bookUsernameFor(MeetingType t, AppUser landingOwner) {
+        if (t.ownerId.equals(landingOwner.id)) {
+            return landingOwner.username;
+        }
+        AppUser creator = AppUser.findById(t.ownerId);
+        return creator.username;
     }
 
     /** Splits the optional "guests" form field on commas/whitespace into a clean email list. */
@@ -240,14 +276,20 @@ public class PublicResource {
             @RestForm("cf-turnstile-response") String turnstileToken,
             MultivaluedMap<String, String> form) {
         var m = messages.forLocale(activeLocale.current());
-        AppUser owner = resolveOwner(user); // 404 if unknown; binds CurrentOwner
-        MeetingType type = MeetingType.findBySlug(owner.id, slug);
+        AppUser urlUser = resolveOwner(user); // 404 if unknown; binds CurrentOwner (may be a co-host alias)
+        MeetingType type = MeetingType.resolveForAlias(urlUser.id, slug);
         if (type == null) {
             throw new NotFoundException("No meeting type with slug " + slug);
         }
-        OwnerSettings settings = OwnerSettings.forOwner(owner.id);
+        AppUser creator = AppUser.findById(type.ownerId);
+        currentOwner.set(creator);
+        OwnerSettings settings = OwnerSettings.forOwner(type.ownerId);
         if (settings == null) {
             return Templates.notReady(m.pub_not_ready_title());
+        }
+        if (!meetingHosts.bookable(type)) {
+            // Reject submissions while a co-host is still PENDING — same disabled page as the GET.
+            return Templates.hostPending(m.pub_host_pending_title());
         }
         String bookTitle = m.pub_book_title_prefix() + " " + type.name;
 
@@ -268,8 +310,8 @@ public class PublicResource {
             // Locale is resolved server-side from the request (set by LocaleResolutionFilter).
             String locale = activeLocale.current().getLanguage();
             booking = bookingService.book(
-                    owner.id,
-                    slug,
+                    type.ownerId,
+                    type.slug,
                     Instant.parse(startUtc),
                     inviteeName,
                     inviteeEmail,
@@ -284,17 +326,17 @@ public class PublicResource {
             // 500, NOT confirm. (Plan 3 has no common BookingException superclass, so catch each.)
             return Templates.book(
                     bookTitle,
-                    owner.username,
+                    urlUser.username,
                     type,
                     daySlots(type),
-                    BookingField.formFor(owner.id, type.id),
+                    BookingField.formFor(type.ownerId, type.id),
                     be.getMessage(),
                     Layout.TZ_BAR,
                     Layout.TZ_SCRIPT,
                     Layout.CALENDAR_SCRIPT,
                     turnstileEnabled,
                     turnstileSiteKey(),
-                    calendarPort.isConnected(owner.id),
+                    calendarPort.isConnected(type.ownerId),
                     settings.ownerName,
                     "");
         }

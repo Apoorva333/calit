@@ -2,6 +2,7 @@ package site.asm0dey.calit.domain;
 
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import jakarta.persistence.*;
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -96,5 +97,49 @@ public class MeetingType extends PanacheEntityBase {
             return count("ownerId = ?1 and slug = ?2", ownerId, slug) > 0;
         }
         return count("ownerId = ?1 and slug = ?2 and id <> ?3", ownerId, slug, excludeTypeId) > 0;
+    }
+
+    /**
+     * Resolves `/{urlOwnerId}/{slug}` for booking purposes: the owner's own type wins; otherwise a
+     * multi-host type with that slug where {@code urlOwnerId} is an ACCEPTED co-host (a username
+     * alias for the shared type). The slug-collision guard (co-hosting requires a free slug in the
+     * candidate's own namespace) means at most one of the two can match. Returns null if neither.
+     */
+    public static MeetingType resolveForAlias(Long urlOwnerId, String slug) {
+        var own = findBySlug(urlOwnerId, slug);
+        if (own != null) {
+            return own;
+        }
+        for (MeetingTypeHost h : MeetingTypeHost.<MeetingTypeHost>list(
+                "ownerId = ?1 and role = ?2 and status = ?3",
+                urlOwnerId,
+                MeetingTypeHost.COHOST,
+                MeetingTypeHost.ACCEPTED)) {
+            MeetingType t = findById(h.meetingTypeId);
+            if (t != null && t.slug.equals(slug)) {
+                return t;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * {@link #listPublic(Long)} plus multi-host types where {@code ownerId} is an ACCEPTED co-host
+     * (and the type is active & not secret) — the union shown on that owner's public landing page,
+     * co-hosted types included.
+     */
+    public static List<MeetingType> listPublicIncludingCohosted(Long ownerId) {
+        List<MeetingType> result = new ArrayList<>(listPublic(ownerId));
+        for (MeetingTypeHost h : MeetingTypeHost.<MeetingTypeHost>list(
+                "ownerId = ?1 and role = ?2 and status = ?3",
+                ownerId,
+                MeetingTypeHost.COHOST,
+                MeetingTypeHost.ACCEPTED)) {
+            MeetingType t = findById(h.meetingTypeId);
+            if (t != null && t.active && !t.secret) {
+                result.add(t);
+            }
+        }
+        return result;
     }
 }
