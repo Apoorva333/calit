@@ -1,6 +1,7 @@
 package site.asm0dey.calit.test;
 
 import site.asm0dey.calit.domain.MeetingType;
+import site.asm0dey.calit.user.AppUser;
 
 /**
  * Shared test seed helpers for the multi-host feature. Kept minimal — only what current tests
@@ -17,5 +18,13 @@ public final class MultiHostFixtures {
         t.durationMinutes = durationMinutes;
         t.persist();
         return t;
+    }
+
+    /** Enabled, onboarded (settingsComplete) user — the minimum shape for a co-host candidate. */
+    public static AppUser enabledUser(String username) {
+        AppUser u = AppUser.create(username, "x", false);
+        u.settingsComplete = true;
+        u.persist();
+        return u;
     }
 }
