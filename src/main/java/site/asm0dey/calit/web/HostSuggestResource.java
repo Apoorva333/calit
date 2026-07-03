@@ -10,6 +10,7 @@ import jakarta.ws.rs.core.MediaType;
 import java.util.ArrayList;
 import java.util.List;
 import site.asm0dey.calit.booking.MeetingHosts;
+import site.asm0dey.calit.domain.MeetingType;
 import site.asm0dey.calit.user.AppUser;
 import site.asm0dey.calit.user.CurrentOwner;
 
@@ -44,8 +45,17 @@ public class HostSuggestResource {
         if (q == null || q.isBlank()) {
             return results; // guard: don't scan all users for an empty prefix
         }
+        // Tenant gate: eligibleCohost() only excludes existing hosts, so calling it for a typeId
+        // the caller doesn't own would leak cross-tenant host membership (Task 20 review). Mirror
+        // AdminResource#requireType's ownership check, but return an empty suggestion list instead
+        // of a 404 - this is a typeahead, not a resource lookup.
+        MeetingType type = typeId == null ? null : MeetingType.findById(typeId);
+        if (type == null || !type.ownerId.equals(currentOwner.id())) {
+            return results;
+        }
         List<AppUser> candidates = AppUser.list(
-                "enabled = true and settingsComplete = true and lower(username) like ?1", q.toLowerCase() + "%");
+                "enabled = true and settingsComplete = true and lower(username) like ?1 escape '\\' order by username",
+                escapeLike(q.toLowerCase()) + "%");
         for (AppUser candidate : candidates) {
             if (results.size() >= MAX_SUGGESTIONS) {
                 break;
@@ -55,5 +65,10 @@ public class HostSuggestResource {
             }
         }
         return results;
+    }
+
+    /** Backslash-escapes {@code \}, {@code %}, {@code _} so user input stays a literal LIKE prefix. */
+    private static String escapeLike(String raw) {
+        return raw.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 }

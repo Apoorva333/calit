@@ -128,4 +128,52 @@ class HostSuggestTest {
                 .statusCode(200)
                 .body(containsString("CALIT_HOST_TYPEAHEAD"));
     }
+
+    /**
+     * Security regression: a foreign {@code typeId} (owned by someone else) must never leak
+     * whether a candidate is a host of that type. Before the ownership gate, {@code
+     * eligibleCohost} was called for whatever typeId the caller passed, so a caller could observe
+     * cross-tenant host membership by prefix-searching a known username: an eligible (not-yet-host)
+     * candidate would be INCLUDED in a totally foreign owner's suggestion list, leaking that they
+     * are not currently a host of that type. The fix mirrors {@code AdminResource#requireType}'s
+     * tenant check but returns an empty suggestion list instead of a 404.
+     */
+    @Test
+    void foreignTypeIdReturnsEmptyRegardlessOfHostMembership() {
+        var uniq = System.nanoTime();
+        AppUser owner = seedCandidate("foreignowner" + uniq);
+        // eligible for *someone's* type (enabled + settingsComplete + not already host of
+        // foreignType) - pre-fix this leaks by being included in owner B's foreign suggestion list.
+        AppUser eligibleElsewhere = seedCandidate("foreignhost" + uniq);
+        MeetingType foreignType = seedForeignType(owner.id, "foreign-" + uniq);
+
+        given().cookie("quarkus-credential", FormAuth.login())
+                .when()
+                .get("/me/hosts?q=" + eligibleElsewhere.username.substring(0, 10) + "&typeId=" + foreignType.id)
+                .then()
+                .statusCode(200)
+                .body(is("[]"));
+    }
+
+    @Transactional
+    MeetingType seedForeignType(Long ownerId, String slug) {
+        return MultiHostFixtures.meetingType(ownerId, slug, 30);
+    }
+
+    /** {@code q=%} must not defeat prefix semantics via unescaped LIKE metacharacters. */
+    @Test
+    void likeMetacharactersInQueryDoNotMatchAll() {
+        var uniq = System.nanoTime();
+        MeetingType t = seedAdminType("host-suggest-like-" + uniq);
+        seedCandidate("volodya" + uniq);
+
+        given().cookie("quarkus-credential", FormAuth.login())
+                .queryParam("q", "%")
+                .queryParam("typeId", t.id)
+                .when()
+                .get("/me/hosts")
+                .then()
+                .statusCode(200)
+                .body(is("[]"));
+    }
 }
