@@ -1,9 +1,14 @@
 package site.asm0dey.calit.booking;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
+import site.asm0dey.calit.booking.events.HostConsentRequested;
 import site.asm0dey.calit.domain.MeetingType;
 import site.asm0dey.calit.domain.MeetingTypeHost;
 import site.asm0dey.calit.google.CalendarPort;
@@ -19,6 +24,9 @@ public class MeetingHosts {
     public static final int MAX_HOSTS = 10;
 
     private final CalendarPort calendarPort;
+
+    @Inject
+    Event<HostConsentRequested> consentEvent;
 
     @Inject
     public MeetingHosts(CalendarPort calendarPort) {
@@ -87,5 +95,53 @@ public class MeetingHosts {
             return false;
         }
         return MeetingTypeHost.find(meetingTypeId, candidate.id) == null;
+    }
+
+    /**
+     * Ensures the CREATOR row exists, then inserts a PENDING co-host row and fires a consent
+     * request. Idempotent: a candidate already present (any status) is a no-op — no duplicate
+     * row, no repeat email.
+     */
+    @Transactional
+    public void addCohost(MeetingType type, AppUser candidate) {
+        MeetingTypeHost existing = MeetingTypeHost.find(type.id, candidate.id);
+        if (existing != null) {
+            return; // idempotent: already a host (pending or accepted) -> no-op, no repeat email
+        }
+        ensureCreatorRow(type);
+        long hostCount = MeetingTypeHost.count("meetingTypeId", type.id);
+        if (hostCount >= MAX_HOSTS) {
+            throw new IllegalStateException("A meeting can have at most " + MAX_HOSTS + " hosts.");
+        }
+        // ponytail: constant cap, revisit only if a real use-case needs more
+        MeetingTypeHost h = MeetingTypeHost.of(type.id, candidate.id, MeetingTypeHost.COHOST, MeetingTypeHost.PENDING);
+        h.consentToken = UUID.randomUUID();
+        h.persist();
+        consentEvent.fire(new HostConsentRequested(type.id, candidate.id, h.consentToken.toString()));
+    }
+
+    private void ensureCreatorRow(MeetingType type) {
+        if (MeetingTypeHost.find(type.id, type.ownerId) == null) {
+            MeetingTypeHost.of(type.id, type.ownerId, MeetingTypeHost.CREATOR, MeetingTypeHost.ACCEPTED)
+                    .persist();
+        }
+    }
+
+    /** Marks a pending co-host row accepted and clears its one-time consent token. */
+    @Transactional
+    public void acceptConsent(MeetingTypeHost host) {
+        host.status = MeetingTypeHost.ACCEPTED;
+        host.respondedAt = Instant.now();
+        host.consentToken = null;
+        host.persist();
+    }
+
+    /** Removes a co-host; if no co-hosts remain, also removes the CREATOR row (revert to single-host). */
+    @Transactional
+    public void removeHost(MeetingType type, Long cohostOwnerId) {
+        MeetingTypeHost.delete("meetingTypeId = ?1 and ownerId = ?2", type.id, cohostOwnerId);
+        if (MeetingTypeHost.count("meetingTypeId = ?1 and role = ?2", type.id, MeetingTypeHost.COHOST) == 0) {
+            MeetingTypeHost.delete("meetingTypeId = ?1 and role = ?2", type.id, MeetingTypeHost.CREATOR);
+        }
     }
 }
