@@ -103,6 +103,19 @@ Offered slots = the **intersection** of every host's free time on the creator's 
 - A slot is offered iff **every** host is free for it (windows cover it, and the host's
   buffered interval overlaps none of that host's busy).
 
+### Disconnected Google (fail-closed per host)
+
+`GoogleCalendarPort.freeBusy` is **fail-closed**: it throws `CalendarUnavailableException` when a
+host's connected Google account is disconnected / `needsReconnect`. (A host who *never* connected
+Google is unaffected — their busy set is just their calit bookings.)
+
+If any host's calendar is connected-but-broken, that host contributes **zero** free time, so the
+intersection is empty and the type shows **no slots** ("temporarily unavailable") until the host
+reconnects. Never offer a slot we can't verify. This matches today's single-host fail-closed
+behavior and is safe (never double-books). The affected host already receives the reconnect nudge
+(`needsReconnect` / `reconnectNotifiedAt`); additionally, the creator's host list shows a per-host
+"calendar needs reconnect" indicator so the creator understands why the type went dark.
+
 ### Implementation shape
 
 `BookingService.availableSlots(type, from, to)` is refactored to compute a per-host filtered
@@ -126,7 +139,9 @@ On a multi-host booking POST (`PublicResource.submitBooking` → `BookingService
 
 1. Validate invitee + fields + abuse guards (unchanged).
 2. Re-check intersection availability for the exact requested start across **all** hosts
-   (`assertSlotAvailable` generalized to the host set). Reject if any host is no longer free.
+   (`assertSlotAvailable` generalized to the host set). Reject if any host is no longer free —
+   including a fail-closed reject when any host's Google calendar is broken (§3), so a booking is
+   never written against an unverifiable calendar.
 3. In one `@Transactional` block, insert **N booking rows** (one per host, `owner_id` = host)
    sharing a new `group_id`, identical start/end/invitee/answers, each with its own
    `manageToken`. Status = `PENDING` if the type `requiresApproval`, else `CONFIRMED`.
@@ -255,6 +270,9 @@ Owner-scoped `@QuarkusTest`s against the admin-is-id-1 invariant:
   only when accepted; non-hosts rejected; creator can't touch co-host windows.
 - **`/me/hosts?q=` endpoint:** owner-auth required, prefix filter, cap, excludes self/existing
   hosts.
+- **Disconnected host Google:** a host whose connected Google is broken empties the intersection
+  (type shows no slots); a host who never connected Google still works (calit-bookings-only busy);
+  booking POST fail-closed rejected while a host's calendar is broken.
 
 ---
 
