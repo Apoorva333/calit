@@ -448,6 +448,39 @@ public interface AppMessages {
     @Message("This meeting has a co-host who hasn't confirmed yet. Please check back soon.")
     String pub_host_pending_desc();
 
+    // ---- Co-host consent page (ConsentResource) ----
+
+    @Message("Co-host invitation")
+    String pub_consent_confirm_title();
+
+    @Message("Accept co-hosting \"{typeName}\" with {creatorName}?")
+    String pub_consent_confirm_h1(String typeName, String creatorName);
+
+    @Message(
+            "Accepting adds you as a co-host: your own availability applies, and every booking needs both of you free.")
+    String pub_consent_confirm_desc();
+
+    @Message("Accept")
+    String pub_consent_accept_btn();
+
+    @Message("Decline")
+    String pub_consent_decline_btn();
+
+    @Message("Co-host invitation")
+    String pub_consent_result_title();
+
+    @Message("You're now a co-host")
+    String pub_consent_accepted_h1();
+
+    @Message("You can set your own availability for this meeting type from your calit dashboard.")
+    String pub_consent_accepted_desc();
+
+    @Message("Invitation declined")
+    String pub_consent_declined_h1();
+
+    @Message("You won't be added as a co-host for this meeting type.")
+    String pub_consent_declined_desc();
+
     // ---- Email subjects ----
 
     @Message("Booking request received: {meetingTypeName}")

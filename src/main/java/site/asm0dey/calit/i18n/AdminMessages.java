@@ -67,6 +67,12 @@ public interface AdminMessages {
     @Message("Admin — Shared meeting types")
     String adm_shared_title();
 
+    @Message("Admin — Co-hosting requests")
+    String adm_shared_requests_title();
+
+    @Message("Admin — Availability for {typeName}")
+    String adm_shared_availability_title(String typeName);
+
     @Message("Admin — ")
     String adm_meetingTypeDetail_title_prefix();
 
@@ -276,6 +282,67 @@ public interface AdminMessages {
 
     @Message("No shared meeting types yet.")
     String adm_shared_empty();
+
+    // ---- Co-host consent requests + shared availability editor (SharedMeetingsResource) ----
+
+    @Message("Pending co-hosting invitations")
+    String adm_shared_requests_h1();
+
+    @Message("No pending co-hosting invitations.")
+    String adm_shared_requests_empty();
+
+    @Message("Invited by {creatorName}")
+    String adm_shared_requests_from(String creatorName);
+
+    @Message("Accept")
+    String adm_shared_requests_accept();
+
+    @Message("Decline")
+    String adm_shared_requests_decline();
+
+    @Message("← Back to requests")
+    String adm_shared_availability_back();
+
+    @Message("Buffers")
+    String adm_shared_availability_section_buffers();
+
+    @Message(
+            "Your own buffer before/after this shared type overrides its default when set; leave blank to use the default.")
+    String adm_shared_availability_buffers_hint();
+
+    @Message("Buffer before (minutes)")
+    String adm_shared_availability_buffer_before_label();
+
+    @Message("Buffer after (minutes)")
+    String adm_shared_availability_buffer_after_label();
+
+    @Message("Save buffers")
+    String adm_shared_availability_btn_save_buffers();
+
+    @Message("Leave this meeting type")
+    String adm_shared_availability_section_revoke();
+
+    @Message(
+            "You can stop co-hosting this meeting type at any time. Your own bookings and availability for it will be affected.")
+    String adm_shared_availability_revoke_hint();
+
+    @Message("Stop co-hosting")
+    String adm_shared_availability_btn_revoke();
+
+    @Message("Stop co-hosting?")
+    String adm_shared_revokeConfirm_title();
+
+    @Message("You have {count} upcoming booking(s) for this shared meeting type. What should happen to them?")
+    String adm_shared_revokeConfirm_count(long count);
+
+    @Message("Keep bookings, just stop co-hosting")
+    String adm_shared_revokeConfirm_keep();
+
+    @Message("Cancel these bookings and stop co-hosting")
+    String adm_shared_revokeConfirm_cancel();
+
+    @Message("Back without removing")
+    String adm_shared_revokeConfirm_back();
 
     // ---- Meeting type detail ----
 

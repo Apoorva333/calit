@@ -462,7 +462,7 @@ public class AdminResource {
      * one-per-override (N+1). Preserves the given override ordering and per-override start-time
      * window ordering. Overrides with no windows get an empty list (day off).
      */
-    private static List<DateOverride> withWindows(List<DateOverride> overrides) {
+    static List<DateOverride> withWindows(List<DateOverride> overrides) {
         if (overrides.isEmpty()) {
             return overrides;
         }
@@ -917,7 +917,7 @@ public class AdminResource {
      * scope (meetingTypeId null = global, non-null = per-type). Skips a frame whose start or end is
      * blank, or whose end is not strictly after its start.
      */
-    private void persistFrames(Long ownerId, Long meetingTypeId, MultivaluedMap<String, String> form) {
+    static void persistFrames(Long ownerId, Long meetingTypeId, MultivaluedMap<String, String> form) {
         List<String> days = form.getOrDefault("frameDay", List.of());
         List<String> starts = form.getOrDefault("frameStart", List.of());
         List<String> ends = form.getOrDefault("frameEnd", List.of());
