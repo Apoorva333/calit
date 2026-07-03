@@ -886,6 +886,10 @@ public class BookingService {
         }
         MeetingType type = MeetingType.findById(booking.meetingTypeId);
 
+        if (booking.groupId != null) {
+            return updateGroupDetails(booking, type, title, description, guestEmails, byOwner);
+        }
+
         var newTitle = blankToNull(title);
         var newDescription = blankToNull(description);
         validateDetailBounds(newTitle, newDescription);
@@ -922,6 +926,75 @@ public class BookingService {
 
         bookingDetailsChangedEvent.fire(new BookingDetailsChanged(booking.id, byOwner));
         return booking;
+    }
+
+    /**
+     * Group counterpart of {@link #updateDetails}: title/description are written to every row in the
+     * group (kept identical across hosts), guests reconcile on the lead row only, and — if the group
+     * has a shared Google event — it is patched exactly once via the organizer's row. Fires a single
+     * {@link BookingDetailsChanged} keyed by the lead. No no-op short-circuit or SEQUENCE bump here;
+     * unlike the single-host path, group edits always propagate to keep every row's title/description
+     * in lockstep.
+     */
+    private Booking updateGroupDetails(
+            Booking booking,
+            MeetingType type,
+            String title,
+            String description,
+            List<String> guestEmails,
+            boolean byOwner) {
+        var newTitle = blankToNull(title);
+        var newDescription = blankToNull(description);
+        validateDetailBounds(newTitle, newDescription);
+
+        for (Booking r : Booking.<Booking>group(booking.groupId)) {
+            r.title = newTitle;
+            r.description = newDescription;
+        }
+        Booking lead = Booking.leadOfGroup(booking.groupId, type.ownerId);
+        if (guestEmails != null) {
+            reconcileGuests(lead, guestEmails);
+        }
+
+        String eventId = groupEventId(booking.groupId);
+        Long organizer = organizerOwnerOf(booking.groupId);
+        if (eventId != null && organizer != null) {
+            calendarPort.updateEventDetails(
+                    organizer,
+                    eventId,
+                    googleSummary(type, lead),
+                    googleDescription(type, lead),
+                    groupAttendeeEmails(type, booking.groupId, meetingHosts.hostOwnerIds(type)));
+        }
+
+        bookingDetailsChangedEvent.fire(new BookingDetailsChanged(lead.id, byOwner));
+        return lead;
+    }
+
+    /**
+     * The Google event id shared by a group booking (only the organizer's row carries it — see
+     * {@link #createGroupGoogleEvent}), or null when the group never had a Google event.
+     */
+    private String groupEventId(UUID groupId) {
+        for (Booking r : Booking.<Booking>group(groupId)) {
+            if (r.googleEventId != null) {
+                return r.googleEventId;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The owner id of the group row that carries the shared Google event (the organizer), or null
+     * when the group never had a Google event.
+     */
+    private Long organizerOwnerOf(UUID groupId) {
+        for (Booking r : Booking.<Booking>group(groupId)) {
+            if (r.googleEventId != null) {
+                return r.ownerId;
+            }
+        }
+        return null;
     }
 
     /**
