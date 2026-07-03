@@ -15,10 +15,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.UnaryOperator;
+import java.util.UUID;
+import java.util.function.Function;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import site.asm0dey.calit.booking.Booking;
 import site.asm0dey.calit.booking.BookingGuest;
+import site.asm0dey.calit.booking.MeetingHosts;
 import site.asm0dey.calit.booking.events.*;
 import site.asm0dey.calit.domain.BookingField;
 import site.asm0dey.calit.domain.MeetingType;
@@ -47,6 +49,9 @@ public class EmailService {
 
     @Inject
     CalendarPort calendarPort;
+
+    @Inject
+    MeetingHosts meetingHosts;
 
     @ConfigProperty(name = "app.base-url")
     String baseUrl;
@@ -231,6 +236,9 @@ public class EmailService {
         static native TemplateInstance passwordReset(String lang, String resetUrl);
 
         static native TemplateInstance googleDisconnected(String lang, String accountEmail, String reconnectUrl);
+
+        static native TemplateInstance hostConsent(
+                String lang, String greetingName, String creatorName, String meetingTypeName, String consentUrl);
     }
 
     /** Where a rendered mail goes: either a direct SMTP send or an outbox enqueue. */
@@ -290,42 +298,40 @@ public class EmailService {
         handleReminder(e);
     }
 
+    void onHostConsent(@Observes(during = TransactionPhase.AFTER_SUCCESS) HostConsentRequested e) {
+        handleHostConsent(e);
+    }
+
     // --- Package-private helpers: own their transaction, directly unit-testable. ---
 
     void handleRequested(BookingRequested e) {
         Loaded l = load(e.bookingId());
         if (l == null) return;
         var location = resolveLocation(l);
-        Locale inviteeLocale = AppLocales.pick(l.booking.locale);
-        Locale ownerLocale = AppLocales.pick(l.owner.locale);
-        String inviteeStart = format(l.booking.startUtc, l.zone, inviteeLocale);
-        String ownerStart = format(l.booking.startUtc, l.zone, ownerLocale);
         sendForKindLocaleAware(
                 l,
                 location,
-                messages.forLocale(inviteeLocale).email_requested_subject(label(l)),
-                messages.forLocale(ownerLocale).email_requested_subject(label(l)),
-                role -> {
-                    var locale = INVITEE_ROLE.equals(role) ? inviteeLocale : ownerLocale;
-                    var start = INVITEE_ROLE.equals(role) ? inviteeStart : ownerStart;
-                    return Templates.requested(
-                                    role,
-                                    locale.getLanguage(),
-                                    INVITEE_ROLE.equals(role) ? l.booking.inviteeName : l.owner.ownerName,
-                                    l.booking.inviteeName,
-                                    label(l),
-                                    start,
-                                    l.meetingType.durationMinutes,
-                                    location,
-                                    isMeet(l),
-                                    manageUrl(l.booking),
-                                    cancelUrl(l.booking),
-                                    approveUrl(l.booking),
-                                    declineUrl(l.booking),
-                                    l.answers)
-                            .setLocale(locale)
-                            .render();
-                });
+                locale -> messages.forLocale(locale).email_requested_subject(label(l)),
+                (role, locale, zone, greetingName, linkBooking) -> Templates.requested(
+                                role,
+                                locale.getLanguage(),
+                                greetingName,
+                                l.booking.inviteeName,
+                                label(l),
+                                format(l.booking.startUtc, zone, locale),
+                                l.meetingType.durationMinutes,
+                                location,
+                                isMeet(l),
+                                manageUrl(linkBooking),
+                                cancelUrl(linkBooking),
+                                approveUrl(linkBooking),
+                                declineUrl(linkBooking),
+                                l.answers)
+                        .setLocale(locale)
+                        .render(),
+                // Actionable: an opted-out host must still be able to approve/decline their row, or
+                // the group deadlocks. (Single-host behavior is unaffected -- see the send core.)
+                true);
     }
 
     void handleConfirmed(BookingConfirmed e) {
@@ -333,34 +339,27 @@ public class EmailService {
         if (l == null) return;
         var location = resolveLocation(l);
         Locale inviteeLocale = AppLocales.pick(l.booking.locale);
-        Locale ownerLocale = AppLocales.pick(l.owner.locale);
-        String inviteeStart = format(l.booking.startUtc, l.zone, inviteeLocale);
-        String ownerStart = format(l.booking.startUtc, l.zone, ownerLocale);
         sendForKindLocaleAware(
                 l,
                 location,
-                messages.forLocale(inviteeLocale).email_confirmed_subject(label(l)),
-                messages.forLocale(ownerLocale).email_confirmed_subject(label(l)),
-                role -> {
-                    var locale = INVITEE_ROLE.equals(role) ? inviteeLocale : ownerLocale;
-                    var start = INVITEE_ROLE.equals(role) ? inviteeStart : ownerStart;
-                    return Templates.confirmation(
-                                    role,
-                                    locale.getLanguage(),
-                                    INVITEE_ROLE.equals(role) ? l.booking.inviteeName : l.owner.ownerName,
-                                    l.booking.inviteeName,
-                                    label(l),
-                                    start,
-                                    l.meetingType.durationMinutes,
-                                    location,
-                                    isMeet(l),
-                                    manageUrl(l.booking),
-                                    ownerManageUrl(l.booking),
-                                    cancelUrl(l.booking),
-                                    l.answers)
-                            .setLocale(locale)
-                            .render();
-                });
+                locale -> messages.forLocale(locale).email_confirmed_subject(label(l)),
+                (role, locale, zone, greetingName, linkBooking) -> Templates.confirmation(
+                                role,
+                                locale.getLanguage(),
+                                greetingName,
+                                l.booking.inviteeName,
+                                label(l),
+                                format(l.booking.startUtc, zone, locale),
+                                l.meetingType.durationMinutes,
+                                location,
+                                isMeet(l),
+                                manageUrl(linkBooking),
+                                ownerManageUrl(linkBooking),
+                                cancelUrl(linkBooking),
+                                l.answers)
+                        .setLocale(locale)
+                        .render(),
+                false);
         sendGuestInvites(l, location, messages.forLocale(inviteeLocale).email_confirmed_subject(label(l)));
     }
 
@@ -369,35 +368,30 @@ public class EmailService {
         if (l == null) return;
         var location = resolveLocation(l);
         Locale inviteeLocale = AppLocales.pick(l.booking.locale);
-        Locale ownerLocale = AppLocales.pick(l.owner.locale);
-        String inviteeStart = format(l.booking.startUtc, l.zone, inviteeLocale);
-        String ownerStart = format(l.booking.startUtc, l.zone, ownerLocale);
-        // Same body as confirmed (now confirmed after approval); only subject differs.
+        // Same body as confirmed (now confirmed after approval); only subject differs. (Group
+        // bookings never fire BookingApproved -- the last host's approval fires BookingConfirmed
+        // instead -- so this handler is single-host only; the fan-out branch never triggers here.)
         sendForKindLocaleAware(
                 l,
                 location,
-                messages.forLocale(inviteeLocale).email_approved_subject(label(l)),
-                messages.forLocale(ownerLocale).email_approved_subject(label(l)),
-                role -> {
-                    var locale = INVITEE_ROLE.equals(role) ? inviteeLocale : ownerLocale;
-                    var start = INVITEE_ROLE.equals(role) ? inviteeStart : ownerStart;
-                    return Templates.confirmation(
-                                    role,
-                                    locale.getLanguage(),
-                                    INVITEE_ROLE.equals(role) ? l.booking.inviteeName : l.owner.ownerName,
-                                    l.booking.inviteeName,
-                                    label(l),
-                                    start,
-                                    l.meetingType.durationMinutes,
-                                    location,
-                                    isMeet(l),
-                                    manageUrl(l.booking),
-                                    ownerManageUrl(l.booking),
-                                    cancelUrl(l.booking),
-                                    l.answers)
-                            .setLocale(locale)
-                            .render();
-                });
+                locale -> messages.forLocale(locale).email_approved_subject(label(l)),
+                (role, locale, zone, greetingName, linkBooking) -> Templates.confirmation(
+                                role,
+                                locale.getLanguage(),
+                                greetingName,
+                                l.booking.inviteeName,
+                                label(l),
+                                format(l.booking.startUtc, zone, locale),
+                                l.meetingType.durationMinutes,
+                                location,
+                                isMeet(l),
+                                manageUrl(linkBooking),
+                                ownerManageUrl(linkBooking),
+                                cancelUrl(linkBooking),
+                                l.answers)
+                        .setLocale(locale)
+                        .render(),
+                false);
         sendGuestInvites(l, location, messages.forLocale(inviteeLocale).email_confirmed_subject(label(l)));
     }
 
@@ -416,31 +410,23 @@ public class EmailService {
 
     /** Renders + delivers the declined email through the given sink (direct or outbox). */
     private void deliverDeclined(Loaded l, MailSink sink) {
-        Locale inviteeLocale = AppLocales.pick(l.booking.locale);
-        Locale ownerLocale = AppLocales.pick(l.owner.locale);
-        String inviteeStart = format(l.booking.startUtc, l.zone, inviteeLocale);
-        String ownerStart = format(l.booking.startUtc, l.zone, ownerLocale);
         // No Google event ever existed -> always notify the invitee. No answers, no location link.
         sendForKindLocaleAware(
                 l,
                 resolveLocation(l),
-                messages.forLocale(inviteeLocale).email_declined_subject(label(l)),
-                messages.forLocale(ownerLocale).email_declined_subject(label(l)),
-                role -> {
-                    var locale = INVITEE_ROLE.equals(role) ? inviteeLocale : ownerLocale;
-                    var start = INVITEE_ROLE.equals(role) ? inviteeStart : ownerStart;
-                    return Templates.declined(
-                                    role,
-                                    locale.getLanguage(),
-                                    INVITEE_ROLE.equals(role) ? l.booking.inviteeName : l.owner.ownerName,
-                                    l.booking.inviteeName,
-                                    label(l),
-                                    start,
-                                    l.meetingType.durationMinutes)
-                            .setLocale(locale)
-                            .render();
-                },
-                sink);
+                locale -> messages.forLocale(locale).email_declined_subject(label(l)),
+                (role, locale, zone, greetingName, linkBooking) -> Templates.declined(
+                                role,
+                                locale.getLanguage(),
+                                greetingName,
+                                l.booking.inviteeName,
+                                label(l),
+                                format(l.booking.startUtc, zone, locale),
+                                l.meetingType.durationMinutes)
+                        .setLocale(locale)
+                        .render(),
+                sink,
+                false);
     }
 
     /** Renders the declined email and enqueues it in the CALLER's transaction (atomic with the claim). */
@@ -455,40 +441,30 @@ public class EmailService {
         if (l == null) return;
         var location = resolveLocation(l);
         Locale inviteeLocale = AppLocales.pick(l.booking.locale);
-        Locale ownerLocale = AppLocales.pick(l.owner.locale);
-        String inviteeNewStart = format(l.booking.startUtc, l.zone, inviteeLocale);
-        String ownerNewStart = format(l.booking.startUtc, l.zone, ownerLocale);
-        String inviteeOldStart = format(e.oldStartUtc(), l.zone, inviteeLocale);
-        String ownerOldStart = format(e.oldStartUtc(), l.zone, ownerLocale);
         sendForKindLocaleAware(
                 l,
                 location,
-                messages.forLocale(inviteeLocale).email_rescheduled_subject(label(l)),
-                messages.forLocale(ownerLocale).email_rescheduled_subject(label(l)),
-                role -> {
-                    var locale = INVITEE_ROLE.equals(role) ? inviteeLocale : ownerLocale;
-                    var newStart = INVITEE_ROLE.equals(role) ? inviteeNewStart : ownerNewStart;
-                    var oldStart = INVITEE_ROLE.equals(role) ? inviteeOldStart : ownerOldStart;
-                    return Templates.reschedule(
-                                    role,
-                                    e.byOwner(),
-                                    locale.getLanguage(),
-                                    l.booking.inviteeName,
-                                    l.owner.ownerName,
-                                    INVITEE_ROLE.equals(role) ? l.booking.inviteeName : l.owner.ownerName,
-                                    label(l),
-                                    newStart,
-                                    oldStart,
-                                    l.meetingType.durationMinutes,
-                                    location,
-                                    isMeet(l),
-                                    manageUrl(l.booking),
-                                    ownerManageUrl(l.booking),
-                                    cancelUrl(l.booking),
-                                    l.answers)
-                            .setLocale(locale)
-                            .render();
-                });
+                locale -> messages.forLocale(locale).email_rescheduled_subject(label(l)),
+                (role, locale, zone, greetingName, linkBooking) -> Templates.reschedule(
+                                role,
+                                e.byOwner(),
+                                locale.getLanguage(),
+                                l.booking.inviteeName,
+                                l.owner.ownerName,
+                                greetingName,
+                                label(l),
+                                format(l.booking.startUtc, zone, locale),
+                                format(e.oldStartUtc(), zone, locale),
+                                l.meetingType.durationMinutes,
+                                location,
+                                isMeet(l),
+                                manageUrl(linkBooking),
+                                ownerManageUrl(linkBooking),
+                                cancelUrl(linkBooking),
+                                l.answers)
+                        .setLocale(locale)
+                        .render(),
+                false);
         sendGuestInvites(l, location, messages.forLocale(inviteeLocale).email_rescheduled_subject(label(l)));
     }
 
@@ -497,38 +473,31 @@ public class EmailService {
         if (l == null) return;
         var location = resolveLocation(l);
         Locale inviteeLocale = AppLocales.pick(l.booking.locale);
-        Locale ownerLocale = AppLocales.pick(l.owner.locale);
-        String inviteeStart = format(l.booking.startUtc, l.zone, inviteeLocale);
-        String ownerStart = format(l.booking.startUtc, l.zone, ownerLocale);
         String desc = l.booking.effectiveDescription(l.meetingType);
         sendForKindLocaleAware(
                 l,
                 location,
-                messages.forLocale(inviteeLocale).email_updated_subject(label(l)),
-                messages.forLocale(ownerLocale).email_updated_subject(label(l)),
-                role -> {
-                    var locale = INVITEE_ROLE.equals(role) ? inviteeLocale : ownerLocale;
-                    var start = INVITEE_ROLE.equals(role) ? inviteeStart : ownerStart;
-                    return Templates.updated(
-                                    role,
-                                    e.byOwner(),
-                                    desc,
-                                    locale.getLanguage(),
-                                    l.booking.inviteeName,
-                                    l.owner.ownerName,
-                                    INVITEE_ROLE.equals(role) ? l.booking.inviteeName : l.owner.ownerName,
-                                    label(l),
-                                    start,
-                                    l.meetingType.durationMinutes,
-                                    location,
-                                    isMeet(l),
-                                    manageUrl(l.booking),
-                                    ownerManageUrl(l.booking),
-                                    cancelUrl(l.booking),
-                                    l.answers)
-                            .setLocale(locale)
-                            .render();
-                });
+                locale -> messages.forLocale(locale).email_updated_subject(label(l)),
+                (role, locale, zone, greetingName, linkBooking) -> Templates.updated(
+                                role,
+                                e.byOwner(),
+                                desc,
+                                locale.getLanguage(),
+                                l.booking.inviteeName,
+                                l.owner.ownerName,
+                                greetingName,
+                                label(l),
+                                format(l.booking.startUtc, zone, locale),
+                                l.meetingType.durationMinutes,
+                                location,
+                                isMeet(l),
+                                manageUrl(linkBooking),
+                                ownerManageUrl(linkBooking),
+                                cancelUrl(linkBooking),
+                                l.answers)
+                        .setLocale(locale)
+                        .render(),
+                false);
         // Re-send the (bumped-sequence) REQUEST .ics to every active guest so their calendar updates too.
         sendGuestInvites(l, location, messages.forLocale(inviteeLocale).email_updated_subject(label(l)));
     }
@@ -537,31 +506,24 @@ public class EmailService {
         Loaded l = load(e.bookingId());
         if (l == null) return;
         Locale inviteeLocale = AppLocales.pick(l.booking.locale);
-        Locale ownerLocale = AppLocales.pick(l.owner.locale);
-        String inviteeStart = format(l.booking.startUtc, l.zone, inviteeLocale);
-        String ownerStart = format(l.booking.startUtc, l.zone, ownerLocale);
         // No location/meet link in the cancellation body; .ics attached when Google is not connected.
         sendForKindLocaleAware(
                 l,
                 resolveLocation(l),
-                messages.forLocale(inviteeLocale).email_cancelled_subject(label(l)),
-                messages.forLocale(ownerLocale).email_cancelled_subject(label(l)),
-                role -> {
-                    var locale = INVITEE_ROLE.equals(role) ? inviteeLocale : ownerLocale;
-                    var start = INVITEE_ROLE.equals(role) ? inviteeStart : ownerStart;
-                    return Templates.cancellation(
-                                    role,
-                                    e.byOwner(),
-                                    locale.getLanguage(),
-                                    l.booking.inviteeName,
-                                    l.owner.ownerName,
-                                    INVITEE_ROLE.equals(role) ? l.booking.inviteeName : l.owner.ownerName,
-                                    label(l),
-                                    start,
-                                    l.meetingType.durationMinutes)
-                            .setLocale(locale)
-                            .render();
-                });
+                locale -> messages.forLocale(locale).email_cancelled_subject(label(l)),
+                (role, locale, zone, greetingName, linkBooking) -> Templates.cancellation(
+                                role,
+                                e.byOwner(),
+                                locale.getLanguage(),
+                                l.booking.inviteeName,
+                                l.owner.ownerName,
+                                greetingName,
+                                label(l),
+                                format(l.booking.startUtc, zone, locale),
+                                l.meetingType.durationMinutes)
+                        .setLocale(locale)
+                        .render(),
+                false);
         sendGuestCancels(l, messages.forLocale(inviteeLocale).email_cancelled_subject(label(l)));
     }
 
@@ -574,36 +536,28 @@ public class EmailService {
     /** Renders + delivers the reminder email through the given sink (direct or outbox). */
     private void deliverReminder(Loaded l, MailSink sink) {
         var location = resolveLocation(l);
-        Locale inviteeLocale = AppLocales.pick(l.booking.locale);
-        Locale ownerLocale = AppLocales.pick(l.owner.locale);
-        String inviteeStart = format(l.booking.startUtc, l.zone, inviteeLocale);
-        String ownerStart = format(l.booking.startUtc, l.zone, ownerLocale);
         sendForKindLocaleAware(
                 l,
                 location,
-                messages.forLocale(inviteeLocale).email_reminder_subject(label(l)),
-                messages.forLocale(ownerLocale).email_reminder_subject(label(l)),
-                role -> {
-                    var locale = INVITEE_ROLE.equals(role) ? inviteeLocale : ownerLocale;
-                    var start = INVITEE_ROLE.equals(role) ? inviteeStart : ownerStart;
-                    return Templates.reminder(
-                                    role,
-                                    locale.getLanguage(),
-                                    INVITEE_ROLE.equals(role) ? l.booking.inviteeName : l.owner.ownerName,
-                                    l.booking.inviteeName,
-                                    label(l),
-                                    start,
-                                    l.meetingType.durationMinutes,
-                                    location,
-                                    isMeet(l),
-                                    manageUrl(l.booking),
-                                    ownerManageUrl(l.booking),
-                                    cancelUrl(l.booking),
-                                    l.answers)
-                            .setLocale(locale)
-                            .render();
-                },
-                sink);
+                locale -> messages.forLocale(locale).email_reminder_subject(label(l)),
+                (role, locale, zone, greetingName, linkBooking) -> Templates.reminder(
+                                role,
+                                locale.getLanguage(),
+                                greetingName,
+                                l.booking.inviteeName,
+                                label(l),
+                                format(l.booking.startUtc, zone, locale),
+                                l.meetingType.durationMinutes,
+                                location,
+                                isMeet(l),
+                                manageUrl(linkBooking),
+                                ownerManageUrl(linkBooking),
+                                cancelUrl(linkBooking),
+                                l.answers)
+                        .setLocale(locale)
+                        .render(),
+                sink,
+                false);
     }
 
     /** Renders the reminder email and enqueues it in the CALLER's transaction (atomic with the claim). */
@@ -698,6 +652,37 @@ public class EmailService {
                 null);
     }
 
+    /**
+     * A pending co-host row was created; email the candidate a one-click {@code /consent/{token}}
+     * link. Actionable (like the approval-needed mail) -- there is no {@code OwnerSettings} row yet
+     * to gate on (the candidate isn't a confirmed host until they accept), so this always sends.
+     */
+    void handleHostConsent(HostConsentRequested e) {
+        QuarkusTransaction.requiringNew().run(() -> {
+            OwnerSettings cohost = OwnerSettings.forOwner(e.cohostOwnerId());
+            if (cohost == null) return;
+            MeetingType type = MeetingType.findById(e.meetingTypeId());
+            if (type == null) return;
+            OwnerSettings creator = OwnerSettings.forOwner(type.ownerId);
+            Locale locale = AppLocales.pick(cohost.locale);
+            String consentUrl = baseUrl + "/consent/" + e.consentToken();
+            String body = Templates.hostConsent(
+                            locale.getLanguage(),
+                            cohost.ownerName,
+                            creator == null ? null : creator.ownerName,
+                            type.name,
+                            consentUrl)
+                    .setLocale(locale)
+                    .render();
+            mailSender.send(
+                    null,
+                    cohost.ownerEmail,
+                    messages.forLocale(locale).email_host_consent_subject(type.name),
+                    body,
+                    null);
+        });
+    }
+
     /** Renders the guest cancel body in the given locale. */
     private String guestCancelBody(Loaded l, BookingGuest g, Locale locale) {
         return Templates.guestCancel(
@@ -735,36 +720,49 @@ public class EmailService {
     // --- recipient selection + send plumbing ---
 
     /**
-     * Locale-aware delivery (default SMTP sink). Invitee and owner may get different subjects and
+     * Per-recipient body renderer: {@code role} is {@link #INVITEE_ROLE} or {@link #OWNER_ROLE};
+     * {@code locale}/{@code zone}/{@code greetingName} are that recipient's own (for a group
+     * booking's owner side, that HOST's own {@code OwnerSettings}); {@code linkBooking} is the row
+     * whose tokens back the manage/cancel/approve/decline URLs (that host's own row for a group
+     * owner copy, the lead row otherwise).
+     */
+    @FunctionalInterface
+    private interface RecipientBodyRenderer {
+        String render(String role, Locale locale, ZoneId zone, String greetingName, Booking linkBooking);
+    }
+
+    /**
+     * Locale-aware delivery (default SMTP sink). Invitee and owner(s) may get different subjects and
      * body renderings according to their respective locales.
      */
     private void sendForKindLocaleAware(
             Loaded l,
             String icsLocation,
-            String inviteeSubject,
-            String ownerSubject,
-            UnaryOperator<String> bodyForRole) {
-        sendForKindLocaleAware(l, icsLocation, inviteeSubject, ownerSubject, bodyForRole, mailSender::send);
+            Function<Locale, String> subjectForLocale,
+            RecipientBodyRenderer bodyForRecipient,
+            boolean actionable) {
+        sendForKindLocaleAware(l, icsLocation, subjectForLocale, bodyForRecipient, mailSender::send, actionable);
     }
 
     /**
-     * Renders the body (per recipient role) and delivers it through {@code sink} to the selected
-     * recipients using per-recipient locale for subject and body. Invitee is always notified — the
-     * calit email carries manage/cancel links that Google's calendar invite does not. Owner included
-     * iff {@code ownerNotificationsEnabled}. When Google is connected it natively notifies invitee
-     * + owner (they are event attendees), so calit attaches NO .ics. When NOT connected, calit's
-     * .ics is the only calendar source.
+     * Renders the body (per recipient) and delivers it through {@code sink} using per-recipient
+     * locale for subject and body. Invitee is always notified exactly ONCE, keyed on the lead row —
+     * the calit email carries manage/cancel links that Google's calendar invite does not. For a
+     * SINGLE-host booking the sole owner is included iff {@code ownerNotificationsEnabled} (unchanged
+     * pre-multi-host behavior). For a GROUP booking, EACH host gets their own personalized copy
+     * (their own locale/name/booking-row tokens); {@code actionable} kinds (approval-needed) ignore
+     * that host's {@code ownerNotificationsEnabled} -- an opted-out host must still be able to
+     * approve/decline their row, or the whole group deadlocks. When Google is connected it natively
+     * notifies invitee + owner(s) (they are event attendees), so calit attaches NO .ics. When NOT
+     * connected, calit's .ics is the only calendar source.
      */
     private void sendForKindLocaleAware(
             Loaded l,
             String icsLocation,
-            String inviteeSubject,
-            String ownerSubject,
-            UnaryOperator<String> bodyForRole,
-            MailSink sink) {
-        // Invariant: when Google is connected it natively notifies invitee + owner (they are event
-        // attendees), so calit attaches NO .ics. We still send the email — it carries the manage/cancel
-        // links Google's invite does not. When NOT connected, calit's .ics is the only calendar source.
+            Function<Locale, String> subjectForLocale,
+            RecipientBodyRenderer bodyForRecipient,
+            MailSink sink,
+            boolean actionable) {
         boolean googleNotifies = calendarPort.isConnected(l.owner.ownerId);
         byte[] ics = googleNotifies
                 ? null
@@ -781,9 +779,34 @@ public class EmailService {
                         .getBytes(StandardCharsets.UTF_8);
         var from = fromName(l);
 
-        sink.deliver(from, l.booking.inviteeEmail, inviteeSubject, bodyForRole.apply(INVITEE_ROLE), ics);
-        if (l.owner.ownerNotificationsEnabled) {
-            sink.deliver(from, l.owner.ownerEmail, ownerSubject, bodyForRole.apply(OWNER_ROLE), ics);
+        Locale inviteeLocale = AppLocales.pick(l.booking.locale);
+        sink.deliver(
+                from,
+                l.booking.inviteeEmail,
+                subjectForLocale.apply(inviteeLocale),
+                bodyForRecipient.render(INVITEE_ROLE, inviteeLocale, l.zone, l.booking.inviteeName, l.booking),
+                ics);
+
+        if (l.booking.groupId != null) {
+            for (HostDelivery hd : l.hostDeliveries) {
+                if (!actionable && !hd.settings.ownerNotificationsEnabled) continue;
+                Locale hostLocale = AppLocales.pick(hd.settings.locale);
+                ZoneId hostZone = ZoneId.of(hd.settings.timezone);
+                sink.deliver(
+                        from,
+                        hd.settings.ownerEmail,
+                        subjectForLocale.apply(hostLocale),
+                        bodyForRecipient.render(OWNER_ROLE, hostLocale, hostZone, hd.settings.ownerName, hd.booking),
+                        ics);
+            }
+        } else if (l.owner.ownerNotificationsEnabled) {
+            Locale ownerLocale = AppLocales.pick(l.owner.locale);
+            sink.deliver(
+                    from,
+                    l.owner.ownerEmail,
+                    subjectForLocale.apply(ownerLocale),
+                    bodyForRecipient.render(OWNER_ROLE, ownerLocale, l.zone, l.owner.ownerName, l.booking),
+                    ics);
         }
     }
 
@@ -844,6 +867,10 @@ public class EmailService {
     /**
      * Loads the booking + meeting type + owner settings + answers in the CALLER's active transaction.
      * Use from an already-transactional caller (the scheduler claim tx). Returns null if gone.
+     * For a group booking ({@code booking.groupId != null}) also eagerly resolves every host's own
+     * {@link OwnerSettings} + own booking row (their approve/manage tokens) -- {@link
+     * #sendForKindLocaleAware} needs those for the per-host fan-out but runs OUTSIDE this
+     * transaction (called after {@link #load} returns), so they can't be looked up lazily there.
      */
     private Loaded read(Long bookingId) {
         Booking booking = Booking.findById(bookingId);
@@ -854,7 +881,26 @@ public class EmailService {
         OwnerSettings owner = OwnerSettings.forOwner(type.ownerId);
         ZoneId zone = ZoneId.of(owner.timezone);
         List<AnswerLine> answers = buildAnswerLines(booking, type);
-        return new Loaded(booking, type, owner, zone, answers);
+        List<HostDelivery> hostDeliveries =
+                booking.groupId == null ? List.of() : loadHostDeliveries(booking.groupId, type);
+        return new Loaded(booking, type, owner, zone, answers, hostDeliveries);
+    }
+
+    /** Every accepted host's own {@code OwnerSettings} paired with their own row of this group. */
+    private List<HostDelivery> loadHostDeliveries(UUID groupId, MeetingType type) {
+        List<Booking> rows = Booking.group(groupId);
+        List<HostDelivery> deliveries = new ArrayList<>();
+        for (Long hostId : meetingHosts.hostOwnerIds(type)) {
+            OwnerSettings settings = OwnerSettings.forOwner(hostId);
+            if (settings == null) continue;
+            Booking row = rows.stream()
+                    .filter(r -> hostId.equals(r.ownerId))
+                    .findFirst()
+                    .orElse(null);
+            if (row == null) continue;
+            deliveries.add(new HostDelivery(settings, row));
+        }
+        return deliveries;
     }
 
     /** As {@link #read} but opens its own transaction — for AFTER_SUCCESS observers (no active tx). */
@@ -883,9 +929,21 @@ public class EmailService {
         return lines;
     }
 
-    /** Immutable bundle read once in one transaction. */
+    /**
+     * Immutable bundle read once in one transaction. {@code hostDeliveries} is empty for a
+     * single-host booking ({@code booking.groupId == null}); for a group booking it holds one entry
+     * per accepted host (their own {@code OwnerSettings} + their own row of the group).
+     */
     private record Loaded(
-            Booking booking, MeetingType meetingType, OwnerSettings owner, ZoneId zone, List<AnswerLine> answers) {}
+            Booking booking,
+            MeetingType meetingType,
+            OwnerSettings owner,
+            ZoneId zone,
+            List<AnswerLine> answers,
+            List<HostDelivery> hostDeliveries) {}
+
+    /** A group booking's per-host delivery target: that host's own settings + own booking row. */
+    private record HostDelivery(OwnerSettings settings, Booking booking) {}
 
     /** One rendered custom-field answer: human label + submitted value. Public for Qute access. */
     public record AnswerLine(String label, String value) {}

@@ -469,6 +469,9 @@ public interface AppMessages {
     @Message("Action needed: reconnect your Google Calendar")
     String email_google_disconnected_subject();
 
+    @Message("You're invited to co-host: {meetingTypeName}")
+    String email_host_consent_subject(String meetingTypeName);
+
     // ---- Email date/time formatting ----
 
     /** strftime-like pattern used to format booking date/time in email bodies. */
@@ -686,6 +689,21 @@ public interface AppMessages {
     @Message(
             "This usually happens when access was revoked, your password changed, or the connection sat unused for a long time. Reconnecting takes a few seconds.")
     String email_google_disconnected_why();
+
+    // ---- Email body — host consent ----
+
+    @Message("Co-host invitation")
+    String email_host_consent_title();
+
+    @Message("Hi {name},")
+    String email_host_consent_greeting(String name);
+
+    @Message(
+            "{creatorName} invited you to co-host \"{meetingTypeName}\" on calit. Accept to start receiving bookings together.")
+    String email_host_consent_body(String creatorName, String meetingTypeName);
+
+    @Message("Accept co-host invitation")
+    String email_host_consent_cta();
 
     // ---- Auth / bootstrap pages ----
 
