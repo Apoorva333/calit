@@ -652,24 +652,34 @@ public class BookingService {
 
     @Transactional
     public Booking reschedule(String manageToken, Instant newStartUtc) {
-        return reschedule(manageToken, newStartUtc, null, false);
+        return reschedule(manageToken, newStartUtc, null, false, null);
     }
 
     @Transactional
     public Booking reschedule(String manageToken, Instant newStartUtc, List<String> guestEmails) {
-        return reschedule(manageToken, newStartUtc, guestEmails, false);
+        return reschedule(manageToken, newStartUtc, guestEmails, false, null);
+    }
+
+    @Transactional
+    public Booking reschedule(String manageToken, Instant newStartUtc, List<String> guestEmails, boolean byOwner) {
+        return reschedule(manageToken, newStartUtc, guestEmails, byOwner, null);
     }
 
     /**
      * Reschedules a booking by its manage token. When {@code guestEmails} is non-null the active guest
      * set is reconciled to it (added guests -> INVITED + GuestRemoved/invite emails downstream; dropped
      * guests -> REMOVED + cancel email; kept guests get the reschedule .ics via BookingRescheduled).
-     * A null {@code guestEmails} leaves guests untouched (the JSON API + the 2-arg overload).
-     * {@code byOwner} true when the host drove the reschedule (from /me or an owner email link),
-     * which flips the notification wording so nobody is told the guest moved it.
+     * A null {@code guestEmails} leaves guests untouched (the JSON API + the 2/3-arg overloads).
+     * {@code byOwner} true when the host drove the reschedule (from /me or an owner email link), which
+     * flips the notification wording so nobody is told the guest moved it, and — for an approval type —
+     * spares the initiating host's own approval (see below). {@code initiatorOwnerId} is the acting
+     * host's owner id, used only for a multi-host group reschedule; null for the invitee path and for
+     * every single-host overload (single host has only one possible initiating host, so there is nothing
+     * to disambiguate).
      */
     @Transactional
-    public Booking reschedule(String manageToken, Instant newStartUtc, List<String> guestEmails, boolean byOwner) {
+    public Booking reschedule(
+            String manageToken, Instant newStartUtc, List<String> guestEmails, boolean byOwner, Long initiatorOwnerId) {
         Booking booking = Booking.findByManageToken(manageToken);
         if (booking == null || booking.status == BookingStatus.CANCELLED || booking.status == BookingStatus.DECLINED) {
             throw new NotFoundException("No active booking for token " + manageToken);
@@ -679,6 +689,10 @@ public class BookingService {
         // SEQUENCE bump + reschedule email when the invitee re-picks the current slot.
         if (newStartUtc.equals(booking.startUtc) && guestEmails == null) {
             return booking;
+        }
+
+        if (booking.groupId != null) {
+            return rescheduleGroup(booking, newStartUtc, guestEmails, byOwner, initiatorOwnerId);
         }
 
         MeetingType type = MeetingType.findById(booking.meetingTypeId);
@@ -693,7 +707,10 @@ public class BookingService {
         // Bump the iTIP SEQUENCE so guest .ics updates/cancels supersede the prior event.
         booking.icsSequence = booking.icsSequence + 1;
 
-        boolean reApproval = type.requiresApproval;
+        // Deliberate behavior change (Task 11): an owner-initiated reschedule of an approval type no
+        // longer reverts to PENDING -- only an invitee-initiated one does. A host already knows their
+        // own slot is free (they just picked it), so re-approving themselves would be theater.
+        var reApproval = type.requiresApproval && !byOwner;
         String priorEventId = booking.googleEventId;
         if (reApproval) {
             // Feature 14: return to the approval queue; drop any existing event.
@@ -757,6 +774,58 @@ public class BookingService {
             }
             bookingRescheduledEvent.fire(new BookingRescheduled(booking.id, oldStart, byOwner));
         }
+    }
+
+    /**
+     * Group reschedule: re-checks the multi-host intersection at the new time, moves every row in the
+     * group (start/end/SEQUENCE), and drops the one shared Google event (recreated on full re-confirm).
+     * For an approval type this re-enters the approval queue: an invitee-initiated reschedule
+     * ({@code initiatorOwnerId == null}) resets every host row to PENDING; a host-initiated one spares
+     * only the initiating host's row (that host just picked the slot, so re-approving themselves would
+     * be theater) and resets every other host. A non-approval type just moves the rows and recreates the
+     * event. {@code row} may be any row of the group (its manageToken resolved the group); only its
+     * {@code groupId}/{@code meetingTypeId}/{@code startUtc} are read.
+     */
+    private Booking rescheduleGroup(
+            Booking row, Instant newStartUtc, List<String> guestEmails, boolean byOwner, Long initiatorOwnerId) {
+        MeetingType type = MeetingType.findById(row.meetingTypeId);
+        Instant newEnd = newStartUtc.plusSeconds(60L * type.durationMinutes);
+
+        // Re-check the intersection across all hosts at the new time (fail-closed inside availableSlots).
+        assertSlotAvailable(type, newStartUtc, row.id);
+
+        boolean reApproval = type.requiresApproval;
+        var initiator = byOwner ? initiatorOwnerId : null;
+
+        deleteGroupGoogleEvent(row.groupId); // drop the one event; recreated below only on full re-confirm
+        Instant oldStart = row.startUtc;
+        for (Booking r : Booking.<Booking>group(row.groupId)) {
+            r.startUtc = newStartUtc;
+            r.endUtc = newEnd;
+            r.icsSequence = r.icsSequence + 1;
+            if (reApproval) {
+                var keepsApproval = initiator != null && initiator.equals(r.ownerId);
+                r.status = keepsApproval ? BookingStatus.CONFIRMED : BookingStatus.PENDING;
+                if (!keepsApproval && r.approvalToken == null) {
+                    r.approvalToken = UUID.randomUUID().toString();
+                }
+            }
+        }
+
+        Booking freshLead = Booking.leadOfGroup(row.groupId, type.ownerId);
+        // Guests live on the lead row only.
+        List<Long> removedGuestIds = guestEmails != null ? reconcileGuests(freshLead, guestEmails) : List.of();
+        for (Long guestId : removedGuestIds) {
+            guestRemovedEvent.fire(new GuestRemoved(freshLead.id, guestId));
+        }
+
+        if (reApproval) {
+            bookingRequestedEvent.fire(new BookingRequested(freshLead.id)); // hosts re-approve
+        } else {
+            createGroupGoogleEvent(type, row.groupId);
+            bookingRescheduledEvent.fire(new BookingRescheduled(freshLead.id, oldStart, byOwner));
+        }
+        return freshLead;
     }
 
     /**
@@ -904,6 +973,9 @@ public class BookingService {
 
     /**
      * {@code byOwner} true when the host cancelled (from /me or an owner email link) -> initiator-aware wording.
+     * A group booking (any host may cancel on behalf of the whole meeting) deletes the one shared Google
+     * event, flips every host's row to CANCELLED, and fires a single {@code BookingCancelled} keyed by the
+     * lead row; single-host behavior is unchanged.
      */
     @Transactional
     public void cancel(String manageToken, boolean byOwner) {
@@ -911,11 +983,40 @@ public class BookingService {
         if (booking == null) {
             throw new NotFoundException("No booking for token " + manageToken);
         }
+        if (booking.groupId == null) {
+            cancelSingle(booking, byOwner);
+            return;
+        }
+        MeetingType type = MeetingType.findById(booking.meetingTypeId);
+        deleteGroupGoogleEvent(booking.groupId); // one shared event
+        for (Booking r : Booking.<Booking>group(booking.groupId)) {
+            r.status = BookingStatus.CANCELLED;
+        }
+        Booking lead = Booking.leadOfGroup(booking.groupId, type.ownerId);
+        bookingCancelledEvent.fire(new BookingCancelled(lead.id, byOwner));
+    }
+
+    private void cancelSingle(Booking booking, boolean byOwner) {
         booking.status = BookingStatus.CANCELLED;
         if (calendarPort.isConnected(booking.ownerId) && booking.googleEventId != null) {
             calendarPort.deleteEvent(booking.ownerId, booking.googleEventId);
         }
         bookingCancelledEvent.fire(new BookingCancelled(booking.id, byOwner));
+    }
+
+    /**
+     * Deletes the one Google event shared by a group (only the organizer's row carries it — see
+     * {@link #createGroupGoogleEvent}) and clears it from that row. A no-op when the group never had a
+     * Google event (degraded mode, or no host was connected at confirm time).
+     */
+    private void deleteGroupGoogleEvent(UUID groupId) {
+        for (Booking r : Booking.<Booking>group(groupId)) {
+            if (r.googleEventId != null) {
+                calendarPort.deleteEvent(r.ownerId, r.googleEventId);
+                r.googleEventId = null;
+                r.meetLink = null;
+            }
+        }
     }
 
     @Transactional
