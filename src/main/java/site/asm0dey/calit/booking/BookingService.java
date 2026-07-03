@@ -23,6 +23,7 @@ import site.asm0dey.calit.booking.events.*;
 import site.asm0dey.calit.domain.BookingField;
 import site.asm0dey.calit.domain.MeetingType;
 import site.asm0dey.calit.domain.MeetingType.LocationType;
+import site.asm0dey.calit.domain.MeetingTypeHost;
 import site.asm0dey.calit.domain.OwnerSettings;
 import site.asm0dey.calit.google.BusyInterval;
 import site.asm0dey.calit.google.CalendarPort;
@@ -217,6 +218,10 @@ public class BookingService {
         // (the DB constraint only guards raw-time overlap, not buffers).
         assertSlotAvailable(type, startUtc, null);
 
+        if (MeetingTypeHost.isMultiHost(type.id)) {
+            return bookGroup(type, startUtc, endUtc, inviteeName, inviteeEmail, submitted, locale, guestEmails);
+        }
+
         Booking booking = new Booking();
         booking.ownerId = type.ownerId;
         booking.meetingTypeId = type.id;
@@ -266,6 +271,119 @@ public class BookingService {
 
         bookingConfirmedEvent.fire(new BookingConfirmed(booking.id));
         return booking;
+    }
+
+    /**
+     * Multi-host booking write: one row per accepted host, sharing a new {@code group_id}, inside a
+     * single flush so a cross-node overlap on ANY host's row rolls back the whole group (same 409 the
+     * single-host path uses). Guests attach to the lead (creator's) row only. Approval types insert N
+     * PENDING rows (each with its own approvalToken) and fire one {@code BookingRequested(leadId)}; auto
+     * types insert N CONFIRMED rows and create exactly one Google event on the chosen organizer.
+     */
+    private Booking bookGroup(
+            MeetingType type,
+            Instant startUtc,
+            Instant endUtc,
+            String inviteeName,
+            String inviteeEmail,
+            Map<String, String> answers,
+            String locale,
+            List<String> guestEmails) {
+        var groupId = UUID.randomUUID();
+        List<Long> hostIds = meetingHosts.hostOwnerIds(type);
+        boolean approval = type.requiresApproval;
+        Booking lead = null;
+        try {
+            for (Long hostId : hostIds) {
+                Booking b = new Booking();
+                b.ownerId = hostId;
+                b.meetingTypeId = type.id;
+                b.inviteeName = inviteeName;
+                b.inviteeEmail = inviteeEmail;
+                b.startUtc = startUtc;
+                b.endUtc = endUtc;
+                b.createdAt = Instant.now();
+                b.manageToken = UUID.randomUUID().toString();
+                b.answers = answers;
+                b.locale = AppLocales.isSupported(locale) ? locale : "en";
+                b.status = approval ? BookingStatus.PENDING : BookingStatus.CONFIRMED;
+                if (approval) {
+                    b.approvalToken = UUID.randomUUID().toString();
+                }
+                b.groupId = groupId;
+                b.persist();
+                if (hostId.equals(type.ownerId)) {
+                    lead = b;
+                }
+            }
+            Booking.getEntityManager().flush(); // surface booking_no_overlap_held now
+        } catch (PersistenceException ex) {
+            if (isNoOverlapViolation(ex)) {
+                throw new BookingConflictException("Slot " + startUtc + " is not available for " + type.slug);
+            }
+            throw ex;
+        }
+
+        // guests attach to the lead row only
+        persistGuests(lead, guestEmails);
+
+        if (approval) {
+            bookingRequestedEvent.fire(new BookingRequested(lead.id));
+            return lead;
+        }
+
+        createGroupGoogleEvent(type, groupId);
+        bookingConfirmedEvent.fire(new BookingConfirmed(lead.id));
+        return lead;
+    }
+
+    /** One Google event on the chosen organizer, all other hosts + invitee + guests invited. */
+    private void createGroupGoogleEvent(MeetingType type, UUID groupId) {
+        List<Long> hostIds = meetingHosts.hostOwnerIds(type);
+        Long organizer = meetingHosts.chooseOrganizer(type, hostIds);
+        if (organizer == null) {
+            return; // no host has Google -> calit-only booking
+        }
+        Booking lead = Booking.leadOfGroup(groupId, type.ownerId);
+        Booking organizerRow = organizer.equals(type.ownerId)
+                ? lead
+                : Booking.<Booking>group(groupId).stream()
+                        .filter(r -> r.ownerId.equals(organizer))
+                        .findFirst()
+                        .orElseThrow();
+        List<String> attendees = groupAttendeeEmails(type, groupId, hostIds);
+        CreatedEvent created = calendarPort.createEvent(
+                organizer,
+                googleSummary(type, lead),
+                googleDescription(type, lead),
+                lead.startUtc,
+                lead.endUtc,
+                attendees,
+                type.locationType == LocationType.GOOGLE_MEET,
+                type.locationDetail);
+        organizerRow.googleEventId = created.googleEventId();
+        organizerRow.meetLink = created.meetLink();
+        // propagate the meet link to the lead row too so invitee-facing views show it
+        if (lead != null && lead.meetLink == null) {
+            lead.meetLink = created.meetLink();
+        }
+    }
+
+    /** Invitee + every host's OwnerSettings.ownerEmail + active guests (guests live on the lead row). */
+    private List<String> groupAttendeeEmails(MeetingType type, UUID groupId, List<Long> hostIds) {
+        List<String> emails = new ArrayList<>();
+        Booking lead = Booking.leadOfGroup(groupId, type.ownerId);
+        emails.add(lead.inviteeEmail);
+        for (Long hostId : hostIds) {
+            OwnerSettings os = OwnerSettings.forOwner(hostId);
+            if (os != null && os.ownerEmail != null) {
+                emails.add(os.ownerEmail);
+            }
+        }
+        for (BookingGuest g : BookingGuest.<BookingGuest>activeForBooking(lead.id)) {
+            emails.add(g.email);
+        }
+        return emails;
     }
 
     /**
@@ -422,7 +540,7 @@ public class BookingService {
         var today = Instant.now().atZone(zone).toLocalDate();
         var dayStart = today.atStartOfDay(zone).toInstant();
         var dayEnd = today.plusDays(1).atStartOfDay(zone).toInstant();
-        if (Booking.countByEmailCreatedBetween(inviteeEmail, dayStart, dayEnd) >= perEmailDailyCap) {
+        if (Booking.countDistinctBookingsByEmailBetween(inviteeEmail, dayStart, dayEnd) >= perEmailDailyCap) {
             throw new RateLimitException("Daily booking cap reached for " + inviteeEmail);
         }
     }
