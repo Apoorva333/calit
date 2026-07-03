@@ -322,7 +322,18 @@ to this feature): the builder doesn't fold lines >75 octets (RFC 5545 §3.1) —
 
 ## 10. UI, admin, authorization, i18n
 
-### Creator — meeting-type edit form
+### Meeting-types navigation (Main vs Shared)
+- **Main meeting-types page** lists the user's **single-host** types + the existing "New meeting
+  type" button (creation unchanged). It shows a **"Shared →"** link **only if** the user has any
+  shared types.
+- **Shared page** — **one flat list** (role badge per row, not grouped) of **every multi-host type
+  involving the user**: both types they **created** (`CREATOR`) and types they **co-host**
+  (accepted `COHOST`). Each row shows role (creator / co-host), status (pending / accepted), and
+  the per-host "calendar needs reconnect" indicator.
+- **Auto-relocation:** a type is created single-host via the same button and **moves Main → Shared
+  the moment the first co-host is added** (and back when the last co-host is removed, §15).
+
+### Creator — meeting-type edit form (a shared type)
 - **Add-cohost input** with progressive-enhancement autocomplete (§11).
 - **Host list** with each host's status (creator / pending / accepted) + per-host "calendar needs
   reconnect" indicator + a remove control (triggering §6 interstitial when needed).
@@ -331,10 +342,11 @@ to this feature): the builder doesn't fold lines >75 octets (RFC 5545 §3.1) —
 
 ### Co-host — `/me`
 - **Pending shared-meeting requests** surface (accept / decline), styled like booking approvals.
-- **"Shared meetings"** section listing accepted shared types (name, creator, canonical link),
-  each opening the **existing per-type availability + buffer editor** scoped to their own
-  `owner_id` + that `meeting_type_id`. Default = their global availability until customized (no
-  forced setup on accept).
+- Accepted shared types appear in the **Shared page** (above). Opening a shared type the user
+  co-hosts gives them the **existing per-type availability + buffer editor** scoped to their own
+  `owner_id` + that `meeting_type_id` (they do **not** get the creator's host-management / type-
+  settings controls). Default = their global availability until customized (no forced setup on
+  accept).
 
 ### Public page
 - A multi-host type that isn't fully accepted / has a disabled host / broken calendar shows
