@@ -21,7 +21,7 @@
     document.addEventListener('click', function (e) {
       var btn = e.target.closest ? e.target.closest('.copy-link-btn') : null;
       if (!btn) { return; }
-      var url = btn.getAttribute('data-copy-link');
+      var url = btn.dataset.copyLink;
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(url).then(
           function () { showToast(msg.textContent, true); },
