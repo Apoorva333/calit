@@ -18,31 +18,20 @@
 
   <div class="space-y-3">
   {#for t in types}
-    <div class="card bg-base-100 border border-base-300">
-      <div class="card-body gap-2">
-        <h3 class="text-lg font-semibold flex items-center gap-2">{t.name}
-          {#if t.secret}<span class="badge badge-ghost badge-sm">{adm:adm_meetingTypes_badge_secret}</span>{/if}
-          {#if !t.active}<span class="badge badge-ghost badge-sm">{adm:adm_meetingTypes_badge_inactive}</span>{/if}
-          {#if t.requiresApproval}<span class="badge badge-primary badge-sm">{adm:adm_meetingTypes_badge_approval}</span>{/if}
-        </h3>
-        <p class="text-sm text-base-content/70">/{t.slug} &middot; {t.durationMinutes} {adm:adm_meetingTypes_min} &middot; {t.locationType.display}{#if t.locationDetail} ({t.locationDetail}){/if}</p>
-        <p class="text-sm text-base-content/70">{adm:adm_meetingTypes_min_notice} {t.minNoticeMinutes} {adm:adm_meetingTypes_min} &middot; {adm:adm_meetingTypes_horizon} {t.horizonDays} {adm:adm_meetingTypes_days}{#if t.slotIntervalMinutes} &middot; {adm:adm_meetingTypes_slot_interval} {t.slotIntervalMinutes} {adm:adm_meetingTypes_min}{/if} &middot; {adm:adm_meetingTypes_buffer} {t.bufferBeforeMinutes}/{t.bufferAfterMinutes} {adm:adm_meetingTypes_min}</p>
-        <div class="flex flex-wrap items-center gap-2 mt-1">
-          <button type="button" class="btn btn-ghost btn-sm btn-square copy-link-btn" data-copy-link="{baseUrl}/{username}/{t.slug}" aria-label="{adm:adm_meetingTypes_copy_link_aria}" title="{adm:adm_meetingTypes_copy_link_aria}">
-            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
-          </button>
-          <a href="/me/meeting-types/{t.id}" class="btn btn-outline btn-sm">{adm:adm_meetingTypes_btn_edit}</a>
-          <form method="post" action="/me/meeting-types/{t.id}/toggle">
-            <input type="hidden" name="{inject:csrf.parameterName}" value="{inject:csrf.token}">
-            <button type="submit" class="btn btn-ghost btn-sm">{#if t.active}{adm:adm_meetingTypes_btn_deactivate}{#else}{adm:adm_meetingTypes_btn_activate}{/if}</button>
-          </form>
-          <form method="post" action="/me/meeting-types/{t.id}/delete">
-            <input type="hidden" name="{inject:csrf.parameterName}" value="{inject:csrf.token}">
-            <button type="submit" class="btn btn-error btn-outline btn-sm">{adm:adm_meetingTypes_btn_delete}</button>
-          </form>
-        </div>
-      </div>
-    </div>
+    {#include AdminResource/_meetingtypecard type=t username=username baseUrl=baseUrl}
+      {#extra}
+      <p class="text-sm text-base-content/70">{adm:adm_meetingTypes_min_notice} {t.minNoticeMinutes} {adm:adm_meetingTypes_min} &middot; {adm:adm_meetingTypes_horizon} {t.horizonDays} {adm:adm_meetingTypes_days}{#if t.slotIntervalMinutes} &middot; {adm:adm_meetingTypes_slot_interval} {t.slotIntervalMinutes} {adm:adm_meetingTypes_min}{/if} &middot; {adm:adm_meetingTypes_buffer} {t.bufferBeforeMinutes}/{t.bufferAfterMinutes} {adm:adm_meetingTypes_min}</p>
+      {/extra}
+      <a href="/me/meeting-types/{t.id}" class="btn btn-outline btn-sm">{adm:adm_meetingTypes_btn_edit}</a>
+      <form method="post" action="/me/meeting-types/{t.id}/toggle">
+        <input type="hidden" name="{inject:csrf.parameterName}" value="{inject:csrf.token}">
+        <button type="submit" class="btn btn-ghost btn-sm">{#if t.active}{adm:adm_meetingTypes_btn_deactivate}{#else}{adm:adm_meetingTypes_btn_activate}{/if}</button>
+      </form>
+      <form method="post" action="/me/meeting-types/{t.id}/delete">
+        <input type="hidden" name="{inject:csrf.parameterName}" value="{inject:csrf.token}">
+        <button type="submit" class="btn btn-error btn-outline btn-sm">{adm:adm_meetingTypes_btn_delete}</button>
+      </form>
+    {/include}
   {/for}
   </div>
 
@@ -184,39 +173,5 @@
     <button type="submit" class="btn btn-primary">{adm:adm_meetingTypes_btn_create}</button>
   </form>
 
-  <div class="toast toast-end z-50" id="copy-toast" style="display:none" role="status" aria-live="polite">
-    <div class="alert alert-success" id="copy-toast-alert">
-      <span id="copy-toast-msg">{adm:adm_meetingTypes_toast_copied}</span>
-    </div>
-  </div>
-
-  <script>
-    (function () {
-      var toast = document.getElementById('copy-toast');
-      var alert = document.getElementById('copy-toast-alert');
-      var msg = document.getElementById('copy-toast-msg');
-      var timer = null;
-      function showToast(text, ok) {
-        if (!toast) { return; }
-        if (msg) { msg.textContent = text; }
-        if (alert) { alert.className = ok ? 'alert alert-success' : 'alert alert-error'; }
-        toast.style.display = '';
-        if (timer) { clearTimeout(timer); }
-        timer = setTimeout(function () { toast.style.display = 'none'; }, 2000);
-      }
-      document.addEventListener('click', function (e) {
-        var btn = e.target.closest ? e.target.closest('.copy-link-btn') : null;
-        if (!btn) { return; }
-        var url = btn.getAttribute('data-copy-link');
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(url).then(
-            function () { showToast(msg.textContent, true); },
-            function () { showToast('Copy failed — ' + url, false); }
-          );
-        } else {
-          showToast('Copy failed — ' + url, false);
-        }
-      });
-    })();
-  </script>
+  {#include AdminResource/_copyToast /}
 {/include}

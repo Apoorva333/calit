@@ -286,6 +286,12 @@ public interface AdminMessages {
     @Message("No shared meeting types yet.")
     String adm_shared_empty();
 
+    @Message("Set availability")
+    String adm_shared_card_setAvailability();
+
+    @Message("Leave")
+    String adm_shared_card_leave();
+
     // ---- Co-host consent requests + shared availability editor (SharedMeetingsResource) ----
 
     @Message("Pending co-hosting invitations")

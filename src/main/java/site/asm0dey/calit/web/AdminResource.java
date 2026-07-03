@@ -59,7 +59,7 @@ public class AdminResource {
                 String title);
 
         public static native TemplateInstance shared(
-                List<SharedRow> rows, Long pendingCount, boolean isAdmin, String title);
+                List<SharedRow> rows, String baseUrl, Long pendingCount, boolean isAdmin, String title);
 
         public static native TemplateInstance meetingTypeDetail(
                 MeetingType type,
@@ -145,9 +145,12 @@ public class AdminResource {
      * One row of the Shared page: a multi-host meeting type this owner is a host of, either as the
      * type's CREATOR or as a COHOST — {@code role}/{@code status} are {@link MeetingTypeHost}
      * constants. {@code needsReconnect} flags this owner's own Google connection, not any other
-     * host's — see {@link #shared()}.
+     * host's — see {@link #shared()}. {@code creatorUsername} is the type's CREATOR's username,
+     * used for the card's copy-link URL — a co-hosted type's canonical booking link always lives
+     * under the creator's username, never this (possibly co-host) owner's.
      */
-    public record SharedRow(MeetingType type, String role, String status, boolean needsReconnect) {}
+    public record SharedRow(
+            MeetingType type, String role, String status, boolean needsReconnect, String creatorUsername) {}
 
     /**
      * One row of the meeting-type detail page's host list (Task 17): resolves {@link
@@ -297,19 +300,25 @@ public class AdminResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance shared() {
         var needsReconnect = ownerNeedsReconnect();
+        String ownUsername = currentOwner.require().username;
         List<SharedRow> rows = new java.util.ArrayList<>();
         for (MeetingType t : MeetingType.listForOwner(currentOwner.id())) {
             if (MeetingTypeHost.isMultiHost(t.id)) {
-                rows.add(new SharedRow(t, MeetingTypeHost.CREATOR, MeetingTypeHost.ACCEPTED, needsReconnect));
+                // This owner IS the creator here (listForOwner filters by t.ownerId), so the
+                // canonical link's username is this owner's own username.
+                rows.add(new SharedRow(
+                        t, MeetingTypeHost.CREATOR, MeetingTypeHost.ACCEPTED, needsReconnect, ownUsername));
             }
         }
         for (MeetingTypeHost h : MeetingTypeHost.cohostedTypesFor(currentOwner.id())) {
             MeetingType t = MeetingType.findById(h.meetingTypeId);
             if (t != null) {
-                rows.add(new SharedRow(t, MeetingTypeHost.COHOST, h.status, needsReconnect));
+                AppUser creator = AppUser.findById(t.ownerId);
+                String creatorUsername = creator != null ? creator.username : "";
+                rows.add(new SharedRow(t, MeetingTypeHost.COHOST, h.status, needsReconnect, creatorUsername));
             }
         }
-        return Templates.shared(rows, pendingCount(), isAdmin(), m().adm_shared_title());
+        return Templates.shared(rows, baseUrl, pendingCount(), isAdmin(), m().adm_shared_title());
     }
 
     @POST

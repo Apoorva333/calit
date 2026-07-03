@@ -99,6 +99,53 @@ class SharedPageTest {
                 .body(containsString("Co-host"));
     }
 
+    /**
+     * Task: Shared page cards. Admin (id 1, username "admin") is CREATOR of a two-host type — the
+     * card must look like the main meeting-types page's card (same `card` shell + copy-link
+     * button), the copy link must use the CREATOR's own username (admin's, since admin created
+     * it), and the only action shown must be Edit (never a co-host-only control).
+     */
+    @Test
+    void sharedPageRendersCreatedTypeAsCardWithCopyLinkAndEditAction() {
+        MeetingType t = seedAdminCreatedSharedType();
+
+        given().cookie("quarkus-credential", FormAuth.login())
+                .when()
+                .get("/me/shared")
+                .then()
+                .statusCode(200)
+                .body(containsString("class=\"card"))
+                .body(containsString(t.name))
+                .body(containsString("data-copy-link=\"http://localhost:8080/admin/" + t.slug + "\""))
+                .body(containsString("Creator"))
+                .body(containsString("href=\"/me/meeting-types/" + t.id + "\""))
+                .body(not(containsString("Set availability")))
+                .body(not(containsString("/me/shared/" + t.id + "/revoke")));
+    }
+
+    /**
+     * Admin (id 1) is COHOST of a type created by "shared-creator" — the card's copy link must use
+     * the CREATOR's username ("shared-creator"), NOT admin's own username, and the actions must be
+     * the co-host set ("Set availability" + revoke/leave form), never the creator's Edit link.
+     */
+    @Test
+    void sharedPageRendersCohostedTypeAsCardWithCreatorUsernameCopyLinkAndCohostActions() {
+        MeetingType t = seedAdminAsCohost();
+
+        given().cookie("quarkus-credential", FormAuth.login())
+                .when()
+                .get("/me/shared")
+                .then()
+                .statusCode(200)
+                .body(containsString("class=\"card"))
+                .body(containsString(t.name))
+                .body(containsString("data-copy-link=\"http://localhost:8080/shared-creator/" + t.slug + "\""))
+                .body(containsString("Co-host"))
+                .body(containsString("href=\"/me/shared/" + t.id + "/availability\""))
+                .body(containsString("action=\"/me/shared/" + t.id + "/revoke\""))
+                .body(not(containsString("href=\"/me/meeting-types/" + t.id + "\"")));
+    }
+
     @Test
     void sidebarShowsSharedNavItemWhenOwnerHasSharedInvolvement() {
         seedAdminCreatedSharedType();
