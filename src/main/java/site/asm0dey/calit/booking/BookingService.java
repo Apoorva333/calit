@@ -933,9 +933,12 @@ public class BookingService {
      * group (kept identical across hosts), each row's iTIP SEQUENCE bumps (same as {@link
      * #rescheduleGroup}) so a resent guest .ics supersedes the prior one, guests reconcile on the lead
      * row only with {@link GuestRemoved} fired per dropped guest, and — if the group has a shared
-     * Google event — it is patched exactly once via the organizer's row. Fires a single {@link
-     * BookingDetailsChanged} keyed by the lead. No no-op short-circuit here; unlike the single-host
-     * path, group edits always propagate to keep every row's title/description in lockstep.
+     * Google event and the organizer is still connected — it is patched exactly once via the
+     * organizer's row (a disconnected organizer skips the remote patch, mirroring {@link
+     * #updateDetails}'s {@code isConnected} guard, but local rows still update). Fires a single
+     * {@link BookingDetailsChanged} keyed by the lead. No no-op short-circuit here; unlike the
+     * single-host path, group edits always propagate to keep every row's title/description in
+     * lockstep.
      */
     private Booking updateGroupDetails(
             Booking booking,
@@ -964,7 +967,7 @@ public class BookingService {
 
         String eventId = groupEventId(booking.groupId);
         Long organizer = organizerOwnerOf(booking.groupId);
-        if (eventId != null && organizer != null) {
+        if (eventId != null && organizer != null && calendarPort.isConnected(organizer)) {
             calendarPort.updateEventDetails(
                     organizer,
                     eventId,
@@ -1124,12 +1127,17 @@ public class BookingService {
     /**
      * Deletes the one Google event shared by a group (only the organizer's row carries it — see
      * {@link #createGroupGoogleEvent}) and clears it from that row. A no-op when the group never had a
-     * Google event (degraded mode, or no host was connected at confirm time).
+     * Google event (degraded mode, or no host was connected at confirm time). If the organizer has
+     * since disconnected Google, the remote delete is skipped (mirrors {@link #cancelSingle}'s
+     * {@code isConnected} guard) but the local event refs are still cleared — the calit-side state
+     * must not be left dangling just because the remote call can't be made.
      */
     private void deleteGroupGoogleEvent(UUID groupId) {
         for (Booking r : Booking.<Booking>group(groupId)) {
             if (r.googleEventId != null) {
-                calendarPort.deleteEvent(r.ownerId, r.googleEventId);
+                if (calendarPort.isConnected(r.ownerId)) {
+                    calendarPort.deleteEvent(r.ownerId, r.googleEventId);
+                }
                 r.googleEventId = null;
                 r.meetLink = null;
             }

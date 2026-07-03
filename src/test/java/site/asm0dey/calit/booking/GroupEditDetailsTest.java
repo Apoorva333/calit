@@ -127,6 +127,40 @@ class GroupEditDetailsTest {
         assertEquals(detailsChangedBefore + 1, DETAILS_CHANGED.get());
     }
 
+    // --- final-review fix: editing details on a group whose organizer has since disconnected
+    // Google must still succeed (rows updated locally) without attempting the remote
+    // updateEventDetails call, mirroring updateDetails's single-host isConnected guard ---
+
+    @Test
+    @io.quarkus.test.TestTransaction
+    void groupEditWhoseOrganizerDisconnectedGoogleUpdatesRowsWithoutCallingUpdateEventDetails() {
+        stubOrganizerOnCreator();
+        groupType(); // auto-confirm -> event created immediately
+
+        Booking lead = bookingService.book(
+                1L, "intro", nextMonday(10), "Sam", "sam@x.com", Map.of(), "tok", "", "en", List.of());
+        List<Booking> rows = Booking.group(lead.groupId);
+        assertEquals(2, rows.size());
+        verify(calendarPort, times(1))
+                .createEvent(anyLong(), any(), any(), any(), any(), anyList(), anyBoolean(), any());
+
+        // The organizer (creator, owner id 1) disconnects Google after confirmation.
+        when(calendarPort.isConnected(1L)).thenReturn(false);
+
+        var detailsChangedBefore = DETAILS_CHANGED.get();
+        Booking cohostRow =
+                rows.stream().filter(r -> !r.ownerId.equals(1L)).findFirst().orElseThrow();
+        assertDoesNotThrow(() -> bookingService.updateDetails(
+                cohostRow.manageToken, "Roadmap sync", "Q3 planning", List.of("ana@x.com"), true));
+
+        Booking.<Booking>group(lead.groupId).forEach(r -> {
+            assertEquals("Roadmap sync", r.title);
+            assertEquals("Q3 planning", r.description);
+        });
+        verify(calendarPort, never()).updateEventDetails(anyLong(), anyString(), anyString(), anyString(), anyList());
+        assertEquals(detailsChangedBefore + 1, DETAILS_CHANGED.get());
+    }
+
     @Test
     @io.quarkus.test.TestTransaction
     void groupEditDroppingAGuestFiresGuestRemoved() {

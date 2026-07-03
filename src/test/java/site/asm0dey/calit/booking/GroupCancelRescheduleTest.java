@@ -107,6 +107,34 @@ class GroupCancelRescheduleTest {
         assertNull(Booking.<Booking>leadOfGroup(lead.groupId, 1L).googleEventId);
     }
 
+    // --- (a2) final-review fix: cancelling a CONFIRMED group whose organizer has since disconnected
+    // Google must still succeed (all rows -> CANCELLED, local event refs cleared) without attempting
+    // the remote deleteEvent call, mirroring cancelSingle's isConnected guard ---
+
+    @Test
+    @TestTransaction
+    void cancelGroupWhoseOrganizerDisconnectedGoogleSucceedsWithoutCallingDeleteEvent() {
+        stubOrganizerOnCreator();
+        groupType(false); // auto-confirm -> event created immediately
+
+        Booking lead = bookingService.book(
+                1L, "intro", nextMonday(10), "Sam", "sam@x.com", Map.of(), "tok", "", "en", List.of());
+        List<Booking> rows = Booking.group(lead.groupId);
+        assertEquals(2, rows.size());
+        rows.forEach(r -> assertEquals(BookingStatus.CONFIRMED, r.status));
+
+        // The organizer (creator, owner id 1) disconnects Google after confirmation.
+        when(calendarPort.isConnected(1L)).thenReturn(false);
+
+        Booking cohostRow =
+                rows.stream().filter(r -> !r.ownerId.equals(1L)).findFirst().orElseThrow();
+        assertDoesNotThrow(() -> bookingService.cancel(cohostRow.manageToken, true));
+
+        Booking.<Booking>group(lead.groupId).forEach(r -> assertEquals(BookingStatus.CANCELLED, r.status));
+        verify(calendarPort, never()).deleteEvent(anyLong(), anyString());
+        assertNull(Booking.<Booking>leadOfGroup(lead.groupId, 1L).googleEventId);
+    }
+
     // --- (b) invitee reschedule of an approval group -> all rows back to PENDING + event deleted ---
 
     @Test
