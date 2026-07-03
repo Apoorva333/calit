@@ -89,4 +89,12 @@ public class MeetingType extends PanacheEntityBase {
     public static List<MeetingType> listForOwner(Long ownerId) {
         return list("ownerId", ownerId);
     }
+
+    /** True when this owner already has a *different* type using this slug. */
+    public static boolean slugUsedByOwner(Long ownerId, String slug, Long excludeTypeId) {
+        if (excludeTypeId == null) {
+            return count("ownerId = ?1 and slug = ?2", ownerId, slug) > 0;
+        }
+        return count("ownerId = ?1 and slug = ?2 and id <> ?3", ownerId, slug, excludeTypeId) > 0;
+    }
 }

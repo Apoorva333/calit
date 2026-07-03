@@ -114,10 +114,38 @@ public class MeetingHosts {
             throw new IllegalStateException("A meeting can have at most " + MAX_HOSTS + " hosts.");
         }
         // ponytail: constant cap, revisit only if a real use-case needs more
+        assertSlugFreeForCohost(type, candidate);
         MeetingTypeHost h = MeetingTypeHost.of(type.id, candidate.id, MeetingTypeHost.COHOST, MeetingTypeHost.PENDING);
         h.consentToken = UUID.randomUUID();
         h.persist();
         consentEvent.fire(new HostConsentRequested(type.id, candidate.id, h.consentToken.toString()));
+    }
+
+    /**
+     * A candidate must not already own, or co-host, another type with the same slug as {@code
+     * type} — their public URL would collide once they accept.
+     */
+    public void assertSlugFreeForCohost(MeetingType type, AppUser candidate) {
+        if (MeetingType.slugUsedByOwner(candidate.id, type.slug, null)) {
+            throw new IllegalStateException(candidate.username + " already uses the slug " + type.slug
+                    + " -- pick a different slug or ask them to free it.");
+        }
+        // also reject if candidate is a host of another multi-host type with this slug
+        for (MeetingTypeHost h : MeetingTypeHost.cohostedTypesFor(candidate.id)) {
+            MeetingType other = MeetingType.findById(h.meetingTypeId);
+            if (other != null && !other.id.equals(type.id) && other.slug.equals(type.slug)) {
+                throw new IllegalStateException(candidate.username + " already co-hosts a type with slug " + type.slug);
+            }
+        }
+    }
+
+    /** For create/rename of a shared type: slug must be free in every host's namespace. */
+    public void assertSlugFreeAcrossHosts(MeetingType type, String newSlug) {
+        for (Long hostId : hostOwnerIds(type)) {
+            if (!hostId.equals(type.ownerId) && MeetingType.slugUsedByOwner(hostId, newSlug, null)) {
+                throw new IllegalStateException("A host already uses the slug " + newSlug);
+            }
+        }
     }
 
     private void ensureCreatorRow(MeetingType type) {
