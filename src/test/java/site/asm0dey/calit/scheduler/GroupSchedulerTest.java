@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -33,6 +34,9 @@ class GroupSchedulerTest {
 
     @Inject
     PendingExpiryScheduler expiryScheduler;
+
+    @Inject
+    EntityManager em;
 
     private MeetingType twoHostType(boolean requiresApproval) {
         return QuarkusTransaction.requiringNew().call(() -> {
@@ -179,5 +183,73 @@ class GroupSchedulerTest {
                     EmailOutbox.count("recipient", "Cohost@x.com"),
                     "no second declined email for the co-host");
         });
+    }
+
+    /**
+     * Deterministic (no real threads) regression proving the per-group advisory-lock
+     * serialization from the AB-BA deadlock fix: a tick must SKIP a claimed row of a group whose
+     * advisory lock is already held by another still-open transaction, rather than trying to lock
+     * (and blocking/deadlocking on) that group's rows. We simulate "another tick already owns this
+     * group's decline this round" by manually opening a real, still-uncommitted transaction on this
+     * thread and taking the group's {@code pg_try_advisory_xact_lock} in it first -- the lock is
+     * session-scoped in Postgres, so {@link PendingExpiryScheduler}'s own {@code requiringNew()}
+     * transaction (a different connection) sees it held and must back off. The claimed row --
+     * expired PENDING, otherwise indistinguishable from the "normal decline" case -- must be left
+     * completely untouched, and neither host nor the invitee gets an email.
+     */
+    @Test
+    void groupExpirySkipsClaimedRowWhenGroupAdvisoryLockIsHeldByAnotherTransaction() {
+        MeetingType type = twoHostType(true);
+        var start = Instant.now().plus(500, ChronoUnit.HOURS);
+        GroupIds ids = seedGroup(
+                type.id,
+                start,
+                BookingStatus.CONFIRMED,
+                Instant.now().minus(2, ChronoUnit.HOURS), // lead already approved
+                BookingStatus.PENDING,
+                Instant.now().minus(25, ChronoUnit.HOURS)); // cohost still pending, past the 24h hold
+
+        UUID groupId = QuarkusTransaction.requiringNew().call(() -> ((Booking) Booking.findById(ids.leadId())).groupId);
+
+        record Baseline(long invitee, long lead, long cohost) {}
+        Baseline before = QuarkusTransaction.requiringNew()
+                .call(() -> new Baseline(
+                        EmailOutbox.count("recipient", INVITEE_EMAIL),
+                        EmailOutbox.count("recipient", "Creator@x.com"),
+                        EmailOutbox.count("recipient", "Cohost@x.com")));
+
+        // Manually open (and hold open) a transaction that owns the group's advisory lock, standing
+        // in for "another tick's still-open transaction". PendingExpiryScheduler's own
+        // requiringNew() call below runs on a DIFFERENT connection, so its
+        // pg_try_advisory_xact_lock attempt for the same group must return false.
+        QuarkusTransaction.begin();
+        try {
+            var acquiredHere =
+                    (Boolean) em.createNativeQuery("select pg_try_advisory_xact_lock(hashtextextended(?1, 0))")
+                            .setParameter(1, groupId.toString())
+                            .getSingleResult();
+            assertEquals(Boolean.TRUE, acquiredHere, "test setup: this transaction must win the lock first");
+
+            expiryScheduler.expirePendingBookings();
+        } finally {
+            QuarkusTransaction.rollback();
+        }
+
+        QuarkusTransaction.requiringNew().run(() -> {
+            assertEquals(
+                    BookingStatus.CONFIRMED,
+                    ((Booking) Booking.findById(ids.leadId())).status,
+                    "lead row untouched -- the tick never owned the group's advisory lock");
+            assertEquals(
+                    BookingStatus.PENDING,
+                    ((Booking) Booking.findById(ids.cohostId())).status,
+                    "claimed cohost row is skipped outright, not declined, while the lock is held elsewhere");
+        });
+        assertEquals(
+                before.invitee(), EmailOutbox.count("recipient", INVITEE_EMAIL), "no declined email for the invitee");
+        assertEquals(
+                before.lead(), EmailOutbox.count("recipient", "Creator@x.com"), "no declined email for the lead host");
+        assertEquals(
+                before.cohost(), EmailOutbox.count("recipient", "Cohost@x.com"), "no declined email for the co-host");
     }
 }

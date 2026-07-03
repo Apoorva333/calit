@@ -21,6 +21,13 @@ import site.asm0dey.calit.email.EmailService;
  * replicas never decline the same booking. Flipping PENDING -> DECLINED drops the
  * row from the booking_no_overlap_held guard (partial on PENDING/CONFIRMED),
  * which immediately frees the held slot for a new booking.
+ *
+ * <p>Multi-host groups: two ticks can each claim a different sibling row of the same
+ * group via the row-level FOR UPDATE SKIP LOCKED above, then both try to decline the
+ * whole group -> AB-BA deadlock on each other's claimed row. Group processing is
+ * serialized with a per-group, transaction-scoped, NON-BLOCKING Postgres advisory
+ * lock ({@code pg_try_advisory_xact_lock}): a losing tick skips the row outright
+ * rather than waiting on the owner, so no wait cycle can form.
  */
 @ApplicationScoped
 public class PendingExpiryScheduler {
@@ -82,12 +89,33 @@ public class PendingExpiryScheduler {
                 // just the one that happened to be claimed, and send a single declined email (fanned
                 // out per host by EmailService) keyed on the group's lead row.
                 if (b.groupId != null) {
+                    // Two ticks can each claim a DIFFERENT sibling row of the SAME group (each row's
+                    // FOR UPDATE SKIP LOCKED lock is acquired independently by the claim query above).
+                    // If both then tried to decline the whole group, each would need to UPDATE the
+                    // OTHER tick's already-locked sibling -> classic AB-BA deadlock. A per-group
+                    // Postgres transaction-scoped advisory lock, taken NON-BLOCKING, fixes this: at
+                    // most one tick ever "owns" a group per round, and a losing tick never waits on
+                    // (and thus never cycles with) the owner -- it just skips this row outright. The
+                    // owning tick may still briefly block acquiring a sibling row lock held by a
+                    // losing tick's still-open claim, but that tick has nothing left to do and commits
+                    // immediately, releasing it -- no cycle, just a short wait.
+                    boolean ownsGroup = Boolean.TRUE.equals(
+                            em.createNativeQuery("select pg_try_advisory_xact_lock(hashtextextended(?1, 0))")
+                                    .setParameter(1, b.groupId.toString())
+                                    .getSingleResult());
+                    if (!ownsGroup) {
+                        // Another tick already owns this group this round -- it will decline the
+                        // whole group, including this row, when it processes its own claimed sibling.
+                        continue;
+                    }
                     Long creatorOwnerId = MeetingType.<MeetingType>findById(b.meetingTypeId).ownerId;
                     Long leadId = Booking.leadOfGroup(b.groupId, creatorOwnerId).id;
-                    // The lead row is the group's single serialization point (mirrors the single-host
-                    // FOR UPDATE SKIP LOCKED guarantee): SELECT ... FOR UPDATE on it so two ticks that
-                    // each claimed a DIFFERENT sibling row of the SAME group can't both run the
-                    // group-decline branch and both enqueue a declined email.
+                    // Cheap idempotency guard (kept alongside the advisory lock, which is the primary
+                    // serialization point): if the group was already declined by an earlier tick (or
+                    // by a host action), the lead row already reflects it -- no-op, no second email.
+                    // PESSIMISTIC_WRITE is safe here: only the advisory-lock owner ever reaches this
+                    // line for a given group, so it can't cycle with another tick's claim locks the
+                    // way the un-guarded row lock used to.
                     Booking lead = Booking.findById(leadId, LockModeType.PESSIMISTIC_WRITE);
                     if (lead.status == BookingStatus.DECLINED) {
                         // Another tick already declined this group under the lock -- nothing to do,
