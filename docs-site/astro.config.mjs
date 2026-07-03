@@ -65,6 +65,7 @@ export default defineConfig({
             { label: 'First run & admin user', slug: 'usage/first-run' },
             { label: 'Resetting a password', slug: 'usage/password-reset' },
             { label: 'Meeting types', slug: 'usage/meeting-types' },
+            { label: 'Multi-host meeting types', slug: 'usage/multi-host-meetings' },
             { label: 'Availability & overrides', slug: 'usage/availability' },
             { label: 'Bookings & approvals', slug: 'usage/bookings' },
             { label: 'Users & admin', slug: 'usage/users-admin' },

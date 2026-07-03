@@ -9,6 +9,53 @@ asset downloads, are on
 
 ## Unreleased
 
+Multi-host meeting types — a meeting type can now require more than one host.
+
+- **Multi-host meeting types.** A meeting type can have up to **10 hosts**
+  total (the creator plus up to 9 co-hosts). Add co-hosts by username from
+  the meeting-type form — an autocomplete suggests matching usernames as you
+  type. The type only becomes bookable once **every** co-host has accepted;
+  each invited co-host gets a one-click accept/decline email link and a
+  pending request on their own `/me` dashboard, under a new **Shared**
+  section. Each co-host sets their **own** working hours and buffers for the
+  shared type independently — duration, minimum notice, and booking horizon
+  still come from the creator's settings. Bookable slots are the
+  **intersection** of every host's availability, and one booking creates a
+  single calendar event shared by all hosts. The public page is reachable at
+  `/<anyHost>/<slug>` — every accepted host's username is a valid alias for
+  the same booking page, though the creator's URL is the canonical one used
+  in emails. A shared type shows as temporarily unavailable — no bookable
+  slots — while any host hasn't accepted, is disabled, or has a disconnected
+  Google Calendar; calit never offers a slot it can't verify for every host.
+  A requested slug is blocked if it collides with any host's existing slugs,
+  in either direction. See [Multi-host meeting
+  types](/calit/usage/multi-host-meetings/).
+- **Cancel and reschedule act on the whole group.** Cancelling or
+  rescheduling a multi-host booking (from any host's Manage link, or the
+  invitee's) applies to every host at once — one shared calendar event, one
+  set of notifications. For an approval-required shared type, any host's
+  decline kills the booking, and rescheduling returns the whole group to
+  pending approval.
+- **Behavior change: single-host approval reschedule.** As part of the same
+  work, an **owner-initiated** reschedule of a single-host, approval-required
+  booking now **stays confirmed** instead of reverting to pending approval —
+  only an **invitee-initiated** reschedule still sends it back to pending.
+  Previously any reschedule of an approval-required booking reverted it,
+  regardless of who initiated it.
+- **Fix: booking-hold constraint is now owner-scoped.** The database
+  constraint that rejects overlapping held bookings was instance-wide,
+  ignoring which owner a booking belonged to — a latent bug that could also
+  let per-host rows of a multi-host booking collide with each other. It is
+  now scoped per owner, so different owners may legitimately hold
+  overlapping bookings, but no single owner can ever double-book itself
+  (V22 migration).
+- **Progressive enhancement, not "no JavaScript."** calit's long-standing "no
+  JavaScript ships at runtime" rule is now "progressive enhancement" —
+  every feature must work fully without JavaScript, and JavaScript may only
+  *enhance* it. The multi-host co-host autocomplete is the first feature
+  built this way: typing a username works and suggests matches with
+  JavaScript on, and still works as a plain text field with JavaScript off.
+
 ## 1.15.1
 
 A follow-up fix to the 1.15.0 booking editor.

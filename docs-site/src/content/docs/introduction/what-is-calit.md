@@ -3,7 +3,7 @@ title: What is calit
 description: A self-hosted, multi-user scheduling app you run on your own server.
 ---
 
-calit is a self-hosted, multi-user scheduling application — a Calendly alternative you run on your own server. It is built on Quarkus and Java, uses Postgres for all persistent state, and renders every page server-side with only minimal inline vanilla JavaScript — no client-side framework, no SPA.
+calit is a self-hosted, multi-user scheduling application — a Calendly alternative you run on your own server. It is built on Quarkus and Java, uses Postgres for all persistent state, and renders every page server-side — no client-side framework, no SPA. calit follows a **progressive-enhancement** rule: every feature works fully without JavaScript, and small inline vanilla scripts only ever enhance the experience (for example, suggesting matching usernames as you type when adding co-hosts to a meeting type) rather than being required for it to work.
 
 ## Per-user tenancy
 
@@ -17,6 +17,7 @@ Each meeting type supports:
 - **Buffer times** — padding before and after each event.
 - **Minimum notice** — how far in advance a slot must be booked.
 - **Booking horizon** — how many days into the future slots are shown.
+- **Multi-host meetings** — a meeting type can require up to 10 hosts; it only becomes bookable once every co-host accepts, and slots are the intersection of all their calendars. See [Multi-host meeting types](/calit/usage/multi-host-meetings/).
 
 ## Optional Google Calendar and Meet integration
 
