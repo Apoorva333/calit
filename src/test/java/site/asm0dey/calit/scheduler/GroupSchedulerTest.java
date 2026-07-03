@@ -226,7 +226,7 @@ class GroupSchedulerTest {
         try {
             var acquiredHere =
                     (Boolean) em.createNativeQuery("select pg_try_advisory_xact_lock(hashtextextended(?1, 0))")
-                            .setParameter(1, groupId.toString())
+                            .setParameter(1, "group:" + groupId)
                             .getSingleResult();
             assertEquals(Boolean.TRUE, acquiredHere, "test setup: this transaction must win the lock first");
 
