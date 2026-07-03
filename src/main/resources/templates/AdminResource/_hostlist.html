@@ -3,31 +3,32 @@
 {@java.lang.String hostTypeaheadScript}
 <section class="mt-6">
   <h2 class="font-semibold mb-2">{adm:adm_hosts_h2}</h2>
-  <ul class="space-y-1 mb-2">
+  <div class="flex flex-wrap items-center gap-2">
     {#for h in hosts}
-    <li class="flex items-center gap-2">
-      <span class="flex-1">{h.username}</span>
-      {#if h.role == 'CREATOR'}
-      <span class="badge badge-sm">{adm:adm_shared_role_creator}</span>
-      {#else}
-      <span class="badge badge-sm">{adm:adm_shared_role_cohost}</span>
-      {/if}
-      <span class="badge badge-sm {#if h.status == 'ACCEPTED'}badge-success{#else}badge-warning{/if}">{#if h.status == 'ACCEPTED'}{adm:adm_hosts_status_accepted}{#else}{adm:adm_hosts_status_pending}{/if}</span>
-      {#if h.needsReconnect}<span class="badge badge-error badge-sm">{adm:adm_shared_reconnect}</span>{/if}
-      {#if h.role != 'CREATOR'}
-      <form method="post" action="/me/meeting-types/{type.id}/hosts/{h.ownerId}/remove">
-        <input type="hidden" name="{inject:csrf.parameterName}" value="{inject:csrf.token}">
-        <button type="submit" class="btn btn-xs btn-ghost">{adm:adm_hosts_remove}</button>
-      </form>
-      {/if}
-    </li>
+    {#if h.role == 'CREATOR'}
+    <span class="badge badge-neutral gap-1">
+      {h.username}
+      <span class="text-[10px] font-semibold uppercase opacity-80">{adm:adm_shared_role_creator}</span>
+      {#if h.needsReconnect}<span class="badge badge-error badge-xs">{adm:adm_shared_reconnect}</span>{/if}
+    </span>
+    {#else}
+    <form method="post" action="/me/meeting-types/{type.id}/hosts/{h.ownerId}/remove" class="inline-flex">
+      <input type="hidden" name="{inject:csrf.parameterName}" value="{inject:csrf.token}">
+      <span class="badge {#if h.status == 'ACCEPTED'}badge-success{#else}badge-warning{/if} gap-1 pr-1">
+        {h.username}
+        <span class="text-[10px] font-semibold uppercase opacity-80">{#if h.status == 'ACCEPTED'}{adm:adm_hosts_status_accepted}{#else}{adm:adm_hosts_status_pending}{/if}</span>
+        {#if h.needsReconnect}<span class="badge badge-error badge-xs">{adm:adm_shared_reconnect}</span>{/if}
+        <button type="submit" class="btn btn-xs btn-circle btn-ghost" aria-label="{adm:adm_hosts_remove}" title="{adm:adm_hosts_remove}">×</button>
+      </span>
+    </form>
+    {/if}
     {/for}
-  </ul>
-  <form method="post" action="/me/meeting-types/{type.id}/hosts" class="flex gap-2" data-host-add>
-    <input type="hidden" name="{inject:csrf.parameterName}" value="{inject:csrf.token}">
-    <input name="cohost" class="input input-sm" list="host-suggest" placeholder="{adm:adm_hosts_add_placeholder}" autocomplete="off">
-    <datalist id="host-suggest"></datalist>
-    <button type="submit" class="btn btn-sm btn-primary">{adm:adm_hosts_add}</button>
-  </form>
+    <form method="post" action="/me/meeting-types/{type.id}/hosts" class="inline-flex items-center gap-1" data-host-add>
+      <input type="hidden" name="{inject:csrf.parameterName}" value="{inject:csrf.token}">
+      <input name="cohost" class="input input-sm" list="host-suggest" placeholder="{adm:adm_hosts_add_placeholder}" autocomplete="off">
+      <datalist id="host-suggest"></datalist>
+      <button type="submit" class="btn btn-sm btn-primary">{adm:adm_hosts_add}</button>
+    </form>
+  </div>
 </section>
 {hostTypeaheadScript.raw}
