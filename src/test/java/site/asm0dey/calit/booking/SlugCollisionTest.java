@@ -7,6 +7,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.calit.domain.MeetingType;
+import site.asm0dey.calit.domain.MeetingTypeHost;
 import site.asm0dey.calit.test.MultiHostFixtures;
 import site.asm0dey.calit.user.AppUser;
 
@@ -31,5 +32,33 @@ class SlugCollisionTest {
         MeetingType t = MultiHostFixtures.meetingType(1L, "intro", 30);
         assertTrue(MeetingType.slugUsedByOwner(1L, "intro", null));
         assertFalse(MeetingType.slugUsedByOwner(1L, "intro", t.id)); // exclude the type itself
+    }
+
+    @Test
+    @TestTransaction
+    void addCohostRejectedWhenCandidateCohostsDifferentTypeWithSameSlug() {
+        AppUser v = MultiHostFixtures.enabledUser("volodya");
+        AppUser other = MultiHostFixtures.enabledUser("olga");
+        // Volodya already co-hosts Olga's "intro" type
+        MeetingType typeA = MultiHostFixtures.meetingType(other.id, "intro", 30);
+        MeetingTypeHost.of(typeA.id, v.id, MeetingTypeHost.COHOST, MeetingTypeHost.ACCEPTED)
+                .persist();
+
+        MeetingType typeB = MultiHostFixtures.meetingType(1L, "intro", 30); // Pasha's new shared intro
+        assertThrows(IllegalStateException.class, () -> meetingHosts.assertSlugFreeForCohost(typeB, v));
+    }
+
+    @Test
+    @TestTransaction
+    void assertSlugFreeForCohostAllowsDifferentSlugCohost() {
+        AppUser v = MultiHostFixtures.enabledUser("volodya");
+        AppUser other = MultiHostFixtures.enabledUser("olga");
+        // Volodya co-hosts Olga's "consult" type -- unrelated slug, must not block "intro"
+        MeetingType typeA = MultiHostFixtures.meetingType(other.id, "consult", 30);
+        MeetingTypeHost.of(typeA.id, v.id, MeetingTypeHost.COHOST, MeetingTypeHost.ACCEPTED)
+                .persist();
+
+        MeetingType typeB = MultiHostFixtures.meetingType(1L, "intro", 30);
+        assertDoesNotThrow(() -> meetingHosts.assertSlugFreeForCohost(typeB, v));
     }
 }
