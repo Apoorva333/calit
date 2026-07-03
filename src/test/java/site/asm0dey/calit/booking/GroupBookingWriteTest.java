@@ -86,6 +86,36 @@ class GroupBookingWriteTest {
 
     @Test
     @TestTransaction
+    void autoConfirmCohostOrganizerPutsEventOnCohostAndMirrorsLinkToLead() {
+        MeetingType t = type(false);
+        long cohostId = meetingHosts.hostOwnerIds(t).stream()
+                .filter(id -> id != 1L)
+                .findFirst()
+                .orElseThrow();
+        when(calendarPort.isConnected(1L)).thenReturn(false);
+        when(calendarPort.isConnected(cohostId)).thenReturn(true);
+        when(calendarPort.createEvent(
+                        anyLong(), anyString(), anyString(), any(), any(), anyList(), anyBoolean(), any()))
+                .thenReturn(new CreatedEvent("evt-1", "https://meet/x", "https://cal/x"));
+
+        Booking lead = bookingService.book(
+                1L, "intro", nextMonday10(), "Sam", "sam@x.com", Map.of(), "tok", "", "en", List.of());
+
+        // event created on the co-host (organizer), not on the creator
+        verify(calendarPort, times(1))
+                .createEvent(eq(cohostId), anyString(), anyString(), any(), any(), anyList(), anyBoolean(), any());
+        Booking cohostRow = Booking.<Booking>group(lead.groupId).stream()
+                .filter(r -> r.ownerId == cohostId)
+                .findFirst()
+                .orElseThrow();
+        assertEquals("evt-1", cohostRow.googleEventId);
+        Booking leadRow = Booking.leadOfGroup(lead.groupId, 1L);
+        assertEquals("https://meet/x", leadRow.meetLink);
+        assertNull(leadRow.googleEventId);
+    }
+
+    @Test
+    @TestTransaction
     void approvalTypeWritesNPendingRowsNoEvent() {
         when(calendarPort.isConnected(anyLong())).thenReturn(false);
         type(true);

@@ -364,7 +364,7 @@ public class BookingService {
         organizerRow.googleEventId = created.googleEventId();
         organizerRow.meetLink = created.meetLink();
         // propagate the meet link to the lead row too so invitee-facing views show it
-        if (lead != null && lead.meetLink == null) {
+        if (lead.meetLink == null) {
             lead.meetLink = created.meetLink();
         }
     }
