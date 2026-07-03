@@ -5,10 +5,22 @@ import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import java.time.DayOfWeek;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.temporal.TemporalAdjusters;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
+import site.asm0dey.calit.booking.Booking;
+import site.asm0dey.calit.booking.BookingService;
+import site.asm0dey.calit.booking.MeetingHosts;
 import site.asm0dey.calit.domain.MeetingType;
 import site.asm0dey.calit.domain.MeetingTypeHost;
 import site.asm0dey.calit.test.MultiHostFixtures;
@@ -21,6 +33,12 @@ import site.asm0dey.calit.user.AppUser;
  */
 @QuarkusTest
 class CohostManageTest {
+
+    @Inject
+    BookingService bookingService;
+
+    @Inject
+    MeetingHosts meetingHosts;
 
     @Transactional
     MeetingType seedAdminType(String slug) {
@@ -123,6 +141,88 @@ class CohostManageTest {
         assertNull(MeetingTypeHost.find(t.id, candidate.id), "cohost row removed");
     }
 
+    /**
+     * Critical regression (Task 17 review): a direct POST removing the CALLER'S OWN owner id (the
+     * CREATOR row) must be rejected server-side, not just hidden client-side. Before the fix this
+     * deleted the CREATOR row while an ACCEPTED co-host remained -- {@link
+     * MeetingTypeHost#isMultiHost} still reported multi-host (a COHOST row survives), but {@link
+     * MeetingHosts#hostOwnerIds} silently dropped the creator, so {@code BookingService.bookGroup}
+     * never assigned a lead and NPE'd on every subsequent booking of this type.
+     */
+    @Test
+    void removingCreatorsOwnIdIsRejectedRowSurvivesAndBookingStillWorks() {
+        var slug = "creator-guard-" + System.nanoTime();
+        AppUser cohost = seedCandidate("cohost-" + System.nanoTime());
+        seedBookableSettingsAndRules(1L);
+        seedBookableSettingsAndRules(cohost.id);
+        MeetingType t = seedAcceptedTwoHostType(1L, cohost.id, slug);
+        long rowsBefore = MeetingTypeHost.count("meetingTypeId = ?1", t.id);
+
+        given().cookie("quarkus-credential", FormAuth.login())
+                .contentType("application/x-www-form-urlencoded")
+                .when()
+                .post("/me/meeting-types/" + t.id + "/hosts/1/remove")
+                .then()
+                .statusCode(200)
+                .body(containsString("alert-error"));
+
+        assertNotNull(MeetingTypeHost.find(t.id, 1L), "CREATOR row must survive a self-removal attempt");
+        assertEquals(rowsBefore, MeetingTypeHost.count("meetingTypeId = ?1", t.id), "no row was deleted");
+        assertTrue(meetingHosts.hostOwnerIds(t).contains(1L), "creator must still be a required host");
+
+        // A subsequent booking on the type must still succeed -- pre-fix this NPE'd in
+        // BookingService.persistGuests because bookGroup never assigned a lead.
+        Booking lead = bookingService.book(
+                1L, t.slug, nextMonday10(), "Sam Invitee", "sam@example.com", Map.of(), "tok", "", "en", List.of());
+        assertNotNull(lead);
+        assertNotNull(lead.groupId);
+    }
+
+    @Test
+    void removeOnTypeNotOwnedByCallerReturns404() {
+        AppUser otherOwner = seedCandidate("other-owner-" + System.nanoTime());
+        MeetingType notMine = seedOwnTypeReturning(otherOwner.id, "not-mine-" + System.nanoTime());
+
+        given().cookie("quarkus-credential", FormAuth.login())
+                .contentType("application/x-www-form-urlencoded")
+                .when()
+                .post("/me/meeting-types/" + notMine.id + "/hosts/" + otherOwner.id + "/remove")
+                .then()
+                .statusCode(404);
+    }
+
+    @Test
+    void addHostOnTypeNotOwnedByCallerReturns404() {
+        AppUser otherOwner = seedCandidate("other-owner2-" + System.nanoTime());
+        MeetingType notMine = seedOwnTypeReturning(otherOwner.id, "not-mine2-" + System.nanoTime());
+
+        given().cookie("quarkus-credential", FormAuth.login())
+                .contentType("application/x-www-form-urlencoded")
+                .formParam("cohost", "admin")
+                .when()
+                .post("/me/meeting-types/" + notMine.id + "/hosts")
+                .then()
+                .statusCode(404);
+    }
+
+    private final ZoneId AMS = ZoneId.of("Europe/Amsterdam");
+
+    private Instant nextMonday10() {
+        var mon = LocalDate.now(AMS).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        return mon.atTime(10, 0).atZone(AMS).toInstant();
+    }
+
+    @Transactional
+    void seedBookableSettingsAndRules(long ownerId) {
+        MultiHostFixtures.settings(ownerId, "owner-" + ownerId);
+        MultiHostFixtures.rule(ownerId, DayOfWeek.MONDAY, 9, 17);
+    }
+
+    @Transactional
+    MeetingType seedAcceptedTwoHostType(long creatorId, long cohostId, String slug) {
+        return MultiHostFixtures.acceptedTwoHostType(creatorId, cohostId, slug, 30, false);
+    }
+
     @Test
     void createRejectsSlugCollidingWithCohostedType() {
         AppUser creator = seedCandidate("other-creator-" + System.nanoTime());
@@ -144,7 +244,10 @@ class CohostManageTest {
                 .post("/me/meeting-types")
                 .then()
                 .statusCode(200)
-                .body(containsString("alert-error"));
+                .body(containsString("alert-error"))
+                // localized (i18n) alert text, not the raw hardcoded English string -- Task 17 review fix
+                .body(containsString("already co-host a meeting type with the slug"))
+                .body(containsString(slug));
 
         assertNull(MeetingType.findBySlug(1L, slug), "no new own-type created on collision");
     }
@@ -172,7 +275,9 @@ class CohostManageTest {
                 .post("/me/meeting-types/" + own.id + "/edit")
                 .then()
                 .statusCode(200)
-                .body(containsString("alert-error"));
+                .body(containsString("alert-error"))
+                .body(containsString("already co-host a meeting type with the slug"))
+                .body(containsString(collidingSlug));
 
         MeetingType reloaded = MeetingType.findById(own.id);
         org.junit.jupiter.api.Assertions.assertNotEquals(

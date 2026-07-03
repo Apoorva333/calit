@@ -434,6 +434,12 @@ public interface AdminMessages {
             "No eligible user with that username -- check spelling, or they may already be a host, disabled, or not yet fully set up.")
     String adm_hosts_error_not_eligible();
 
+    @Message("The creator cannot be removed from their own meeting type.")
+    String adm_hosts_error_creator_immutable();
+
+    @Message("You already co-host a meeting type with the slug \"{slug}\" -- pick a different slug.")
+    String adm_hosts_error_slug_owned_cohost(String slug);
+
     // ---- Availability ----
 
     @Message("Availability (work hours)")

@@ -364,8 +364,7 @@ public class AdminResource {
         for (MeetingTypeHost h : MeetingTypeHost.cohostedTypesFor(currentOwner.id())) {
             MeetingType other = MeetingType.findById(h.meetingTypeId);
             if (other != null && other.slug.equals(slug)) {
-                throw new IllegalStateException(
-                        "You already co-host a meeting type with the slug \"" + slug + "\" -- pick a different slug.");
+                throw new IllegalStateException(m().adm_hosts_error_slug_owned_cohost(slug));
             }
         }
     }
@@ -637,6 +636,13 @@ public class AdminResource {
      * Plain removal — no keep-vs-cancel interstitial for existing future bookings yet (Task 18
      * adds that). Reverts to single-host automatically once the last co-host is gone (see {@link
      * MeetingHosts#removeHost}).
+     *
+     * <p>Task 17 review fix: the CREATOR row must never be removable — the {@code _hostlist.html}
+     * remove button is already hidden for the CREATOR row client-side, but a direct POST with the
+     * owner's own id used to pass {@link #requireType} (the owner owns the type) and delete the
+     * CREATOR row, silently dropping the owner out of {@link MeetingHosts#hostOwnerIds} and NPE-ing
+     * every later booking. Checked here (localizable) before ever calling {@link
+     * MeetingHosts#removeHost}, which also carries the same guard as defense-in-depth.
      */
     @POST
     @Path("/meeting-types/{id}/hosts/{cohostOwnerId}/remove")
@@ -645,7 +651,14 @@ public class AdminResource {
     @Transactional
     public TemplateInstance removeCohost(@PathParam("id") Long id, @PathParam("cohostOwnerId") Long cohostOwnerId) {
         MeetingType t = requireType(id);
-        meetingHosts.removeHost(t, cohostOwnerId);
+        try {
+            if (cohostOwnerId.equals(t.ownerId)) {
+                throw new IllegalStateException(m().adm_hosts_error_creator_immutable());
+            }
+            meetingHosts.removeHost(t, cohostOwnerId);
+        } catch (IllegalStateException e) {
+            return detailInstance(id, e.getMessage());
+        }
         return detailInstance(id);
     }
 

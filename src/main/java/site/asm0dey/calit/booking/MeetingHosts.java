@@ -164,9 +164,18 @@ public class MeetingHosts {
         host.persist();
     }
 
-    /** Removes a co-host; if no co-hosts remain, also removes the CREATOR row (revert to single-host). */
+    /**
+     * Removes a co-host; if no co-hosts remain, also removes the CREATOR row (revert to
+     * single-host). Defense-in-depth guard against removing the CREATOR row directly (Task 17
+     * review): {@link site.asm0dey.calit.web.AdminResource#removeCohost} already rejects this
+     * before calling here (with a localized alert), so this exception is only reachable via a
+     * caller that skips that check.
+     */
     @Transactional
     public void removeHost(MeetingType type, Long cohostOwnerId) {
+        if (cohostOwnerId.equals(type.ownerId)) {
+            throw new IllegalStateException("The creator cannot be removed from their own meeting type.");
+        }
         MeetingTypeHost.delete("meetingTypeId = ?1 and ownerId = ?2", type.id, cohostOwnerId);
         if (MeetingTypeHost.count("meetingTypeId = ?1 and role = ?2", type.id, MeetingTypeHost.COHOST) == 0) {
             MeetingTypeHost.delete("meetingTypeId = ?1 and role = ?2", type.id, MeetingTypeHost.CREATOR);
