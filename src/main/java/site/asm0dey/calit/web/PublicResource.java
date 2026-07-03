@@ -20,6 +20,7 @@ import site.asm0dey.calit.availability.TimeSlot;
 import site.asm0dey.calit.booking.*;
 import site.asm0dey.calit.domain.BookingField;
 import site.asm0dey.calit.domain.MeetingType;
+import site.asm0dey.calit.domain.MeetingTypeHost;
 import site.asm0dey.calit.domain.OwnerSettings;
 import site.asm0dey.calit.google.CalendarUnavailableException;
 import site.asm0dey.calit.i18n.ActiveLocale;
@@ -177,7 +178,13 @@ public class PublicResource {
         // listPublicIncludingCohosted(ownerId) = that owner's own active && !secret types PLUS
         // multi-host types where they are an ACCEPTED co-host. Co-hosted entries link to the
         // canonical /{creatorUsername}/{slug} — every host's landing points at the same URL.
+        // A multi-host candidate is filtered out here (domain layer can't reach MeetingHosts,
+        // a CDI bean, without bad layering) unless meetingHosts.bookable(t) — i.e. EVERY host row
+        // is ACCEPTED and enabled, not just the viewer's own row. Applies to the owner's own
+        // multi-host types too: a creator's not-yet-fully-accepted type is hidden from their own
+        // landing as well.
         List<LandingType> types = MeetingType.listPublicIncludingCohosted(owner.id).stream()
+                .filter(t -> !MeetingTypeHost.isMultiHost(t.id) || meetingHosts.bookable(t))
                 .map(t -> new LandingType(t, "/" + bookUsernameFor(t, owner) + "/" + t.slug))
                 .toList();
         return Templates.landing(m.pub_user_title(), types, owner.username, settings.ownerName);
