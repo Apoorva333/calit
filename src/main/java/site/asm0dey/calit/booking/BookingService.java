@@ -11,6 +11,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -25,6 +26,7 @@ import site.asm0dey.calit.domain.MeetingType.LocationType;
 import site.asm0dey.calit.domain.OwnerSettings;
 import site.asm0dey.calit.google.BusyInterval;
 import site.asm0dey.calit.google.CalendarPort;
+import site.asm0dey.calit.google.CalendarUnavailableException;
 import site.asm0dey.calit.google.CreatedEvent;
 import site.asm0dey.calit.i18n.AppLocales;
 
@@ -37,6 +39,7 @@ public class BookingService {
     private final SlotService slotService;
     private final CalendarPort calendarPort;
     private final TurnstileVerifier turnstileVerifier;
+    private final MeetingHosts meetingHosts;
     private final long perEmailDailyCap;
 
     /**
@@ -49,10 +52,12 @@ public class BookingService {
             SlotService slotService,
             CalendarPort calendarPort,
             TurnstileVerifier turnstileVerifier,
+            MeetingHosts meetingHosts,
             @ConfigProperty(name = "calit.abuse.per-email-daily-cap", defaultValue = "10") long perEmailDailyCap) {
         this.slotService = slotService;
         this.calendarPort = calendarPort;
         this.turnstileVerifier = turnstileVerifier;
+        this.meetingHosts = meetingHosts;
         this.perEmailDailyCap = perEmailDailyCap;
     }
 
@@ -95,33 +100,61 @@ public class BookingService {
      * omits one booking from the busy set (used by reschedule so a booking can move within its own window).
      */
     public List<TimeSlot> availableSlots(MeetingType type, LocalDate from, LocalDate to, Long excludeBookingId) {
-        ZoneId zone = ZoneId.of(OwnerSettings.forOwner(type.ownerId).timezone);
-        var fromInstant = from.atStartOfDay(zone).toInstant();
-        var toInstant = to.plusDays(1).atStartOfDay(zone).toInstant();
-
-        List<Interval> busy = busyIntervals(type.ownerId, fromInstant, toInstant, excludeBookingId);
-
-        // Feature 11 bounds, captured once relative to request time.
+        if (!meetingHosts.bookable(type)) {
+            return List.of();
+        }
+        List<Long> hostIds = meetingHosts.hostOwnerIds(type);
         var now = Instant.now();
         Instant earliest = now.plusSeconds(60L * type.minNoticeMinutes);
         Instant latest = now.plus(type.horizonDays, ChronoUnit.DAYS);
 
-        List<TimeSlot> raw = slotService.generateRawSlots(type, from, to);
-        List<TimeSlot> available = new ArrayList<>();
-        for (TimeSlot slot : raw) {
-            Instant slotStart = slot.start().toInstant();
-            // Feature 11: drop too-soon (before now+minNotice) and too-far (after now+horizon) slots.
-            if (slotStart.isBefore(earliest) || slotStart.isAfter(latest)) {
-                continue;
+        // Per-host free set, keyed by slot-start instant; a slot survives only if free for ALL hosts.
+        // Single-host keeps the pre-multi-host contract of letting CalendarUnavailableException
+        // propagate (the web layer renders the "temporarily unavailable" page for it); only the
+        // multi-host case fails closed to an empty list, since a caller can't sensibly render
+        // "unavailable" for just one host out of several bookable ones.
+        var singleHost = hostIds.size() == 1;
+        Map<Instant, TimeSlot> candidate = null;
+        for (Long hostId : hostIds) {
+            ZoneId zone = ZoneId.of(OwnerSettings.forOwner(hostId).timezone);
+            var fromInstant = from.atStartOfDay(zone).toInstant();
+            var toInstant = to.plusDays(1).atStartOfDay(zone).toInstant();
+            List<Interval> busy;
+            if (singleHost) {
+                busy = busyIntervals(hostId, fromInstant, toInstant, excludeBookingId);
+            } else {
+                try {
+                    busy = busyIntervals(hostId, fromInstant, toInstant, excludeBookingId);
+                } catch (CalendarUnavailableException failClosed) {
+                    return List.of(); // any host's calendar unverifiable -> offer nothing
+                }
             }
-            Interval buffered = new Interval(
-                    slotStart.minusSeconds(60L * type.bufferBeforeMinutes),
-                    slot.end().toInstant().plusSeconds(60L * type.bufferAfterMinutes));
-            if (!buffered.overlapsAny(busy)) {
-                available.add(slot);
+            int bufBefore = meetingHosts.effectiveBufferBefore(type, hostId);
+            int bufAfter = meetingHosts.effectiveBufferAfter(type, hostId);
+            Map<Instant, TimeSlot> hostFree = new LinkedHashMap<>();
+            for (TimeSlot slot : slotService.generateRawSlots(type, hostId, from, to)) {
+                Instant slotStart = slot.start().toInstant();
+                // Feature 11: drop too-soon (before now+minNotice) and too-far (after now+horizon) slots.
+                if (slotStart.isBefore(earliest) || slotStart.isAfter(latest)) {
+                    continue;
+                }
+                Interval buffered = new Interval(
+                        slotStart.minusSeconds(60L * bufBefore),
+                        slot.end().toInstant().plusSeconds(60L * bufAfter));
+                if (!buffered.overlapsAny(busy)) {
+                    hostFree.put(slotStart, slot);
+                }
+            }
+            if (candidate == null) {
+                candidate = hostFree;
+            } else {
+                candidate.keySet().retainAll(hostFree.keySet()); // intersection by start instant
+            }
+            if (candidate.isEmpty()) {
+                return List.of();
             }
         }
-        return available;
+        return candidate == null ? List.of() : new ArrayList<>(candidate.values());
     }
 
     /**
@@ -261,7 +294,7 @@ public class BookingService {
         if (guestEmails == null || guestEmails.isEmpty()) {
             return List.of();
         }
-        java.util.LinkedHashMap<String, String> byLower = new java.util.LinkedHashMap<>();
+        LinkedHashMap<String, String> byLower = new LinkedHashMap<>();
         for (String raw : guestEmails) {
             var email = raw == null ? "" : raw.trim();
             // Drop blanks/over-length, the invitee's own address (they already get every mail), and

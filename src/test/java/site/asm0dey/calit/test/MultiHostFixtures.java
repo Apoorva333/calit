@@ -49,4 +49,34 @@ public final class MultiHostFixtures {
         r.persist();
         return r;
     }
+
+    /**
+     * A MeetingType owned by {@code creatorId} (large horizonDays so tests never fall outside it) plus
+     * two ACCEPTED {@link site.asm0dey.calit.domain.MeetingTypeHost} rows (creator + cohost). Caller
+     * still seeds {@code OwnerSettings}/rules/windows separately via {@link #settings} / {@link #rule}.
+     */
+    public static MeetingType acceptedTwoHostType(
+            long creatorId, long cohostId, String slug, int durationMinutes, boolean requiresApproval) {
+        MeetingType t = new MeetingType();
+        t.ownerId = creatorId;
+        t.name = slug;
+        t.slug = slug;
+        t.durationMinutes = durationMinutes;
+        t.horizonDays = 50000;
+        t.requiresApproval = requiresApproval;
+        t.persist();
+        site.asm0dey.calit.domain.MeetingTypeHost.of(
+                        t.id,
+                        creatorId,
+                        site.asm0dey.calit.domain.MeetingTypeHost.CREATOR,
+                        site.asm0dey.calit.domain.MeetingTypeHost.ACCEPTED)
+                .persist();
+        site.asm0dey.calit.domain.MeetingTypeHost.of(
+                        t.id,
+                        cohostId,
+                        site.asm0dey.calit.domain.MeetingTypeHost.COHOST,
+                        site.asm0dey.calit.domain.MeetingTypeHost.ACCEPTED)
+                .persist();
+        return t;
+    }
 }
