@@ -54,12 +54,24 @@ class MeetingHostsTest {
 
     @Test
     @TestTransaction
-    void organizerPrefersCreatorThenLowestConnected() {
+    void organizerPrefersCreatorThenLowestConnectedThenNull() {
         MeetingType t = multiHostType();
+        // Accept the co-host row so hostOwnerIds(t) returns both hosts, exercising the
+        // fallback loop (with only the PENDING row, hostOwnerIds would return just [1]).
+        MeetingTypeHost.forType(t.id).forEach(h -> h.status = MeetingTypeHost.ACCEPTED);
+        em.flush();
         List<Long> hosts = meetingHosts.hostOwnerIds(t);
+        assertEquals(2, hosts.size());
+        var cohostId = hosts.stream().filter(id -> !id.equals(1L)).findFirst().orElseThrow();
+
         when(calendarPort.isConnected(1L)).thenReturn(true);
+        when(calendarPort.isConnected(cohostId)).thenReturn(false);
         assertEquals(1L, meetingHosts.chooseOrganizer(t, hosts));
+
         when(calendarPort.isConnected(1L)).thenReturn(false);
+        when(calendarPort.isConnected(cohostId)).thenReturn(true);
+        assertEquals(cohostId, meetingHosts.chooseOrganizer(t, hosts));
+
         when(calendarPort.isConnected(anyLong())).thenReturn(false);
         assertNull(meetingHosts.chooseOrganizer(t, hosts));
     }
@@ -73,5 +85,33 @@ class MeetingHostsTest {
         em.flush();
         assertEquals(20, meetingHosts.effectiveBufferBefore(t, 1L)); // overridden
         assertEquals(10, meetingHosts.effectiveBufferAfter(t, 1L)); // inherits type
+    }
+
+    @Test
+    @TestTransaction
+    void eligibleCohostCoversEveryBranch() {
+        MeetingType t = MultiHostFixtures.meetingType(1L, "eligibility", 30);
+        Long creatorOwnerId = 1L;
+
+        AppUser disabled = MultiHostFixtures.enabledUser("disabled-user");
+        disabled.enabled = false;
+        em.flush();
+        assertFalse(meetingHosts.eligibleCohost(t.id, creatorOwnerId, disabled));
+
+        AppUser incomplete = MultiHostFixtures.enabledUser("incomplete-user");
+        incomplete.settingsComplete = false;
+        em.flush();
+        assertFalse(meetingHosts.eligibleCohost(t.id, creatorOwnerId, incomplete));
+
+        AppUser creator = AppUser.findById(creatorOwnerId);
+        assertFalse(meetingHosts.eligibleCohost(t.id, creatorOwnerId, creator));
+
+        AppUser alreadyHost = MultiHostFixtures.enabledUser("already-host");
+        MeetingTypeHost.of(t.id, alreadyHost.id, MeetingTypeHost.COHOST, MeetingTypeHost.PENDING)
+                .persist();
+        assertFalse(meetingHosts.eligibleCohost(t.id, creatorOwnerId, alreadyHost));
+
+        AppUser fresh = MultiHostFixtures.enabledUser("fresh-candidate");
+        assertTrue(meetingHosts.eligibleCohost(t.id, creatorOwnerId, fresh));
     }
 }
