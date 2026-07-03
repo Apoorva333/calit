@@ -930,11 +930,12 @@ public class BookingService {
 
     /**
      * Group counterpart of {@link #updateDetails}: title/description are written to every row in the
-     * group (kept identical across hosts), guests reconcile on the lead row only, and — if the group
-     * has a shared Google event — it is patched exactly once via the organizer's row. Fires a single
-     * {@link BookingDetailsChanged} keyed by the lead. No no-op short-circuit or SEQUENCE bump here;
-     * unlike the single-host path, group edits always propagate to keep every row's title/description
-     * in lockstep.
+     * group (kept identical across hosts), each row's iTIP SEQUENCE bumps (same as {@link
+     * #rescheduleGroup}) so a resent guest .ics supersedes the prior one, guests reconcile on the lead
+     * row only with {@link GuestRemoved} fired per dropped guest, and — if the group has a shared
+     * Google event — it is patched exactly once via the organizer's row. Fires a single {@link
+     * BookingDetailsChanged} keyed by the lead. No no-op short-circuit here; unlike the single-host
+     * path, group edits always propagate to keep every row's title/description in lockstep.
      */
     private Booking updateGroupDetails(
             Booking booking,
@@ -950,10 +951,15 @@ public class BookingService {
         for (Booking r : Booking.<Booking>group(booking.groupId)) {
             r.title = newTitle;
             r.description = newDescription;
+            // Bump the iTIP SEQUENCE so guest .ics updates supersede the prior one (same as rescheduleGroup).
+            r.icsSequence = r.icsSequence + 1;
         }
         Booking lead = Booking.leadOfGroup(booking.groupId, type.ownerId);
         if (guestEmails != null) {
-            reconcileGuests(lead, guestEmails);
+            List<Long> removedGuestIds = reconcileGuests(lead, guestEmails);
+            for (Long guestId : removedGuestIds) {
+                guestRemovedEvent.fire(new GuestRemoved(lead.id, guestId));
+            }
         }
 
         String eventId = groupEventId(booking.groupId);

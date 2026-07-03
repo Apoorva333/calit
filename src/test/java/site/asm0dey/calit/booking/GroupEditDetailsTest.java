@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.calit.booking.events.BookingDetailsChanged;
+import site.asm0dey.calit.booking.events.GuestRemoved;
 import site.asm0dey.calit.domain.MeetingType;
 import site.asm0dey.calit.google.CalendarPort;
 import site.asm0dey.calit.google.CreatedEvent;
@@ -40,9 +41,14 @@ class GroupEditDetailsTest {
     private final ZoneId AMS = ZoneId.of("Europe/Amsterdam");
 
     static final AtomicInteger DETAILS_CHANGED = new AtomicInteger();
+    static final AtomicInteger GUEST_REMOVED = new AtomicInteger();
 
     void onDetailsChanged(@Observes BookingDetailsChanged e) {
         DETAILS_CHANGED.incrementAndGet();
+    }
+
+    void onGuestRemoved(@Observes GuestRemoved e) {
+        GUEST_REMOVED.incrementAndGet();
     }
 
     private Instant nextMonday(int hour) {
@@ -81,6 +87,8 @@ class GroupEditDetailsTest {
                 .createEvent(anyLong(), any(), any(), any(), any(), anyList(), anyBoolean(), any());
 
         var detailsChangedBefore = DETAILS_CHANGED.get();
+        Map<Long, Integer> seqBefore = new java.util.HashMap<>();
+        Booking.<Booking>group(lead.groupId).forEach(r -> seqBefore.put(r.id, r.icsSequence));
 
         // The co-host (not the creator/organizer) initiates the edit -> keyed by ITS manageToken.
         Booking cohostRow =
@@ -92,6 +100,12 @@ class GroupEditDetailsTest {
             assertEquals("Roadmap sync", r.title);
             assertEquals("Q3 planning", r.description);
         });
+
+        // Review fix 1: every group row's iTIP SEQUENCE bumps on a detail edit, exactly like
+        // rescheduleGroup, so a resent guest .ics supersedes the prior one in calendar clients.
+        Booking.<Booking>group(lead.groupId)
+                .forEach(r ->
+                        assertEquals(seqBefore.get(r.id) + 1, r.icsSequence, "icsSequence must bump on row " + r.id));
 
         // the shared Google event is patched exactly once, via the organizer (creator, owner id 1).
         verify(calendarPort, times(1))
@@ -111,5 +125,63 @@ class GroupEditDetailsTest {
 
         // exactly one BookingDetailsChanged fired, keyed by the lead.
         assertEquals(detailsChangedBefore + 1, DETAILS_CHANGED.get());
+    }
+
+    @Test
+    @io.quarkus.test.TestTransaction
+    void groupEditDroppingAGuestFiresGuestRemoved() {
+        stubOrganizerOnCreator();
+        groupType(); // auto-confirm -> event created immediately
+
+        Booking lead = bookingService.book(
+                1L,
+                "intro",
+                nextMonday(11),
+                "Sam",
+                "sam@x.com",
+                Map.of(),
+                "tok",
+                "",
+                "en",
+                List.of("ana@x.com", "ben@x.com"));
+
+        var guestRemovedBefore = GUEST_REMOVED.get();
+
+        // Review fix 2: dropping a guest via a group detail-edit must fire GuestRemoved for the
+        // dropped guest, exactly like rescheduleGroup -- so they get a cancellation, not silence.
+        bookingService.updateDetails(lead.manageToken, lead.title, lead.description, List.of("ana@x.com"), true);
+
+        assertEquals(guestRemovedBefore + 1, GUEST_REMOVED.get());
+
+        Booking freshLead = Booking.leadOfGroup(lead.groupId, 1L);
+        List<BookingGuest> activeGuests = BookingGuest.activeForBooking(freshLead.id);
+        assertEquals(1, activeGuests.size());
+        assertEquals("ana@x.com", activeGuests.getFirst().email);
+    }
+
+    @Test
+    @io.quarkus.test.TestTransaction
+    void groupEditByCohostOrganizerPatchesEventViaCohostOwnerId() {
+        // Creator NOT connected to Google, co-host IS -> co-host is the organizer of the shared event.
+        MultiHostFixtures.settings(1L, "pasha");
+        AppUser v = MultiHostFixtures.enabledUser("volodya");
+        MultiHostFixtures.settings(v.id, "volodya");
+        MultiHostFixtures.rule(1L, DayOfWeek.MONDAY, 9, 17);
+        MultiHostFixtures.rule(v.id, DayOfWeek.MONDAY, 9, 17);
+        MeetingType type = MultiHostFixtures.acceptedTwoHostType(1L, v.id, "intro", 60, false);
+
+        when(calendarPort.isConnected(1L)).thenReturn(false);
+        when(calendarPort.isConnected(v.id)).thenReturn(true);
+        when(calendarPort.createEvent(eq(v.id), any(), any(), any(), any(), anyList(), anyBoolean(), any()))
+                .thenReturn(new CreatedEvent("grp-evt-cohost", "meet", "cal"));
+
+        Booking lead = bookingService.book(
+                1L, "intro", nextMonday(10), "Sam", "sam@x.com", Map.of(), "tok", "", "en", List.of());
+
+        bookingService.updateDetails(lead.manageToken, "Cohost organized", "desc", List.of(), true);
+
+        verify(calendarPort, times(1))
+                .updateEventDetails(
+                        eq(v.id), eq("grp-evt-cohost"), eq("Cohost organized with Sam"), eq("desc"), anyList());
     }
 }
