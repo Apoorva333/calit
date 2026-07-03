@@ -987,7 +987,8 @@ public class AdminResource {
         Booking b = requireOwnedBooking(id);
         // Time only -- guests untouched (null). Host edits guests via /me/bookings/{id}/edit-details.
         bookingService.reschedule(b.manageToken, Instant.parse(startUtc), null, true); // host-initiated
-        return dashboard(); // re-render /me; rescheduled booking reflects its new time (or moves to pending queue)
+        return dashboard(); // re-render /me; rescheduled booking reflects its new time (stays confirmed -- an
+        // owner-initiated reschedule never reverts an approval booking to pending, see reschedule's javadoc)
     }
 
     @POST

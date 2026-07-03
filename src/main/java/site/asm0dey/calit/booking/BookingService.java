@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.hibernate.exception.ConstraintViolationException;
@@ -90,7 +91,7 @@ public class BookingService {
     Event<BookingDetailsChanged> bookingDetailsChangedEvent;
 
     public List<TimeSlot> availableSlots(MeetingType type, LocalDate from, LocalDate to) {
-        return availableSlots(type, from, to, null);
+        return availableSlots(type, from, to, (Long) null);
     }
 
     /**
@@ -101,6 +102,17 @@ public class BookingService {
      * omits one booking from the busy set (used by reschedule so a booking can move within its own window).
      */
     public List<TimeSlot> availableSlots(MeetingType type, LocalDate from, LocalDate to, Long excludeBookingId) {
+        return availableSlots(type, from, to, excludeBookingId == null ? Set.of() : Set.of(excludeBookingId));
+    }
+
+    /**
+     * Same as {@link #availableSlots(MeetingType, LocalDate, LocalDate, Long)} but excludes every id in
+     * {@code excludeBookingIds} from every host's busy set. Needed by a GROUP reschedule re-check
+     * ({@link #rescheduleGroup}): a group has one row per host, and until the move loop runs every row
+     * still sits at the OLD time, so excluding only the row whose manageToken resolved the reschedule
+     * left each OTHER host's own sibling row counted as busy against itself (Task 11 review fix).
+     */
+    public List<TimeSlot> availableSlots(MeetingType type, LocalDate from, LocalDate to, Set<Long> excludeBookingIds) {
         if (!meetingHosts.bookable(type)) {
             return List.of();
         }
@@ -122,10 +134,10 @@ public class BookingService {
             var toInstant = to.plusDays(1).atStartOfDay(zone).toInstant();
             List<Interval> busy;
             if (singleHost) {
-                busy = busyIntervals(hostId, fromInstant, toInstant, excludeBookingId);
+                busy = busyIntervals(hostId, fromInstant, toInstant, excludeBookingIds);
             } else {
                 try {
-                    busy = busyIntervals(hostId, fromInstant, toInstant, excludeBookingId);
+                    busy = busyIntervals(hostId, fromInstant, toInstant, excludeBookingIds);
                 } catch (CalendarUnavailableException failClosed) {
                     return List.of(); // any host's calendar unverifiable -> offer nothing
                 }
@@ -164,6 +176,15 @@ public class BookingService {
      * pending approval request holds its slot (feature 14).
      */
     List<Interval> busyIntervals(Long ownerId, Instant from, Instant to, Long excludeBookingId) {
+        return busyIntervals(ownerId, from, to, excludeBookingId == null ? Set.of() : Set.of(excludeBookingId));
+    }
+
+    /**
+     * Same as {@link #busyIntervals(Long, Instant, Instant, Long)} but excludes every id in
+     * {@code excludeBookingIds} rather than just one — see {@link #availableSlots(MeetingType, LocalDate,
+     * LocalDate, Set)}.
+     */
+    List<Interval> busyIntervals(Long ownerId, Instant from, Instant to, Set<Long> excludeBookingIds) {
         List<Interval> busy = new ArrayList<>();
         if (calendarPort.isConnected(ownerId)) {
             for (BusyInterval bi : calendarPort.freeBusy(ownerId, from, to)) {
@@ -171,7 +192,7 @@ public class BookingService {
             }
         }
         for (Booking b : Booking.<Booking>heldOverlapping(ownerId, from, to)) {
-            if (excludeBookingId != null && excludeBookingId.equals(b.id)) {
+            if (excludeBookingIds.contains(b.id)) {
                 continue;
             }
             busy.add(new Interval(b.startUtc, b.endUtc));
@@ -216,7 +237,7 @@ public class BookingService {
 
         // App-level availability re-check: nice errors + buffer/min-notice/horizon enforcement
         // (the DB constraint only guards raw-time overlap, not buffers).
-        assertSlotAvailable(type, startUtc, null);
+        assertSlotAvailable(type, startUtc, (Long) null);
 
         if (MeetingTypeHost.isMultiHost(type.id)) {
             return bookGroup(type, startUtc, endUtc, inviteeName, inviteeEmail, submitted, locale, guestEmails);
@@ -577,9 +598,17 @@ public class BookingService {
      * Throws BookingConflictException unless an available slot starts exactly at {@code startUtc}.
      */
     private void assertSlotAvailable(MeetingType type, Instant startUtc, Long excludeBookingId) {
+        assertSlotAvailable(type, startUtc, excludeBookingId == null ? Set.of() : Set.of(excludeBookingId));
+    }
+
+    /**
+     * Same as {@link #assertSlotAvailable(MeetingType, Instant, Long)} but excludes every id in
+     * {@code excludeBookingIds} — used by the group reschedule re-check.
+     */
+    private void assertSlotAvailable(MeetingType type, Instant startUtc, Set<Long> excludeBookingIds) {
         ZoneId zone = ZoneId.of(OwnerSettings.forOwner(type.ownerId).timezone);
         var day = startUtc.atZone(zone).toLocalDate();
-        boolean ok = availableSlots(type, day, day, excludeBookingId).stream()
+        boolean ok = availableSlots(type, day, day, excludeBookingIds).stream()
                 .anyMatch(s -> s.start().toInstant().equals(startUtc));
         if (!ok) {
             throw new BookingConflictException("Slot " + startUtc + " is not available for " + type.slug);
@@ -792,7 +821,16 @@ public class BookingService {
         Instant newEnd = newStartUtc.plusSeconds(60L * type.durationMinutes);
 
         // Re-check the intersection across all hosts at the new time (fail-closed inside availableSlots).
-        assertSlotAvailable(type, newStartUtc, row.id);
+        // Exclude EVERY row of the group, not just `row` -- a group has one row per host, all still at
+        // the OLD time until the move loop below runs, so excluding a single row left each OTHER host's
+        // own sibling row counted as busy against itself (Task 11 review fix: falsely rejected a small
+        // shift / adjacent-slot reschedule whenever a buffer made the new slot's buffered interval
+        // overlap the group's own old occupied interval).
+        Set<Long> groupRowIds = new java.util.HashSet<>();
+        for (Booking r : Booking.<Booking>group(row.groupId)) {
+            groupRowIds.add(r.id);
+        }
+        assertSlotAvailable(type, newStartUtc, groupRowIds);
 
         boolean reApproval = type.requiresApproval;
         var initiator = byOwner ? initiatorOwnerId : null;
@@ -909,11 +947,11 @@ public class BookingService {
      * True iff the booking's current active guest set equals {@code wanted} (case-insensitive).
      */
     private static boolean sameGuestSet(Booking booking, List<String> wanted) {
-        java.util.Set<String> current = new java.util.HashSet<>();
+        Set<String> current = new java.util.HashSet<>();
         for (BookingGuest g : BookingGuest.<BookingGuest>activeForBooking(booking.id)) {
             current.add(g.email.toLowerCase());
         }
-        java.util.Set<String> want = new java.util.HashSet<>();
+        Set<String> want = new java.util.HashSet<>();
         for (String e : wanted) {
             want.add(e.toLowerCase());
         }
@@ -929,7 +967,7 @@ public class BookingService {
             return List.of();
         }
         List<String> wanted = normalizeGuestEmails(guestEmails, booking.inviteeEmail);
-        java.util.Set<String> wantedLower = new java.util.HashSet<>();
+        Set<String> wantedLower = new java.util.HashSet<>();
         for (String e : wanted) wantedLower.add(e.toLowerCase());
 
         // Existing rows for this booking, keyed by lowercase email.

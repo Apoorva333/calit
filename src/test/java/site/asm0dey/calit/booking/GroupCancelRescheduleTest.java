@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.TestTransaction;
 import io.quarkus.test.junit.QuarkusTest;
+import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import java.time.DayOfWeek;
 import java.time.Instant;
@@ -15,7 +16,9 @@ import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import site.asm0dey.calit.booking.events.BookingRescheduled;
 import site.asm0dey.calit.domain.MeetingType;
 import site.asm0dey.calit.google.CalendarPort;
 import site.asm0dey.calit.google.CreatedEvent;
@@ -36,6 +39,13 @@ class GroupCancelRescheduleTest {
     CalendarPort calendarPort;
 
     private final ZoneId AMS = ZoneId.of("Europe/Amsterdam");
+
+    // CDI observer counting fired BookingRescheduled events (same pattern as BookServiceTest).
+    static final AtomicInteger RESCHEDULED = new AtomicInteger();
+
+    void onRescheduled(@Observes BookingRescheduled e) {
+        RESCHEDULED.incrementAndGet();
+    }
 
     private Instant nextMonday(int hour) {
         var mon = LocalDate.now(AMS).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
@@ -210,5 +220,65 @@ class GroupCancelRescheduleTest {
         assertNull(loaded.meetLink);
         verify(calendarPort, times(1)).deleteEvent(anyLong(), eq("evt-s2"));
         verify(calendarPort, never()).updateEvent(anyLong(), any(), any(), any(), any());
+    }
+
+    // --- (e) Task 11 review fix: group reschedule to an adjacent slot must not be falsely rejected
+    // by the group's OWN sibling rows, which still sit at the old time until the move loop runs ---
+
+    @Test
+    @TestTransaction
+    void groupRescheduleToAdjacentSlotSucceedsDespiteSiblingRowsAtOldTime() {
+        stubOrganizerOnCreator();
+        MeetingType type = groupType(false); // auto-confirm
+        // A non-zero buffer makes the new (adjacent) slot's BUFFERED interval overlap the group's own
+        // OLD (unbuffered) occupied interval: [10:00,11:00) booked, buffered 11:00 slot -> [10:45,12:15).
+        type.bufferBeforeMinutes = 15;
+        type.bufferAfterMinutes = 15;
+        type.persist();
+
+        Booking lead = bookingService.book(
+                1L, "intro", nextMonday(10), "Sam", "sam@x.com", Map.of(), "tok", "", "en", List.of());
+        List<Booking> rows = Booking.group(lead.groupId);
+        assertEquals(2, rows.size());
+
+        Booking freshLead = Booking.leadOfGroup(lead.groupId, 1L);
+        // Before the fix: assertSlotAvailable excluded only freshLead.id, so the co-host's OWN row
+        // (still at 10:00-11:00) was counted busy against the new slot's buffered interval ->
+        // BookingConflictException (409), even though the group is only shifting by one hour.
+        assertDoesNotThrow(() -> bookingService.reschedule(freshLead.manageToken, nextMonday(11)));
+
+        Booking.<Booking>group(lead.groupId)
+                .forEach(r -> assertEquals(nextMonday(11), r.startUtc, "every group row moved to the new time"));
+    }
+
+    // --- (f) Task 11 review fix: auto-confirm group reschedule deletes the old event and creates a
+    // new one, moves every row, and fires BookingRescheduled (rows stay CONFIRMED, never PENDING) ---
+
+    @Test
+    @TestTransaction
+    void autoConfirmGroupRescheduleDeletesOldEventAndCreatesNewOne() {
+        stubOrganizerOnCreator();
+        groupType(false); // auto-confirm
+
+        Booking lead = bookingService.book(
+                1L, "intro", nextMonday(10), "Sam", "sam@x.com", Map.of(), "tok", "", "en", List.of());
+        List<Booking> rows = Booking.group(lead.groupId);
+        rows.forEach(r -> assertEquals(BookingStatus.CONFIRMED, r.status));
+        verify(calendarPort, times(1))
+                .createEvent(anyLong(), any(), any(), any(), any(), anyList(), anyBoolean(), any());
+
+        Booking freshLead = Booking.leadOfGroup(lead.groupId, 1L);
+        var rescheduledBefore = RESCHEDULED.get();
+
+        bookingService.reschedule(freshLead.manageToken, nextMonday(15)); // invitee-initiated, far shift
+
+        Booking.<Booking>group(lead.groupId).forEach(r -> {
+            assertEquals(BookingStatus.CONFIRMED, r.status, "auto-confirm group reschedule stays confirmed");
+            assertEquals(nextMonday(15), r.startUtc);
+        });
+        verify(calendarPort, times(1)).deleteEvent(eq(1L), eq("evt"));
+        verify(calendarPort, times(2))
+                .createEvent(anyLong(), any(), any(), any(), any(), anyList(), anyBoolean(), any());
+        assertEquals(rescheduledBefore + 1, RESCHEDULED.get(), "BookingRescheduled fired once");
     }
 }
