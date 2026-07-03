@@ -25,13 +25,22 @@ public class SlotService {
      * and overrides (~3 queries/day, ~180 over a 60-day horizon).
      */
     public List<TimeSlot> generateRawSlots(MeetingType type, LocalDate from, LocalDate to) {
-        OwnerSettings settings = OwnerSettings.forOwner(type.ownerId);
+        return generateRawSlots(type, type.ownerId, from, to);
+    }
+
+    /**
+     * Same as {@link #generateRawSlots(MeetingType, LocalDate, LocalDate)}, but the grid/duration
+     * come from {@code type} while {@link OwnerSettings} and availability are read for {@code
+     * hostOwnerId} — lets a co-host's own hours/timezone drive their raw slots for a shared type.
+     */
+    public List<TimeSlot> generateRawSlots(MeetingType type, Long hostOwnerId, LocalDate from, LocalDate to) {
+        OwnerSettings settings = OwnerSettings.forOwner(hostOwnerId);
         if (settings == null) {
-            throw new IllegalStateException("Owner settings not configured for owner " + type.ownerId
+            throw new IllegalStateException("Owner settings not configured for owner " + hostOwnerId
                     + "; set them via /me/settings before generating slots.");
         }
         ZoneId zone = ZoneId.of(settings.timezone);
-        Availability availability = loadAvailability(type, from, to);
+        Availability availability = loadAvailability(type, hostOwnerId, from, to);
         List<TimeSlot> slots = new ArrayList<>();
 
         for (var date = from; !date.isAfter(to); date = date.plusDays(1)) {
@@ -97,10 +106,10 @@ public class SlotService {
      * overrides in range, and all windows of the overrides actually selected. Split into per-type
      * and this-owner's-global maps so {@link Availability#windowsFor} can resolve each day in memory.
      */
-    private Availability loadAvailability(MeetingType type, LocalDate from, LocalDate to) {
+    private Availability loadAvailability(MeetingType type, Long hostOwnerId, LocalDate from, LocalDate to) {
         // 1) Rules: this owner's per-type + global, grouped by day-of-week.
         List<AvailabilityRule> rules = AvailabilityRule.list(
-                "ownerId = ?1 and (meetingTypeId = ?2 or meetingTypeId is null)", type.ownerId, type.id);
+                "ownerId = ?1 and (meetingTypeId = ?2 or meetingTypeId is null)", hostOwnerId, type.id);
         Map<DayOfWeek, List<AvailabilityRule>> typedRules = rules.stream()
                 .filter(r -> type.id.equals(r.meetingTypeId))
                 .collect(Collectors.groupingBy(r -> r.dayOfWeek));
@@ -112,7 +121,7 @@ public class SlotService {
         List<DateOverride> overrides = DateOverride.list(
                 "ownerId = ?1 and (meetingTypeId = ?2 or meetingTypeId is null) "
                         + "and overrideDate >= ?3 and overrideDate <= ?4",
-                type.ownerId,
+                hostOwnerId,
                 type.id,
                 from,
                 to);

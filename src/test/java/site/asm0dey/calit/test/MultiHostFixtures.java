@@ -1,6 +1,8 @@
 package site.asm0dey.calit.test;
 
+import site.asm0dey.calit.domain.AvailabilityRule;
 import site.asm0dey.calit.domain.MeetingType;
+import site.asm0dey.calit.domain.OwnerSettings;
 import site.asm0dey.calit.user.AppUser;
 
 /**
@@ -26,5 +28,25 @@ public final class MultiHostFixtures {
         u.settingsComplete = true;
         u.persist();
         return u;
+    }
+
+    public static OwnerSettings settings(long ownerId, String name) {
+        OwnerSettings o = new OwnerSettings();
+        o.ownerId = ownerId;
+        o.ownerName = name;
+        o.ownerEmail = name + "@x.com";
+        o.timezone = "Europe/Amsterdam";
+        o.persist();
+        return o;
+    }
+
+    public static AvailabilityRule rule(long ownerId, java.time.DayOfWeek day, int startHour, int endHour) {
+        AvailabilityRule r = new AvailabilityRule();
+        r.ownerId = ownerId;
+        r.dayOfWeek = day;
+        r.startTime = java.time.LocalTime.of(startHour, 0);
+        r.endTime = java.time.LocalTime.of(endHour, 0);
+        r.persist();
+        return r;
     }
 }
