@@ -592,6 +592,12 @@ public class BookingService {
         if (booking == null) {
             throw new NotFoundException("No booking " + bookingId);
         }
+        // Group idempotency guard: a double-submit (double-click / back-button replay) of approve
+        // on an already-processed group row must not re-run createGroupGoogleEvent / re-fire
+        // BookingConfirmed. Single-host is unaffected (groupId == null -> guard is false).
+        if (booking.groupId != null && booking.status != BookingStatus.PENDING) {
+            return;
+        }
         booking.status = BookingStatus.CONFIRMED;
         MeetingType type = MeetingType.findById(booking.meetingTypeId);
         if (booking.groupId == null) {
@@ -621,6 +627,11 @@ public class BookingService {
         Booking booking = Booking.findById(bookingId);
         if (booking == null) {
             throw new NotFoundException("No booking " + bookingId);
+        }
+        // Group idempotency guard: a double-submit of decline on an already-DECLINED group row is
+        // a no-op (the group was already killed by the first decline). Single-host is unaffected.
+        if (booking.groupId != null && booking.status == BookingStatus.DECLINED) {
+            return;
         }
         if (booking.groupId == null) {
             // Single-host: unchanged. DECLINED leaves the PENDING|CONFIRMED partial constraint ->

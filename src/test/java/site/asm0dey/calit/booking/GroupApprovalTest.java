@@ -75,6 +75,53 @@ class GroupApprovalTest {
 
     @Test
     @TestTransaction
+    void doubleApproveOnAlreadyConfirmedGroupRowDoesNotDuplicateEvent() {
+        when(calendarPort.isConnected(1L)).thenReturn(true);
+        when(calendarPort.isConnected(argThat(id -> id != null && id != 1L))).thenReturn(false);
+        when(calendarPort.createEvent(anyLong(), any(), any(), any(), any(), anyList(), anyBoolean(), any()))
+                .thenReturn(new CreatedEvent("evt", "meet", "cal"));
+        type(true);
+
+        Booking lead = bookingService.book(
+                1L, "intro", nextMonday10(), "Sam", "sam@x.com", Map.of(), "tok", "", "en", List.of());
+        List<Booking> rows = Booking.group(lead.groupId);
+        assertEquals(2, rows.size());
+
+        bookingService.approve(rows.get(0).id); // first host approves
+        bookingService.approve(rows.get(1).id); // last host approves -> event created + group confirmed
+        verify(calendarPort, times(1))
+                .createEvent(anyLong(), any(), any(), any(), any(), anyList(), anyBoolean(), any());
+
+        // Double-submit: re-approve an already-CONFIRMED row (double-click / back-button replay).
+        // Must NOT re-run createGroupGoogleEvent -> still exactly ONE event, not two.
+        bookingService.approve(rows.get(1).id);
+        verify(calendarPort, times(1))
+                .createEvent(anyLong(), any(), any(), any(), any(), anyList(), anyBoolean(), any());
+    }
+
+    @Test
+    @TestTransaction
+    void doubleDeclineOnAlreadyDeclinedGroupIsNoOp() {
+        when(calendarPort.isConnected(anyLong())).thenReturn(false);
+        type(true);
+
+        Booking lead = bookingService.book(
+                1L, "intro", nextMonday10(), "Sam", "sam@x.com", Map.of(), "tok", "", "en", List.of());
+        List<Booking> rows = Booking.group(lead.groupId);
+        assertEquals(2, rows.size());
+
+        bookingService.decline(rows.get(0).id);
+        Booking.<Booking>group(lead.groupId).forEach(r -> assertEquals(BookingStatus.DECLINED, r.status));
+
+        // Double-submit: decline an already-DECLINED row again -> no-op.
+        bookingService.decline(rows.get(1).id);
+        Booking.<Booking>group(lead.groupId).forEach(r -> assertEquals(BookingStatus.DECLINED, r.status));
+        verify(calendarPort, never())
+                .createEvent(anyLong(), any(), any(), any(), any(), anyList(), anyBoolean(), any());
+    }
+
+    @Test
+    @TestTransaction
     void anyDeclineKillsWholeGroup() {
         when(calendarPort.isConnected(anyLong())).thenReturn(false);
         type(true);
