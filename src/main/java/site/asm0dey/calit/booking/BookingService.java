@@ -594,11 +594,26 @@ public class BookingService {
         }
         booking.status = BookingStatus.CONFIRMED;
         MeetingType type = MeetingType.findById(booking.meetingTypeId);
-        // Feature 14 + degraded mode: create the Google event now, only when connected.
-        if (calendarPort.isConnected(type.ownerId)) {
-            createGoogleEvent(type, booking);
+        if (booking.groupId == null) {
+            // Single-host: unchanged from pre-multi-host behavior.
+            // Feature 14 + degraded mode: create the Google event now, only when connected.
+            if (calendarPort.isConnected(type.ownerId)) {
+                createGoogleEvent(type, booking);
+            }
+            bookingApprovedEvent.fire(new BookingApproved(bookingId));
+            return;
         }
-        bookingApprovedEvent.fire(new BookingApproved(bookingId));
+        // Group: row-status is the source of truth for "all approved" -- no extra group-state
+        // column. Only the LAST host's approval (no group row still PENDING) creates the ONE
+        // shared Google event and fires the invitee-facing BookingConfirmed; earlier approvals
+        // just flip that host's row and wait.
+        boolean anyPending =
+                Booking.<Booking>group(booking.groupId).stream().anyMatch(r -> r.status == BookingStatus.PENDING);
+        if (!anyPending) {
+            createGroupGoogleEvent(type, booking.groupId);
+            Booking lead = Booking.leadOfGroup(booking.groupId, type.ownerId);
+            bookingConfirmedEvent.fire(new BookingConfirmed(lead.id));
+        }
     }
 
     @Transactional
@@ -607,10 +622,21 @@ public class BookingService {
         if (booking == null) {
             throw new NotFoundException("No booking " + bookingId);
         }
-        // DECLINED leaves the PENDING|CONFIRMED partial constraint -> frees the slot.
-        // A PENDING request has no Google event, so nothing to delete.
-        booking.status = BookingStatus.DECLINED;
-        bookingDeclinedEvent.fire(new BookingDeclined(bookingId));
+        if (booking.groupId == null) {
+            // Single-host: unchanged. DECLINED leaves the PENDING|CONFIRMED partial constraint ->
+            // frees the slot. A PENDING request has no Google event, so nothing to delete.
+            booking.status = BookingStatus.DECLINED;
+            bookingDeclinedEvent.fire(new BookingDeclined(bookingId));
+            return;
+        }
+        // Group: any single host declining kills the whole group -- no event was created
+        // pre-confirmation, so there's nothing to delete on Google's side.
+        MeetingType type = MeetingType.findById(booking.meetingTypeId);
+        for (Booking row : Booking.<Booking>group(booking.groupId)) {
+            row.status = BookingStatus.DECLINED;
+        }
+        Booking lead = Booking.leadOfGroup(booking.groupId, type.ownerId);
+        bookingDeclinedEvent.fire(new BookingDeclined(lead.id));
     }
 
     @Transactional
