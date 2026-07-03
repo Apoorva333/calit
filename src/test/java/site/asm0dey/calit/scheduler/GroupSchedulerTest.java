@@ -124,4 +124,60 @@ class GroupSchedulerTest {
             assertEquals(1, EmailOutbox.count("recipient", "Cohost@x.com"), "co-host gets exactly one declined email");
         });
     }
+
+    /**
+     * Deterministic (no real threads) regression for the Task 14 review finding: two ticks racing
+     * on DIFFERENT sibling rows of the SAME group must not both run the group-decline branch and
+     * both enqueue a declined email. We simulate "another tick already committed the group decline"
+     * by pre-setting the LEAD row to DECLINED directly, while leaving the co-host row PENDING and
+     * past its hold window so the claim query still picks it up and the expiry tick still enters
+     * the group branch. The lead-row PESSIMISTIC_WRITE lock check must see lead.status == DECLINED
+     * and skip -- no re-decline, no second email, co-host row left untouched.
+     */
+    @Test
+    void groupExpirySkipsAndSendsNoEmailWhenLeadAlreadyDeclinedByAnotherTick() {
+        MeetingType type = twoHostType(true);
+        var start = Instant.now().plus(500, ChronoUnit.HOURS);
+        GroupIds ids = seedGroup(
+                type.id,
+                start,
+                BookingStatus.DECLINED, // simulates a concurrent tick that already won the race
+                Instant.now().minus(25, ChronoUnit.HOURS),
+                BookingStatus.PENDING,
+                Instant.now().minus(25, ChronoUnit.HOURS)); // still claimable: past the 24h hold
+
+        // email_outbox isn't reset per test (DatabaseResetCallback only truncates domain tables), so
+        // compare counts before/after the tick rather than asserting an absolute value.
+        record Baseline(long invitee, long lead, long cohost) {}
+        Baseline before = QuarkusTransaction.requiringNew()
+                .call(() -> new Baseline(
+                        EmailOutbox.count("recipient", INVITEE_EMAIL),
+                        EmailOutbox.count("recipient", "Creator@x.com"),
+                        EmailOutbox.count("recipient", "Cohost@x.com")));
+
+        expiryScheduler.expirePendingBookings();
+
+        QuarkusTransaction.requiringNew().run(() -> {
+            assertEquals(
+                    BookingStatus.DECLINED,
+                    ((Booking) Booking.findById(ids.leadId())).status,
+                    "lead row stays DECLINED (already handled by the other tick)");
+            assertEquals(
+                    BookingStatus.PENDING,
+                    ((Booking) Booking.findById(ids.cohostId())).status,
+                    "co-host row is left untouched -- the skip happens before the group loop runs");
+            assertEquals(
+                    before.invitee(),
+                    EmailOutbox.count("recipient", INVITEE_EMAIL),
+                    "no second declined email for the invitee");
+            assertEquals(
+                    before.lead(),
+                    EmailOutbox.count("recipient", "Creator@x.com"),
+                    "no second declined email for the lead host");
+            assertEquals(
+                    before.cohost(),
+                    EmailOutbox.count("recipient", "Cohost@x.com"),
+                    "no second declined email for the co-host");
+        });
+    }
 }

@@ -6,6 +6,7 @@ import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.util.List;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import site.asm0dey.calit.booking.Booking;
@@ -82,11 +83,26 @@ public class PendingExpiryScheduler {
                 // out per host by EmailService) keyed on the group's lead row.
                 if (b.groupId != null) {
                     Long creatorOwnerId = MeetingType.<MeetingType>findById(b.meetingTypeId).ownerId;
+                    Long leadId = Booking.leadOfGroup(b.groupId, creatorOwnerId).id;
+                    // The lead row is the group's single serialization point (mirrors the single-host
+                    // FOR UPDATE SKIP LOCKED guarantee): SELECT ... FOR UPDATE on it so two ticks that
+                    // each claimed a DIFFERENT sibling row of the SAME group can't both run the
+                    // group-decline branch and both enqueue a declined email.
+                    Booking lead = Booking.findById(leadId, LockModeType.PESSIMISTIC_WRITE);
+                    if (lead.status == BookingStatus.DECLINED) {
+                        // Another tick already declined this group under the lock -- nothing to do,
+                        // and critically no second declined email. NOTE: the lead row need not have
+                        // been PENDING to begin with (e.g. lead already CONFIRMED, a sibling still
+                        // PENDING and expired) -- only DECLINED means "already processed".
+                        continue;
+                    }
                     for (Booking r : Booking.<Booking>group(b.groupId)) {
+                        if (r.status == BookingStatus.DECLINED) {
+                            continue; // already declined (e.g. by a concurrent host action); idempotent skip
+                        }
                         r.status = BookingStatus.DECLINED; // flipped within the lock-holding transaction
                         Reminder.deleteUnsentFor(r.id); // was ReminderScheduler.onDeclined observer
                     }
-                    Booking lead = Booking.leadOfGroup(b.groupId, creatorOwnerId);
                     // Guard covers a render/load failure (throws before any persist): the flip +
                     // cleanup still commit, one mail dropped. A crash (not caught) rolls back the
                     // whole tx pre-commit and the row is reclaimed next tick -- the crash-safety
