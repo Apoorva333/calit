@@ -10,11 +10,13 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.calit.availability.TimeSlot;
+import site.asm0dey.calit.domain.AvailabilityRule;
 import site.asm0dey.calit.domain.MeetingType;
 import site.asm0dey.calit.domain.MeetingTypeHost;
 import site.asm0dey.calit.google.CalendarPort;
@@ -86,5 +88,39 @@ class AvailableSlotsIntersectionTest {
         MeetingTypeHost.find(t.id, 1L).persistAndFlush();
         var mon = LocalDate.now(AMS).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
         assertTrue(bookingService.availableSlots(t, mon, mon).isEmpty());
+    }
+
+    /**
+     * Task 8b: creator window starts 09:00, cohost window starts 09:15 — a non-multiple-of-step
+     * offset. Window-anchored grids never share a start instant (creator lands on :00/:30, cohost
+     * on :15/:45), so the intersection is empty even though both hosts are free 09:30-11:30/12:00.
+     * Day-anchoring (grid multiples of `step` from local midnight) puts both hosts on the same
+     * :00/:30 lattice, so the intersection is non-empty and starts at 09:30.
+     */
+    @Test
+    @TestTransaction
+    void offsetWindowsStillIntersectWithDayAnchoredGrid() {
+        when(calendarPort.isConnected(anyLong())).thenReturn(false);
+        settings(1L, "pasha");
+        AppUser v = enabledUser("volodya");
+        settings(v.id, "volodya");
+        var mon = DayOfWeek.MONDAY;
+        rule(1L, mon, 9, 12); // creator: 09:00-12:00
+
+        AvailabilityRule cohostRule = new AvailabilityRule();
+        cohostRule.ownerId = v.id;
+        cohostRule.dayOfWeek = mon;
+        cohostRule.startTime = LocalTime.of(9, 15);
+        cohostRule.endTime = LocalTime.of(12, 0);
+        cohostRule.persist();
+
+        MeetingType t = acceptedTwoHostType(1L, v.id, "intro30", 30, false);
+        var monday = LocalDate.now(AMS).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        List<TimeSlot> slots = bookingService.availableSlots(t, monday, monday);
+
+        assertFalse(slots.isEmpty());
+        assertEquals(
+                LocalTime.of(9, 30),
+                slots.get(0).start().withZoneSameInstant(AMS).toLocalTime());
     }
 }

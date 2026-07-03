@@ -34,6 +34,23 @@ public class SlotService {
      * hostOwnerId} — lets a co-host's own hours/timezone drive their raw slots for a shared type.
      */
     public List<TimeSlot> generateRawSlots(MeetingType type, Long hostOwnerId, LocalDate from, LocalDate to) {
+        return generateRawSlots(type, hostOwnerId, from, to, false);
+    }
+
+    /**
+     * Same as {@link #generateRawSlots(MeetingType, Long, LocalDate, LocalDate)}, plus a
+     * {@code dayAnchoredGrid} switch used only by the multi-host intersection path (Task 8b).
+     *
+     * <p>Single-host callers must keep {@code dayAnchoredGrid=false} (window-anchored — the grid's
+     * first point is the window start, byte-identical to the historical behavior). Multi-host
+     * callers pass {@code true}: two hosts whose window starts differ by a non-multiple of the
+     * slot step (e.g. 09:00 vs 09:15 with a 30-min step) would otherwise generate grids that never
+     * share a start instant, making the intersection spuriously empty even though the hosts' free
+     * time genuinely overlaps. Anchoring the grid to day-start (00:00 host-local) instead puts
+     * every host's slots on the same {@code step}-minute lattice so they can actually intersect.
+     */
+    public List<TimeSlot> generateRawSlots(
+            MeetingType type, Long hostOwnerId, LocalDate from, LocalDate to, boolean dayAnchoredGrid) {
         OwnerSettings settings = OwnerSettings.forOwner(hostOwnerId);
         if (settings == null) {
             throw new IllegalStateException("Owner settings not configured for owner " + hostOwnerId
@@ -51,7 +68,10 @@ public class SlotService {
                 // which (e.g. a window ending 23:30 with a 30-min duration) would loop forever.
                 var startMin = window.start().toSecondOfDay() / 60;
                 var endMin = window.end().toSecondOfDay() / 60;
-                for (var s = startMin; s + duration <= endMin; s += step) {
+                // window-anchored (default, single-host): first = startMin, unchanged.
+                // day-anchored (multi-host): first grid multiple of `step` from 00:00 that is >= startMin.
+                var first = dayAnchoredGrid ? ((startMin + step - 1) / step) * step : startMin;
+                for (var s = first; s + duration <= endMin; s += step) {
                     var start = LocalTime.ofSecondOfDay(s * 60L);
                     var end = LocalTime.ofSecondOfDay((s + duration) * 60L);
                     slots.add(new TimeSlot(

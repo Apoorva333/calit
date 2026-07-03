@@ -132,7 +132,7 @@ public class BookingService {
             int bufBefore = meetingHosts.effectiveBufferBefore(type, hostId);
             int bufAfter = meetingHosts.effectiveBufferAfter(type, hostId);
             Map<Instant, TimeSlot> hostFree = new LinkedHashMap<>();
-            for (TimeSlot slot : slotService.generateRawSlots(type, hostId, from, to)) {
+            for (TimeSlot slot : slotService.generateRawSlots(type, hostId, from, to, !singleHost)) {
                 Instant slotStart = slot.start().toInstant();
                 // Feature 11: drop too-soon (before now+minNotice) and too-far (after now+horizon) slots.
                 if (slotStart.isBefore(earliest) || slotStart.isAfter(latest)) {
