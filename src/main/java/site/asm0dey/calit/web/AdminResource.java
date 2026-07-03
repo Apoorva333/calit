@@ -74,6 +74,7 @@ public class AdminResource {
                 Long pendingCount,
                 boolean isAdmin,
                 String error,
+                String hostTypeaheadScript,
                 String title);
 
         public static native TemplateInstance availability(
@@ -537,6 +538,7 @@ public class AdminResource {
                 pendingCount(),
                 isAdmin(),
                 error,
+                Layout.HOST_TYPEAHEAD_SCRIPT,
                 title);
     }
 

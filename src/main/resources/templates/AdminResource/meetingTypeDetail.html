@@ -10,6 +10,7 @@
 {@java.lang.Long pendingCount}
 {@java.lang.Boolean isAdmin}
 {@java.lang.String error}
+{@java.lang.String hostTypeaheadScript}
 {@java.lang.String title}
 {#include adminBase title=title pendingCount=pendingCount active="meetingTypes" isAdmin=isAdmin}
   <p class="mb-2"><a class="link link-hover text-sm" href="/me/meeting-types">{adm:adm_detail_back}</a></p>
@@ -184,6 +185,6 @@
       </div>
     </div>
   </div>
-  {#include AdminResource/_hostlist hosts=hosts type=type /}
+  {#include AdminResource/_hostlist hosts=hosts type=type hostTypeaheadScript=hostTypeaheadScript /}
   <script src="/workplan.js"></script>
 {/include}
