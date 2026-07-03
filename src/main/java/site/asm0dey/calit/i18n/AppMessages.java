@@ -156,6 +156,16 @@ public interface AppMessages {
             "Connect each user's own Google account. Bookings create events and auto-generate a Meet link — or run fully degraded.")
     String pub_landing_feat_calendar_p();
 
+    @Message("Group meetings")
+    String pub_landing_feat_multihost_k();
+
+    @Message("Meetings that need everyone")
+    String pub_landing_feat_multihost_h3();
+
+    @Message(
+            "A meeting type can require several hosts. calit only offers slots when every host is free, books one event on every calendar, and each co-host confirms before it goes live.")
+    String pub_landing_feat_multihost_p();
+
     @Message("Control")
     String pub_landing_feat_control_k();
 
