@@ -128,8 +128,37 @@ class MultiHostEmailFanoutTest {
                 "opted-out co-host still gets the approval-needed mail (actionable, not suppressible)");
         assertEquals(3, mailbox.getTotalMessagesSent());
 
+        // Each host's mail must link to THEIR OWN group row (id + approvalToken), never the lead's --
+        // a regression that hands every host the lead's token would still contain "/me/bookings/"
+        // (weak substring check) but must fail this exact-link assertion.
+        record RowTokens(long id, String approvalToken) {}
+        RowTokens[] rows = QuarkusTransaction.requiringNew().call(() -> {
+            List<Booking> group = Booking.group(Booking.<Booking>findById(leadId).groupId);
+            Booking cohostRow = group.stream()
+                    .filter(b -> b.ownerId.equals(COHOST_ID))
+                    .findFirst()
+                    .orElseThrow();
+            Booking leadRow = group.stream()
+                    .filter(b -> b.ownerId.equals(CREATOR_ID))
+                    .findFirst()
+                    .orElseThrow();
+            return new RowTokens[] {
+                new RowTokens(cohostRow.id, cohostRow.approvalToken), new RowTokens(leadRow.id, leadRow.approvalToken)
+            };
+        });
+        var cohostRow = rows[0];
+        var leadRow = rows[1];
+
         Mail cohostMail = mailbox.getMailsSentTo("Cohost@x.com").getFirst();
-        assertTrue(cohostMail.getHtml().contains("/me/bookings/"), "carries this host's OWN approve/manage link");
+        var cohostExpectedLink = "/me/bookings/" + cohostRow.id() + "/approve?t=" + cohostRow.approvalToken();
+        assertTrue(cohostMail.getHtml().contains(cohostExpectedLink), "carries this host's OWN approve link");
+        assertFalse(
+                cohostMail.getHtml().contains("/me/bookings/" + leadRow.id() + "/approve?t="),
+                "must NOT carry the lead's approve link");
+
+        Mail creatorMail = mailbox.getMailsSentTo("Creator@x.com").getFirst();
+        var leadExpectedLink = "/me/bookings/" + leadRow.id() + "/approve?t=" + leadRow.approvalToken();
+        assertTrue(creatorMail.getHtml().contains(leadExpectedLink), "lead host gets their own approve link too");
     }
 
     @Test
