@@ -294,4 +294,56 @@ class CohostManageTest {
         MeetingTypeHost.of(typeId, ownerId, MeetingTypeHost.COHOST, MeetingTypeHost.ACCEPTED)
                 .persist();
     }
+
+    /**
+     * Bug fix regression: a plain single-host type holds NO {@link MeetingTypeHost} rows at all, so
+     * the Hosts tokenfield used to render completely empty for it. The owner must always appear as
+     * a persistent, non-removable "Creator" chip -- synthesized on the fly when no real CREATOR row
+     * exists.
+     */
+    @Test
+    void singleHostTypeDetailPageShowsOwnerAsCreatorChipWithNoHostRows() {
+        MeetingType t = seedAdminType("single-host-" + System.nanoTime());
+        assertEquals(0, MeetingTypeHost.count("meetingTypeId = ?1", t.id), "single-host type has no host rows");
+
+        given().cookie("quarkus-credential", FormAuth.login())
+                .when()
+                .get("/me/meeting-types/" + t.id)
+                .then()
+                .statusCode(200)
+                .body(containsString("admin"))
+                .body(containsString("Creator"));
+    }
+
+    /**
+     * After removing the last co-host, {@link MeetingHosts} deletes the CREATOR row too (revert to
+     * single-host, by design). The detail page must still show the owner's chip -- not an empty
+     * Hosts control.
+     */
+    @Test
+    void removingLastCohostLeavesCreatorChipVisible() {
+        MeetingType t = seedAdminType("last-cohost-" + System.nanoTime());
+        AppUser candidate = seedCandidate("last-cohost-cand-" + System.nanoTime());
+        seedPendingCohost(t.id, candidate.id);
+
+        given().cookie("quarkus-credential", FormAuth.login())
+                .contentType("application/x-www-form-urlencoded")
+                .when()
+                .post("/me/meeting-types/" + t.id + "/hosts/" + candidate.id + "/remove")
+                .then()
+                .statusCode(200);
+
+        assertEquals(
+                0,
+                MeetingTypeHost.count("meetingTypeId = ?1", t.id),
+                "removing the last co-host also removes the CREATOR row (revert to single-host)");
+
+        given().cookie("quarkus-credential", FormAuth.login())
+                .when()
+                .get("/me/meeting-types/" + t.id)
+                .then()
+                .statusCode(200)
+                .body(containsString("admin"))
+                .body(containsString("Creator"));
+    }
 }

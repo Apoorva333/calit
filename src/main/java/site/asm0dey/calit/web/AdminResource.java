@@ -542,7 +542,14 @@ public class AdminResource {
                 title);
     }
 
-    /** This type's host rows (empty for a plain single-host type, since it holds no host rows yet). */
+    /**
+     * This type's host rows for the Hosts tokenfield. A plain single-host type holds no {@link
+     * MeetingTypeHost} rows at all (the CREATOR row is only materialized once a co-host is added,
+     * and removed again once the last co-host is removed -- see {@link
+     * site.asm0dey.calit.booking.MeetingHosts}), so a synthetic CREATOR row for the current owner
+     * is prepended whenever no real CREATOR row is present. This keeps the owner's chip always
+     * visible, whether the type is single- or multi-host.
+     */
     private List<HostRow> hostRows(MeetingType type) {
         List<HostRow> rows = new java.util.ArrayList<>();
         for (MeetingTypeHost h : MeetingTypeHost.forType(type.id)) {
@@ -553,6 +560,16 @@ public class AdminResource {
                     h.role,
                     h.status,
                     GoogleCredential.needsReconnect(h.ownerId)));
+        }
+        boolean hasCreatorRow = rows.stream().anyMatch(h -> MeetingTypeHost.CREATOR.equals(h.role()));
+        if (!hasCreatorRow) {
+            AppUser owner = currentOwner.require();
+            rows.addFirst(new HostRow(
+                    owner.id,
+                    owner.username,
+                    MeetingTypeHost.CREATOR,
+                    MeetingTypeHost.ACCEPTED,
+                    GoogleCredential.needsReconnect(owner.id)));
         }
         return rows;
     }
