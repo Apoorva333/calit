@@ -165,6 +165,22 @@ public class MeetingHosts {
     }
 
     /**
+     * Task 18: how many of {@code hostOwnerId}'s own rows in future (PENDING|CONFIRMED) group
+     * bookings of {@code type} exist right now. A non-zero count is what triggers the
+     * keep-vs-cancel interstitial in {@link site.asm0dey.calit.web.AdminResource#removeCohost}
+     * instead of removing the host immediately. Standalone (non-group) bookings are irrelevant
+     * here — a host row is only ever a group row.
+     */
+    public long countFutureBookings(MeetingType type, Long hostOwnerId) {
+        return Booking.count(
+                "ownerId = ?1 and meetingTypeId = ?2 and startUtc > ?3 and status in ?4 and groupId is not null",
+                hostOwnerId,
+                type.id,
+                Instant.now(),
+                List.of(BookingStatus.PENDING, BookingStatus.CONFIRMED));
+    }
+
+    /**
      * Removes a co-host; if no co-hosts remain, also removes the CREATOR row (revert to
      * single-host). Defense-in-depth guard against removing the CREATOR row directly (Task 17
      * review): {@link site.asm0dey.calit.web.AdminResource#removeCohost} already rejects this

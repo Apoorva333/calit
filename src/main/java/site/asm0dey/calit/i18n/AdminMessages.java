@@ -440,6 +440,23 @@ public interface AdminMessages {
     @Message("You already co-host a meeting type with the slug \"{slug}\" -- pick a different slug.")
     String adm_hosts_error_slug_owned_cohost(String slug);
 
+    // ---- Meeting type detail: host removal interstitial (Task 18) ----
+
+    @Message("Remove co-host?")
+    String adm_hosts_removeConfirm_title();
+
+    @Message("{username} has {count} upcoming booking(s) on this meeting type. What should happen to them?")
+    String adm_hosts_removeConfirm_count(String username, long count);
+
+    @Message("Keep bookings, just remove co-host")
+    String adm_hosts_removeConfirm_keep();
+
+    @Message("Cancel those bookings and remove co-host")
+    String adm_hosts_removeConfirm_cancel();
+
+    @Message("Back without removing")
+    String adm_hosts_removeConfirm_back();
+
     // ---- Availability ----
 
     @Message("Availability (work hours)")

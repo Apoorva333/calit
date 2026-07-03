@@ -1136,6 +1136,33 @@ public class BookingService {
         }
     }
 
+    /**
+     * Task 18: cascade for the co-host-removal keep-vs-cancel interstitial. Cancels every future
+     * (PENDING|CONFIRMED) group booking that {@code hostOwnerId} is a party to on {@code type} —
+     * each whole group (all hosts' rows -> CANCELLED, the one shared Google event deleted, one
+     * {@code BookingCancelled} fired), by delegating to the same {@link #cancel(String, boolean)}
+     * used by the manual group-cancel path. Lives here (not on {@link MeetingHosts}) so it can
+     * reuse {@code cancel} without a constructor cycle — {@code BookingService} already depends on
+     * {@code MeetingHosts}, not the other way around. Deduplicates by group id so a host with only
+     * one row per group (the normal case) is cancelled exactly once per group even if this method
+     * is ever called from a batch context.
+     */
+    @Transactional
+    public void cancelFutureGroupBookingsForHost(MeetingType type, Long hostOwnerId) {
+        List<Booking> rows = Booking.list(
+                "ownerId = ?1 and meetingTypeId = ?2 and startUtc > ?3 and status in ?4 and groupId is not null",
+                hostOwnerId,
+                type.id,
+                Instant.now(),
+                List.of(BookingStatus.PENDING, BookingStatus.CONFIRMED));
+        Set<UUID> cancelledGroups = new java.util.HashSet<>();
+        for (Booking row : rows) {
+            if (cancelledGroups.add(row.groupId)) {
+                cancel(row.manageToken, true);
+            }
+        }
+    }
+
     @Transactional
     public void declineGuest(String declineToken) {
         BookingGuest guest = BookingGuest.findByDeclineToken(declineToken);

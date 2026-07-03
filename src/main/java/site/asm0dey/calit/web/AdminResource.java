@@ -129,6 +129,15 @@ public class AdminResource {
 
         public static native TemplateInstance approvalResult(
                 Long pendingCount, boolean isAdmin, String title, String h1, String desc);
+
+        public static native TemplateInstance removeHostConfirm(
+                MeetingType type,
+                Long cohostOwnerId,
+                String cohostUsername,
+                long futureBookingCount,
+                Long pendingCount,
+                boolean isAdmin,
+                String title);
     }
 
     /**
@@ -633,9 +642,13 @@ public class AdminResource {
     }
 
     /**
-     * Plain removal — no keep-vs-cancel interstitial for existing future bookings yet (Task 18
-     * adds that). Reverts to single-host automatically once the last co-host is gone (see {@link
-     * MeetingHosts#removeHost}).
+     * Removes a co-host. Task 18: when the co-host still has future (PENDING|CONFIRMED) group
+     * bookings on this type, a plain POST (no {@code choice}) renders a keep-vs-cancel interstitial
+     * instead of removing right away — {@code choice=keep} removes the host and leaves those
+     * bookings as-is; {@code choice=cancel} cancels every one of them first (see {@link
+     * BookingService#cancelFutureGroupBookingsForHost}), then removes the host. No future bookings
+     * -> unchanged behavior: removed immediately. Reverts to single-host automatically once the
+     * last co-host is gone (see {@link MeetingHosts#removeHost}).
      *
      * <p>Task 17 review fix: the CREATOR row must never be removable — the {@code _hostlist.html}
      * remove button is already hidden for the CREATOR row client-side, but a direct POST with the
@@ -649,17 +662,44 @@ public class AdminResource {
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Produces(MediaType.TEXT_HTML)
     @Transactional
-    public TemplateInstance removeCohost(@PathParam("id") Long id, @PathParam("cohostOwnerId") Long cohostOwnerId) {
+    public TemplateInstance removeCohost(
+            @PathParam("id") Long id,
+            @PathParam("cohostOwnerId") Long cohostOwnerId,
+            @QueryParam("choice") String choice) {
         MeetingType t = requireType(id);
         try {
             if (cohostOwnerId.equals(t.ownerId)) {
                 throw new IllegalStateException(m().adm_hosts_error_creator_immutable());
             }
-            meetingHosts.removeHost(t, cohostOwnerId);
+            if ("cancel".equals(choice)) {
+                bookingService.cancelFutureGroupBookingsForHost(t, cohostOwnerId);
+                meetingHosts.removeHost(t, cohostOwnerId);
+            } else if ("keep".equals(choice)) {
+                meetingHosts.removeHost(t, cohostOwnerId);
+            } else {
+                long futureCount = meetingHosts.countFutureBookings(t, cohostOwnerId);
+                if (futureCount > 0) {
+                    return removeHostConfirmInstance(t, cohostOwnerId, futureCount);
+                }
+                meetingHosts.removeHost(t, cohostOwnerId);
+            }
         } catch (IllegalStateException e) {
             return detailInstance(id, e.getMessage());
         }
         return detailInstance(id);
+    }
+
+    /** Renders the Task 18 keep-vs-cancel interstitial for removing a co-host with future bookings. */
+    private TemplateInstance removeHostConfirmInstance(MeetingType t, Long cohostOwnerId, long futureCount) {
+        AppUser cohost = AppUser.findById(cohostOwnerId);
+        return Templates.removeHostConfirm(
+                t,
+                cohostOwnerId,
+                cohost != null ? cohost.username : "?",
+                futureCount,
+                pendingCount(),
+                isAdmin(),
+                m().adm_hosts_removeConfirm_title());
     }
 
     @POST
