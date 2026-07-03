@@ -10,6 +10,7 @@ import java.util.List;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import site.asm0dey.calit.booking.Booking;
 import site.asm0dey.calit.booking.BookingStatus;
+import site.asm0dey.calit.domain.MeetingType;
 import site.asm0dey.calit.email.EmailService;
 
 /**
@@ -69,15 +70,47 @@ public class PendingExpiryScheduler {
             for (Number n : ids) {
                 Long id = n.longValue();
                 Booking b = Booking.findById(id);
-                b.status = BookingStatus.DECLINED; // flipped within the lock-holding transaction
-                Reminder.deleteUnsentFor(id); // was ReminderScheduler.onDeclined observer
-                // Guard covers a render/load failure (throws before any persist): the flip + cleanup
-                // still commit, one mail dropped. A crash (not caught) rolls back the whole tx pre-commit
-                // and the row is reclaimed next tick -- the crash-safety guarantee.
-                try {
-                    emailService.enqueueDeclined(id); // was EmailService.onDeclined observer; durable, same tx
-                } catch (Exception ex) {
-                    Log.errorf(ex, "declined enqueue failed for booking %d (declined, mail dropped)", id);
+                // A sibling row of the same group may already have been declined earlier in THIS
+                // batch (two rows of one group both expired -> both claimed in the same tick): skip
+                // the no-op re-decline rather than re-enqueue a second declined email for the group.
+                if (b.status != BookingStatus.PENDING) {
+                    continue;
+                }
+                // Multi-host: the hold window elapsing on ANY row without full approval means the
+                // whole conceptual meeting failed to convene -- decline every row in the group, not
+                // just the one that happened to be claimed, and send a single declined email (fanned
+                // out per host by EmailService) keyed on the group's lead row.
+                if (b.groupId != null) {
+                    Long creatorOwnerId = MeetingType.<MeetingType>findById(b.meetingTypeId).ownerId;
+                    for (Booking r : Booking.<Booking>group(b.groupId)) {
+                        r.status = BookingStatus.DECLINED; // flipped within the lock-holding transaction
+                        Reminder.deleteUnsentFor(r.id); // was ReminderScheduler.onDeclined observer
+                    }
+                    Booking lead = Booking.leadOfGroup(b.groupId, creatorOwnerId);
+                    // Guard covers a render/load failure (throws before any persist): the flip +
+                    // cleanup still commit, one mail dropped. A crash (not caught) rolls back the
+                    // whole tx pre-commit and the row is reclaimed next tick -- the crash-safety
+                    // guarantee.
+                    try {
+                        emailService.enqueueDeclined(lead.id); // durable, same tx
+                    } catch (Exception ex) {
+                        Log.errorf(
+                                ex,
+                                "declined enqueue failed for group %s lead booking %d (declined, mail dropped)",
+                                b.groupId,
+                                lead.id);
+                    }
+                } else {
+                    b.status = BookingStatus.DECLINED; // flipped within the lock-holding transaction
+                    Reminder.deleteUnsentFor(id); // was ReminderScheduler.onDeclined observer
+                    // Guard covers a render/load failure (throws before any persist): the flip + cleanup
+                    // still commit, one mail dropped. A crash (not caught) rolls back the whole tx pre-commit
+                    // and the row is reclaimed next tick -- the crash-safety guarantee.
+                    try {
+                        emailService.enqueueDeclined(id); // was EmailService.onDeclined observer; durable, same tx
+                    } catch (Exception ex) {
+                        Log.errorf(ex, "declined enqueue failed for booking %d (declined, mail dropped)", id);
+                    }
                 }
             }
         });
