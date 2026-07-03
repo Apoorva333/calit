@@ -375,9 +375,10 @@ fallback shipped.
 
 ## 11. Progressive enhancement & the no-JS rule
 
-**Rule change (update `CLAUDE.md` + docs-site):** "no JavaScript ships at runtime" becomes
-**progressive enhancement** — *every feature works without JavaScript; JS is optional, kept minimal
-and simple, and only enhances.*
+**Rule change:** "no JavaScript ships at runtime" becomes **progressive enhancement** — *every
+feature works without JavaScript; JS is optional, kept minimal and simple, and only enhances.*
+`CLAUDE.md` is **already updated** ahead of implementation (not part of the plan); the matching
+docs-site update **stays in the plan**.
 
 ### Host autocomplete
 - **Baseline (no JS):** a plain daisyUI-styled `<input name="cohost" class="input">`. Type the
