@@ -8,6 +8,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.calit.domain.MeetingType;
+import site.asm0dey.calit.domain.MeetingTypeHost;
 import site.asm0dey.calit.test.MultiHostFixtures;
 import site.asm0dey.calit.user.AppUser;
 
@@ -31,6 +32,22 @@ class SharedPageTest {
     MeetingType seedAdminAsCohost() {
         AppUser creator = MultiHostFixtures.enabledUser("shared-creator");
         return MultiHostFixtures.acceptedTwoHostType(creator.id, 1L, "shared-cohosted", 30, false);
+    }
+
+    /**
+     * A different owner invites admin (id 1) as a co-host, but admin hasn't accepted yet — a
+     * PENDING consent invite. The sidebar "Shared" item must still show so this co-host can find
+     * /me/shared/requests to accept it (requirement: any role, any status).
+     */
+    @Transactional
+    MeetingType seedAdminAsPendingCohost() {
+        AppUser creator = MultiHostFixtures.enabledUser("shared-pending-creator");
+        MeetingType t = MultiHostFixtures.meetingType(creator.id, "shared-pending-invite", 30);
+        MeetingTypeHost.of(t.id, creator.id, MeetingTypeHost.CREATOR, MeetingTypeHost.ACCEPTED)
+                .persist();
+        MeetingTypeHost.of(t.id, 1L, MeetingTypeHost.COHOST, MeetingTypeHost.PENDING)
+                .persist();
+        return t;
     }
 
     @Test
@@ -80,5 +97,39 @@ class SharedPageTest {
                 .statusCode(200)
                 .body(containsString(t.name))
                 .body(containsString("Co-host"));
+    }
+
+    @Test
+    void sidebarShowsSharedNavItemWhenOwnerHasSharedInvolvement() {
+        seedAdminCreatedSharedType();
+
+        given().cookie("quarkus-credential", FormAuth.login())
+                .when()
+                .get("/me")
+                .then()
+                .statusCode(200)
+                .body(containsString("href=\"/me/shared\""));
+    }
+
+    @Test
+    void sidebarShowsSharedNavItemForPendingCohostInvite() {
+        seedAdminAsPendingCohost();
+
+        given().cookie("quarkus-credential", FormAuth.login())
+                .when()
+                .get("/me")
+                .then()
+                .statusCode(200)
+                .body(containsString("href=\"/me/shared\""));
+    }
+
+    @Test
+    void sidebarHidesSharedNavItemWhenOwnerHasNoSharedInvolvement() {
+        given().cookie("quarkus-credential", FormAuth.login())
+                .when()
+                .get("/me")
+                .then()
+                .statusCode(200)
+                .body(not(containsString("href=\"/me/shared\"")));
     }
 }

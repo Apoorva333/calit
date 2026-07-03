@@ -32,6 +32,9 @@ public interface AdminMessages {
     @Message("Meeting types")
     String adm_nav_meeting_types();
 
+    @Message("Shared")
+    String adm_nav_shared();
+
     @Message("Availability")
     String adm_nav_availability();
 
