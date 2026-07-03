@@ -3,7 +3,7 @@
 {@java.lang.String hostTypeaheadScript}
 <section class="mt-6">
   <h2 class="font-semibold mb-2">{adm:adm_hosts_h2}</h2>
-  <div class="flex flex-wrap items-center gap-2">
+  <div class="input tokenfield">
     {#for h in hosts}
     {#if h.role == 'CREATOR'}
     <span class="badge badge-neutral gap-1">
@@ -23,11 +23,11 @@
     </form>
     {/if}
     {/for}
-    <form method="post" action="/me/meeting-types/{type.id}/hosts" class="inline-flex items-center gap-1" data-host-add>
+    <form method="post" action="/me/meeting-types/{type.id}/hosts" class="flex flex-1 items-center gap-1 min-w-[8rem]" data-host-add>
       <input type="hidden" name="{inject:csrf.parameterName}" value="{inject:csrf.token}">
-      <input name="cohost" class="input input-sm" list="host-suggest" placeholder="{adm:adm_hosts_add_placeholder}" autocomplete="off">
+      <input name="cohost" class="grow min-w-[8rem] border-0 outline-none bg-transparent p-0" list="host-suggest" placeholder="{adm:adm_hosts_add_placeholder}" autocomplete="off">
       <datalist id="host-suggest"></datalist>
-      <button type="submit" class="btn btn-sm btn-primary">{adm:adm_hosts_add}</button>
+      <button type="submit" class="btn btn-xs btn-primary">{adm:adm_hosts_add}</button>
     </form>
   </div>
 </section>
