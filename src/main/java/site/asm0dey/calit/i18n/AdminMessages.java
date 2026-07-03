@@ -410,6 +410,30 @@ public interface AdminMessages {
     @Message("Remove frame")
     String adm_detail_remove_frame_aria();
 
+    // ---- Meeting type detail: hosts (Task 17) ----
+
+    @Message("Hosts")
+    String adm_hosts_h2();
+
+    @Message("Remove")
+    String adm_hosts_remove();
+
+    @Message("Add co-host")
+    String adm_hosts_add();
+
+    @Message("username")
+    String adm_hosts_add_placeholder();
+
+    @Message("pending")
+    String adm_hosts_status_pending();
+
+    @Message("accepted")
+    String adm_hosts_status_accepted();
+
+    @Message(
+            "No eligible user with that username -- check spelling, or they may already be a host, disabled, or not yet fully set up.")
+    String adm_hosts_error_not_eligible();
+
     // ---- Availability ----
 
     @Message("Availability (work hours)")

@@ -6,11 +6,15 @@
 {@java.lang.String username}
 {@java.lang.String baseUrl}
 {@java.lang.Boolean hasShared}
+{@java.lang.String error}
 {@java.lang.String title}
 {#include adminBase title=title pendingCount=pendingCount active="meetingTypes" isAdmin=isAdmin}
   <h1 class="text-2xl font-bold mb-4 flex items-center gap-2">{adm:adm_meetingTypes_h1}
     {#if hasShared}<a href="/me/shared" class="btn btn-ghost btn-sm">{adm:adm_meetingTypes_shared_link}</a>{/if}
   </h1>
+  {#if error}
+  <div class="alert alert-error mb-4 max-w-2xl"><span>{error}</span></div>
+  {/if}
 
   <div class="space-y-3">
   {#for t in types}

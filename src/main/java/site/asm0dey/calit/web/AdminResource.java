@@ -24,6 +24,7 @@ import site.asm0dey.calit.availability.TimeSlot;
 import site.asm0dey.calit.booking.Booking;
 import site.asm0dey.calit.booking.BookingGuest;
 import site.asm0dey.calit.booking.BookingService;
+import site.asm0dey.calit.booking.MeetingHosts;
 import site.asm0dey.calit.domain.*;
 import site.asm0dey.calit.domain.BookingField.FieldType;
 import site.asm0dey.calit.domain.MeetingType.LocationType;
@@ -32,6 +33,7 @@ import site.asm0dey.calit.google.GoogleCredential;
 import site.asm0dey.calit.i18n.ActiveLocale;
 import site.asm0dey.calit.i18n.AdminMessageResolver;
 import site.asm0dey.calit.i18n.AdminMessages;
+import site.asm0dey.calit.user.AppUser;
 
 @Path("/me")
 @RolesAllowed("user")
@@ -53,6 +55,7 @@ public class AdminResource {
                 String username,
                 String baseUrl,
                 boolean hasShared,
+                String error,
                 String title);
 
         public static native TemplateInstance shared(
@@ -64,11 +67,13 @@ public class AdminResource {
                 List<AvailabilityRule> rules,
                 List<WeekRow> week,
                 List<DateOverride> overrides,
+                List<HostRow> hosts,
                 LocationType[] locationTypes,
                 BookingField.FieldType[] fieldTypes,
                 DayOfWeek[] daysOfWeek,
                 Long pendingCount,
                 boolean isAdmin,
+                String error,
                 String title);
 
         public static native TemplateInstance availability(
@@ -134,8 +139,18 @@ public class AdminResource {
      */
     public record SharedRow(MeetingType type, String role, String status, boolean needsReconnect) {}
 
+    /**
+     * One row of the meeting-type detail page's host list (Task 17): resolves {@link
+     * MeetingTypeHost#ownerId} to a display username and this host's own Google reconnect status,
+     * so the template never has to look either up.
+     */
+    public record HostRow(Long ownerId, String username, String role, String status, boolean needsReconnect) {}
+
     @Inject
     BookingService bookingService;
+
+    @Inject
+    MeetingHosts meetingHosts;
 
     @Inject
     site.asm0dey.calit.user.CurrentOwner currentOwner;
@@ -232,6 +247,11 @@ public class AdminResource {
 
     /** Re-render the Main meeting-types page (shared by the GET and every mutating POST below). */
     private TemplateInstance renderMeetingTypes() {
+        return renderMeetingTypes(null);
+    }
+
+    /** Re-render the Main meeting-types page with an error alert (create's slug-collision guard). */
+    private TemplateInstance renderMeetingTypes(String error) {
         // Pass LocationType.values() so the form can render the location dropdown options.
         return Templates.meetingTypes(
                 singleHostTypes(),
@@ -242,6 +262,7 @@ public class AdminResource {
                 currentOwner.require().username,
                 baseUrl,
                 hasShared(),
+                error,
                 m().adm_meetingTypes_title()); // includes secret
     }
 
@@ -258,8 +279,7 @@ public class AdminResource {
      * some other host's account.
      */
     private boolean ownerNeedsReconnect() {
-        GoogleCredential cred = GoogleCredential.forOwner(currentOwner.id());
-        return cred != null && cred.needsReconnect;
+        return GoogleCredential.needsReconnect(currentOwner.id());
     }
 
     @GET
@@ -306,6 +326,15 @@ public class AdminResource {
         t.name = name;
         String slugBase = (slug == null || slug.isBlank()) ? Slugs.slugify(name) : Slugs.slugify(slug);
         t.slug = Slugs.uniqueMeetingTypeSlug(currentOwner.id(), slugBase, null);
+        // Task 17 slug guards -- validated on the transient (unpersisted) t, so a rejection never
+        // leaves a half-created row behind. assertSlugFreeAcrossHosts is always a no-op here (a
+        // brand-new type has no host rows yet); kept for parity with editMeetingType below.
+        try {
+            assertNoOwnerSlugCollision(t.slug);
+            meetingHosts.assertSlugFreeAcrossHosts(t, t.slug);
+        } catch (IllegalStateException e) {
+            return renderMeetingTypes(e.getMessage());
+        }
         t.durationMinutes = durationMinutes;
         t.bufferBeforeMinutes = bufferBeforeMinutes;
         t.bufferAfterMinutes = bufferAfterMinutes;
@@ -323,6 +352,22 @@ public class AdminResource {
         createInitialWorkingHours(t.id, t.ownerId, form);
         createInitialDateOverride(t.id, t.ownerId, form);
         return renderMeetingTypes();
+    }
+
+    /**
+     * Task 17: a slug this owner picks for their OWN type must not collide with a type they
+     * co-host under someone else's ownership — {@link MeetingType#resolveForAlias} tries the
+     * owner's own type first, so the new own-type would silently shadow the cohosted one at the
+     * same {@code /{username}/{slug}} alias.
+     */
+    private void assertNoOwnerSlugCollision(String slug) {
+        for (MeetingTypeHost h : MeetingTypeHost.cohostedTypesFor(currentOwner.id())) {
+            MeetingType other = MeetingType.findById(h.meetingTypeId);
+            if (other != null && other.slug.equals(slug)) {
+                throw new IllegalStateException(
+                        "You already co-host a meeting type with the slug \"" + slug + "\" -- pick a different slug.");
+            }
+        }
     }
 
     /**
@@ -461,6 +506,11 @@ public class AdminResource {
 
     /** Re-render the detail page for one meeting type (shared by every detail-scoped handler). */
     private TemplateInstance detailInstance(Long id) {
+        return detailInstance(id, null);
+    }
+
+    /** Re-render the detail page with an error alert (co-host add + slug-collision guards). */
+    private TemplateInstance detailInstance(Long id, String error) {
         MeetingType t = requireType(id);
         List<BookingField> fields = BookingField.list("meetingTypeId = ?1 order by position", id);
         List<AvailabilityRule> rules = AvailabilityRule.list("meetingTypeId = ?1 order by dayOfWeek", id);
@@ -472,12 +522,29 @@ public class AdminResource {
                 rules,
                 weekRows(rules),
                 overrides,
+                hostRows(t),
                 LocationType.values(),
                 BookingField.FieldType.values(),
                 DayOfWeek.values(),
                 pendingCount(),
                 isAdmin(),
+                error,
                 title);
+    }
+
+    /** This type's host rows (empty for a plain single-host type, since it holds no host rows yet). */
+    private List<HostRow> hostRows(MeetingType type) {
+        List<HostRow> rows = new java.util.ArrayList<>();
+        for (MeetingTypeHost h : MeetingTypeHost.forType(type.id)) {
+            AppUser u = AppUser.findById(h.ownerId);
+            rows.add(new HostRow(
+                    h.ownerId,
+                    u != null ? u.username : "?",
+                    h.role,
+                    h.status,
+                    GoogleCredential.needsReconnect(h.ownerId)));
+        }
+        return rows;
     }
 
     @GET
@@ -509,9 +576,19 @@ public class AdminResource {
             @RestForm String slotIntervalMinutes,
             @RestForm String requiresApproval) {
         MeetingType t = requireType(id);
-        t.name = name;
         String slugBase = (slug == null || slug.isBlank()) ? Slugs.slugify(name) : Slugs.slugify(slug);
-        t.slug = Slugs.uniqueMeetingTypeSlug(currentOwner.id(), slugBase, id);
+        String newSlug = Slugs.uniqueMeetingTypeSlug(currentOwner.id(), slugBase, id);
+        // Task 17 slug guards -- validated against the candidate newSlug BEFORE any field on the
+        // managed entity `t` is mutated, so a rejection leaves it untouched (a caught exception
+        // does not roll back the transaction; only the field assignments below would flush).
+        try {
+            assertNoOwnerSlugCollision(newSlug);
+            meetingHosts.assertSlugFreeAcrossHosts(t, newSlug);
+        } catch (IllegalStateException e) {
+            return detailInstance(id, e.getMessage());
+        }
+        t.name = name;
+        t.slug = newSlug;
         t.durationMinutes = durationMinutes;
         t.bufferBeforeMinutes = bufferBeforeMinutes;
         t.bufferAfterMinutes = bufferAfterMinutes;
@@ -525,6 +602,51 @@ public class AdminResource {
                 : Integer.valueOf(slotIntervalMinutes);
         t.requiresApproval = "on".equals(requiresApproval);
         return detailInstance(id); // managed entity flushes on commit
+    }
+
+    /**
+     * Resolves a submitted username to an {@link AppUser} eligible to co-host {@code typeId}:
+     * known, enabled, onboarded, not the creator, and not already a host (any status). Throws
+     * {@link IllegalStateException} on any failure so the caller can render one uniform alert.
+     */
+    private AppUser resolveEligibleCohost(Long typeId, Long creatorOwnerId, String username) {
+        AppUser candidate = (username == null || username.isBlank()) ? null : AppUser.findByUsername(username);
+        if (!meetingHosts.eligibleCohost(typeId, creatorOwnerId, candidate)) {
+            throw new IllegalStateException(m().adm_hosts_error_not_eligible());
+        }
+        return candidate;
+    }
+
+    @POST
+    @Path("/meeting-types/{id}/hosts")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    @Transactional
+    public TemplateInstance addCohost(@PathParam("id") Long id, @RestForm String cohost) {
+        MeetingType t = requireType(id);
+        try {
+            AppUser candidate = resolveEligibleCohost(t.id, t.ownerId, cohost);
+            meetingHosts.addCohost(t, candidate); // cap / slug-collision -> IllegalStateException
+        } catch (IllegalStateException e) {
+            return detailInstance(id, e.getMessage());
+        }
+        return detailInstance(id);
+    }
+
+    /**
+     * Plain removal — no keep-vs-cancel interstitial for existing future bookings yet (Task 18
+     * adds that). Reverts to single-host automatically once the last co-host is gone (see {@link
+     * MeetingHosts#removeHost}).
+     */
+    @POST
+    @Path("/meeting-types/{id}/hosts/{cohostOwnerId}/remove")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    @Transactional
+    public TemplateInstance removeCohost(@PathParam("id") Long id, @PathParam("cohostOwnerId") Long cohostOwnerId) {
+        MeetingType t = requireType(id);
+        meetingHosts.removeHost(t, cohostOwnerId);
+        return detailInstance(id);
     }
 
     @POST
@@ -1031,7 +1153,9 @@ public class AdminResource {
     public TemplateInstance ownerReschedule(@PathParam("id") Long id, @RestForm String startUtc) {
         Booking b = requireOwnedBooking(id);
         // Time only -- guests untouched (null). Host edits guests via /me/bookings/{id}/edit-details.
-        bookingService.reschedule(b.manageToken, Instant.parse(startUtc), null, true); // host-initiated
+        // initiatorOwnerId = this acting host: for a multi-host GROUP booking, spares their own row
+        // instead of resetting every host back to PENDING (see reschedule's javadoc).
+        bookingService.reschedule(b.manageToken, Instant.parse(startUtc), null, true, currentOwner.id());
         return dashboard(); // re-render /me; rescheduled booking reflects its new time (stays confirmed -- an
         // owner-initiated reschedule never reverts an approval booking to pending, see reschedule's javadoc)
     }

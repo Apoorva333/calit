@@ -78,6 +78,12 @@ public class GoogleCredential extends PanacheEntityBase {
         return count("ownerId", ownerId);
     }
 
+    /** True when this owner has a connected Google credential that needs reconnecting. False when not connected at all. */
+    public static boolean needsReconnect(Long ownerId) {
+        var cred = forOwner(ownerId);
+        return cred != null && cred.needsReconnect;
+    }
+
     /** True when there is no cached access token, or it expires within the safety margin of {@code now}. */
     public boolean isAccessTokenExpired(Instant now) {
         if (accessToken == null || accessTokenExpiry == null) {
