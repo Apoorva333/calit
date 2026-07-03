@@ -64,6 +64,9 @@ public interface AdminMessages {
     @Message("Admin — Meeting types")
     String adm_meetingTypes_title();
 
+    @Message("Admin — Shared meeting types")
+    String adm_shared_title();
+
     @Message("Admin — ")
     String adm_meetingTypeDetail_title_prefix();
 
@@ -115,6 +118,9 @@ public interface AdminMessages {
 
     @Message("Meeting types")
     String adm_meetingTypes_h1();
+
+    @Message("Shared →")
+    String adm_meetingTypes_shared_link();
 
     @Message("secret")
     String adm_meetingTypes_badge_secret();
@@ -250,6 +256,26 @@ public interface AdminMessages {
 
     @Message("Link copied")
     String adm_meetingTypes_toast_copied();
+
+    // ---- Shared meeting types (multi-host) ----
+
+    @Message("Shared meeting types")
+    String adm_shared_h1();
+
+    @Message("Creator")
+    String adm_shared_role_creator();
+
+    @Message("Co-host")
+    String adm_shared_role_cohost();
+
+    @Message("pending")
+    String adm_shared_pending();
+
+    @Message("reconnect Google")
+    String adm_shared_reconnect();
+
+    @Message("No shared meeting types yet.")
+    String adm_shared_empty();
 
     // ---- Meeting type detail ----
 

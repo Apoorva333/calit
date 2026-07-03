@@ -28,6 +28,7 @@ import site.asm0dey.calit.domain.*;
 import site.asm0dey.calit.domain.BookingField.FieldType;
 import site.asm0dey.calit.domain.MeetingType.LocationType;
 import site.asm0dey.calit.google.GoogleCalendar;
+import site.asm0dey.calit.google.GoogleCredential;
 import site.asm0dey.calit.i18n.ActiveLocale;
 import site.asm0dey.calit.i18n.AdminMessageResolver;
 import site.asm0dey.calit.i18n.AdminMessages;
@@ -51,7 +52,11 @@ public class AdminResource {
                 boolean isAdmin,
                 String username,
                 String baseUrl,
+                boolean hasShared,
                 String title);
+
+        public static native TemplateInstance shared(
+                List<SharedRow> rows, Long pendingCount, boolean isAdmin, String title);
 
         public static native TemplateInstance meetingTypeDetail(
                 MeetingType type,
@@ -120,6 +125,14 @@ public class AdminResource {
         public static native TemplateInstance approvalResult(
                 Long pendingCount, boolean isAdmin, String title, String h1, String desc);
     }
+
+    /**
+     * One row of the Shared page: a multi-host meeting type this owner is a host of, either as the
+     * type's CREATOR or as a COHOST — {@code role}/{@code status} are {@link MeetingTypeHost}
+     * constants. {@code needsReconnect} flags this owner's own Google connection, not any other
+     * host's — see {@link #shared()}.
+     */
+    public record SharedRow(MeetingType type, String role, String status, boolean needsReconnect) {}
 
     @Inject
     BookingService bookingService;
@@ -197,20 +210,76 @@ public class AdminResource {
         return Templates.dashboard(upcoming, pendingCount, Layout.TZ_SCRIPT, isAdmin(), m().adm_dashboard_title());
     }
 
-    @GET
-    @Path("/meeting-types")
-    @Produces(MediaType.TEXT_HTML)
-    public TemplateInstance meetingTypes() {
+    /**
+     * This owner's SINGLE-host meeting types only — multi-host types (whether created or co-hosted
+     * by this owner) live on the Shared page instead. Includes secret types (owner view).
+     */
+    private List<MeetingType> singleHostTypes() {
+        return MeetingType.listForOwner(currentOwner.id()).stream()
+                .filter(t -> !MeetingTypeHost.isMultiHost(t.id))
+                .toList();
+    }
+
+    /** True when this owner is a host (CREATOR or COHOST) of any multi-host type — drives the Main-page "Shared" link. */
+    private boolean hasShared() {
+        return MeetingTypeHost.count(
+                        "ownerId = ?1 and (role = ?2 or role = ?3)",
+                        currentOwner.id(),
+                        MeetingTypeHost.CREATOR,
+                        MeetingTypeHost.COHOST)
+                > 0;
+    }
+
+    /** Re-render the Main meeting-types page (shared by the GET and every mutating POST below). */
+    private TemplateInstance renderMeetingTypes() {
         // Pass LocationType.values() so the form can render the location dropdown options.
         return Templates.meetingTypes(
-                MeetingType.listForOwner(currentOwner.id()),
+                singleHostTypes(),
                 allowedLocationTypes(),
                 DayOfWeek.values(),
                 pendingCount(),
                 isAdmin(),
                 currentOwner.require().username,
                 baseUrl,
+                hasShared(),
                 m().adm_meetingTypes_title()); // includes secret
+    }
+
+    @GET
+    @Path("/meeting-types")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance meetingTypes() {
+        return renderMeetingTypes();
+    }
+
+    /**
+     * This owner's own Google reconnect status — used for every {@link SharedRow} on the Shared
+     * page, since every row there reflects THIS owner's participation (as creator or co-host), not
+     * some other host's account.
+     */
+    private boolean ownerNeedsReconnect() {
+        GoogleCredential cred = GoogleCredential.forOwner(currentOwner.id());
+        return cred != null && cred.needsReconnect;
+    }
+
+    @GET
+    @Path("/shared")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance shared() {
+        var needsReconnect = ownerNeedsReconnect();
+        List<SharedRow> rows = new java.util.ArrayList<>();
+        for (MeetingType t : MeetingType.listForOwner(currentOwner.id())) {
+            if (MeetingTypeHost.isMultiHost(t.id)) {
+                rows.add(new SharedRow(t, MeetingTypeHost.CREATOR, MeetingTypeHost.ACCEPTED, needsReconnect));
+            }
+        }
+        for (MeetingTypeHost h : MeetingTypeHost.cohostedTypesFor(currentOwner.id())) {
+            MeetingType t = MeetingType.findById(h.meetingTypeId);
+            if (t != null) {
+                rows.add(new SharedRow(t, MeetingTypeHost.COHOST, h.status, needsReconnect));
+            }
+        }
+        return Templates.shared(rows, pendingCount(), isAdmin(), m().adm_shared_title());
     }
 
     @POST
@@ -253,15 +322,7 @@ public class AdminResource {
         t.persist(); // need the generated id before scoping child rules/overrides to it
         createInitialWorkingHours(t.id, t.ownerId, form);
         createInitialDateOverride(t.id, t.ownerId, form);
-        return Templates.meetingTypes(
-                MeetingType.listForOwner(currentOwner.id()),
-                allowedLocationTypes(),
-                DayOfWeek.values(),
-                pendingCount(),
-                isAdmin(),
-                currentOwner.require().username,
-                baseUrl,
-                m().adm_meetingTypes_title());
+        return renderMeetingTypes();
     }
 
     /**
@@ -324,15 +385,7 @@ public class AdminResource {
     public TemplateInstance toggleActive(@PathParam("id") Long id) {
         MeetingType t = requireType(id);
         t.active = !t.active;
-        return Templates.meetingTypes(
-                MeetingType.listForOwner(currentOwner.id()),
-                allowedLocationTypes(),
-                DayOfWeek.values(),
-                pendingCount(),
-                isAdmin(),
-                currentOwner.require().username,
-                baseUrl,
-                m().adm_meetingTypes_title());
+        return renderMeetingTypes();
     }
 
     @POST
@@ -343,15 +396,7 @@ public class AdminResource {
     public TemplateInstance deleteMeetingType(@PathParam("id") Long id) {
         requireType(id);
         MeetingType.deleteById(id);
-        return Templates.meetingTypes(
-                MeetingType.listForOwner(currentOwner.id()),
-                allowedLocationTypes(),
-                DayOfWeek.values(),
-                pendingCount(),
-                isAdmin(),
-                currentOwner.require().username,
-                baseUrl,
-                m().adm_meetingTypes_title());
+        return renderMeetingTypes();
     }
 
     /** Date overrides scoped to one meeting type, each with its (transient) windows loaded. */

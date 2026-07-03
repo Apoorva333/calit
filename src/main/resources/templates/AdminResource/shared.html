@@ -1,0 +1,28 @@
+{@java.util.List<site.asm0dey.calit.web.AdminResource$SharedRow> rows}
+{@java.lang.Long pendingCount}
+{@java.lang.Boolean isAdmin}
+{@java.lang.String title}
+{#include adminBase title=title pendingCount=pendingCount active="shared" isAdmin=isAdmin}
+  <h1 class="text-2xl font-bold mb-4">{adm:adm_shared_h1}</h1>
+
+  {#if rows.isEmpty()}
+  <p class="text-base-content/70">{adm:adm_shared_empty}</p>
+  {#else}
+  <ul class="menu bg-base-200 rounded-box">
+    {#for r in rows}
+    <li>
+      <a href="/me/meeting-types/{r.type.id}" class="flex items-center gap-2">
+        <span class="flex-1">{r.type.name}</span>
+        {#if r.role == 'CREATOR'}
+        <span class="badge badge-sm">{adm:adm_shared_role_creator}</span>
+        {#else}
+        <span class="badge badge-sm">{adm:adm_shared_role_cohost}</span>
+        {/if}
+        {#if r.status == 'PENDING'}<span class="badge badge-warning badge-sm">{adm:adm_shared_pending}</span>{/if}
+        {#if r.needsReconnect}<span class="badge badge-error badge-sm">{adm:adm_shared_reconnect}</span>{/if}
+      </a>
+    </li>
+    {/for}
+  </ul>
+  {/if}
+{/include}
