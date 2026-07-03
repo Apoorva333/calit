@@ -146,6 +146,26 @@ class SharedPageTest {
                 .body(not(containsString("href=\"/me/meeting-types/" + t.id + "\"")));
     }
 
+    /**
+     * A PENDING co-host has no accepted involvement yet — the Set-availability/Leave actions are
+     * both 404 dead ends for them (requireAcceptedHost rejects PENDING). Their card must instead
+     * link to /me/shared/requests, where the accept/decline forms actually live.
+     */
+    @Test
+    void sharedPageRendersPendingCohostCardWithRespondLinkNotDeadActions() {
+        MeetingType t = seedAdminAsPendingCohost();
+
+        given().cookie("quarkus-credential", FormAuth.login())
+                .when()
+                .get("/me/shared")
+                .then()
+                .statusCode(200)
+                .body(containsString(t.name))
+                .body(containsString("href=\"/me/shared/requests\""))
+                .body(not(containsString("href=\"/me/shared/" + t.id + "/availability\"")))
+                .body(not(containsString("action=\"/me/shared/" + t.id + "/revoke\"")));
+    }
+
     @Test
     void sidebarShowsSharedNavItemWhenOwnerHasSharedInvolvement() {
         seedAdminCreatedSharedType();

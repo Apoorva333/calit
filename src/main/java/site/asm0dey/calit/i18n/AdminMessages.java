@@ -292,6 +292,9 @@ public interface AdminMessages {
     @Message("Leave")
     String adm_shared_card_leave();
 
+    @Message("Respond to invitation →")
+    String adm_shared_card_respond();
+
     // ---- Co-host consent requests + shared availability editor (SharedMeetingsResource) ----
 
     @Message("Pending co-hosting invitations")

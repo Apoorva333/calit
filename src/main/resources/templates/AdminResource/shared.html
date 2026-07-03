@@ -23,6 +23,8 @@
       {/badges}
       {#if r.role == 'CREATOR'}
       <a href="/me/meeting-types/{r.type.id}" class="btn btn-outline btn-sm">{adm:adm_meetingTypes_btn_edit}</a>
+      {#else if r.status == 'PENDING'}
+      <a href="/me/shared/requests" class="btn btn-outline btn-sm">{adm:adm_shared_card_respond}</a>
       {#else}
       <a href="/me/shared/{r.type.id}/availability" class="btn btn-outline btn-sm">{adm:adm_shared_card_setAvailability}</a>
       <form method="post" action="/me/shared/{r.type.id}/revoke">
