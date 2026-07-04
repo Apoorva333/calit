@@ -7,7 +7,9 @@ This changelog is maintained manually. The canonical release notes, including
 asset downloads, are on
 [GitHub Releases](https://github.com/asm0dey/calit/releases).
 
-## Unreleased
+## 1.17.0
+
+Self-hosted ALTCHA CAPTCHA and email invitations for admin-created users.
 
 - **Invite users by email.** When a site admin adds a user, calit now sends
   the person an **invitation email** with a link to set their own password,
