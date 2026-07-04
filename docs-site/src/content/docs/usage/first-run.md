@@ -10,7 +10,7 @@ Open `http://<your-host>/setup` in a browser. Fill in a username and password. T
 
 ![calit first-run setup screen](/calit/img/setup-wizard.png)
 
-The account created at `/setup` is automatically granted the site-admin role (`is_admin = true`). Once you submit the form, `/setup` permanently returns **404** — it is unavailable from that point on and cannot be used to create additional users.
+The account created at `/setup` is automatically granted the site-admin role (`is_admin = true`). Once you submit the form, `/setup` permanently returns **404** — it is unavailable from that point on and cannot be used to create additional users. Additional users are added by invitation from the admin console (see [Users & admin](/calit/usage/users-admin/)) or via public [signup](/calit/usage/users-admin/#public-signup) when enabled.
 
 ## First-login wizard
 

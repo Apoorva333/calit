@@ -27,3 +27,4 @@ You are returned to the sign-in page; log in with the new password. The old one 
 - The reset email is sent to the **owner email** in your settings, so that address must be set and your [mailer](/calit/installation/configuration/) must be configured. Without working SMTP, no reset mail is delivered.
 - Accounts that sign in **only with Google** can set a password this way too; afterwards either method works.
 - Only a hashed token is stored server-side — the raw link exists only in the email.
+- This same set-password page also **activates an invited account**: when an admin adds a user, the invitation link opens this page so the new user can set their first password. See [Users & admin](/calit/usage/users-admin/).
