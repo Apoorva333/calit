@@ -10,12 +10,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.hibernate.exception.ConstraintViolationException;
 import site.asm0dey.calit.availability.SlotService;
@@ -850,7 +845,7 @@ public class BookingService {
         // own sibling row counted as busy against itself (Task 11 review fix: falsely rejected a small
         // shift / adjacent-slot reschedule whenever a buffer made the new slot's buffered interval
         // overlap the group's own old occupied interval).
-        Set<Long> groupRowIds = new java.util.HashSet<>();
+        Set<Long> groupRowIds = new HashSet<>();
         for (Booking r : Booking.<Booking>group(row.groupId)) {
             groupRowIds.add(r.id);
         }
@@ -1057,11 +1052,11 @@ public class BookingService {
      * True iff the booking's current active guest set equals {@code wanted} (case-insensitive).
      */
     private static boolean sameGuestSet(Booking booking, List<String> wanted) {
-        Set<String> current = new java.util.HashSet<>();
+        Set<String> current = new HashSet<>();
         for (BookingGuest g : BookingGuest.<BookingGuest>activeForBooking(booking.id)) {
             current.add(g.email.toLowerCase());
         }
-        Set<String> want = new java.util.HashSet<>();
+        Set<String> want = new HashSet<>();
         for (String e : wanted) {
             want.add(e.toLowerCase());
         }
@@ -1077,11 +1072,11 @@ public class BookingService {
             return List.of();
         }
         List<String> wanted = normalizeGuestEmails(guestEmails, booking.inviteeEmail);
-        Set<String> wantedLower = new java.util.HashSet<>();
+        Set<String> wantedLower = new HashSet<>();
         for (String e : wanted) wantedLower.add(e.toLowerCase());
 
         // Existing rows for this booking, keyed by lowercase email.
-        Map<String, BookingGuest> existing = new java.util.HashMap<>();
+        Map<String, BookingGuest> existing = new HashMap<>();
         for (BookingGuest g : BookingGuest.<BookingGuest>allForBooking(booking.id)) {
             existing.put(g.email.toLowerCase(), g);
         }
@@ -1191,7 +1186,7 @@ public class BookingService {
                 type.id,
                 Instant.now(),
                 List.of(BookingStatus.PENDING, BookingStatus.CONFIRMED));
-        Set<UUID> cancelledGroups = new java.util.HashSet<>();
+        Set<UUID> cancelledGroups = new HashSet<>();
         for (Booking row : rows) {
             if (cancelledGroups.add(row.groupId)) {
                 cancel(row.manageToken, true);
