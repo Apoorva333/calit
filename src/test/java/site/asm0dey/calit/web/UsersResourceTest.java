@@ -11,8 +11,10 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.Test;
+import site.asm0dey.calit.domain.OwnerSettings;
 import site.asm0dey.calit.user.AppUser;
 import site.asm0dey.calit.user.PasswordHasher;
+import site.asm0dey.calit.user.PasswordResetToken;
 
 @QuarkusTest
 class UsersResourceTest {
@@ -53,22 +55,51 @@ class UsersResourceTest {
     @TestSecurity(
             user = "admin",
             roles = {"user", "admin"})
-    void createUserPersistsTempUser() {
+    void createUserSendsInviteAndStoresEmail() {
         given().contentType("application/x-www-form-urlencoded")
                 .formParam("username", "bob")
-                .formParam("tempPassword", "Temp-pw-12345")
+                .formParam("email", "bob@example.com")
                 .when()
                 .post("/me/users")
                 .then()
                 .statusCode(200)
                 .body(containsString("bob"));
-        AppUser bob = AppUser.findByUsername("bob");
-        assertNotNull(bob);
-        assertTrue(bob.mustChangePassword);
+
+        AppUser bob = reload(AppUser.findByUsername("bob").id);
+        assertNull(bob.passwordHash, "invited user starts password-less (dormant)");
+        assertFalse(bob.mustChangePassword);
         assertFalse(bob.settingsComplete);
         assertTrue(bob.enabled);
         assertFalse(bob.isAdmin);
-        assertEquals("user", bob.roles);
+
+        OwnerSettings s = OwnerSettings.forOwner(bob.id);
+        assertNotNull(s, "settings row pre-created so the wizard can pre-fill the email");
+        assertEquals("bob@example.com", s.ownerEmail);
+        assertEquals(1, PasswordResetToken.count("userId", bob.id), "exactly one activation token minted");
+    }
+
+    @Test
+    @TestSecurity(
+            user = "admin",
+            roles = {"user", "admin"})
+    void createUserRejectsInvalidEmail() {
+        given().contentType("application/x-www-form-urlencoded")
+                .formParam("username", "carol")
+                .formParam("email", "   ")
+                .when()
+                .post("/me/users")
+                .then()
+                .statusCode(200);
+        assertNull(AppUser.findByUsername("carol"), "no user created on invalid email");
+
+        given().contentType("application/x-www-form-urlencoded")
+                .formParam("username", "nodot")
+                .formParam("email", "a@")
+                .when()
+                .post("/me/users")
+                .then()
+                .statusCode(200);
+        assertNull(AppUser.findByUsername("nodot"), "no user created on malformed (no-dot) email");
     }
 
     @Test
@@ -94,7 +125,7 @@ class UsersResourceTest {
     void grantAndRevokeAdminSyncRoles() {
         given().contentType("application/x-www-form-urlencoded")
                 .formParam("username", "carol")
-                .formParam("tempPassword", "Temp-pw-12345")
+                .formParam("email", "carol@example.com")
                 .when()
                 .post("/me/users")
                 .then()
@@ -119,7 +150,7 @@ class UsersResourceTest {
     void lockAndUnlockTogglesEnabled() {
         given().contentType("application/x-www-form-urlencoded")
                 .formParam("username", "dave")
-                .formParam("tempPassword", "Temp-pw-12345")
+                .formParam("email", "dave@example.com")
                 .when()
                 .post("/me/users")
                 .then()
@@ -139,6 +170,45 @@ class UsersResourceTest {
             roles = {"user", "admin"})
     void unknownUserActionReturns404() {
         given().when().post("/me/users/999999/lock").then().statusCode(404);
+    }
+
+    @Test
+    @TestSecurity(
+            user = "admin",
+            roles = {"user", "admin"})
+    void resendInviteMintsAnotherTokenForPendingUser() {
+        given().contentType("application/x-www-form-urlencoded")
+                .formParam("username", "dave")
+                .formParam("email", "dave@example.com")
+                .when()
+                .post("/me/users")
+                .then()
+                .statusCode(200);
+        Long id = AppUser.findByUsername("dave").id;
+        assertEquals(1, PasswordResetToken.count("userId", id));
+
+        given().contentType("application/x-www-form-urlencoded")
+                .when()
+                .post("/me/users/" + id + "/resend-invite")
+                .then()
+                .statusCode(200);
+        assertEquals(2, PasswordResetToken.count("userId", id), "resend mints a second token");
+    }
+
+    @Test
+    @TestSecurity(
+            user = "admin",
+            roles = {"user", "admin"})
+    void resendInviteRejectedForActiveUser() {
+        // Admin (id 1) already has a password → not pending.
+        Long adminId = AppUser.findByUsername("admin").id;
+        long before = PasswordResetToken.count("userId", adminId);
+        given().contentType("application/x-www-form-urlencoded")
+                .when()
+                .post("/me/users/" + adminId + "/resend-invite")
+                .then()
+                .statusCode(200);
+        assertEquals(before, PasswordResetToken.count("userId", adminId), "no token minted for an active user");
     }
 
     @Test
