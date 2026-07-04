@@ -61,6 +61,8 @@ public class SharedMeetingsResource {
     // S107: Qute @CheckedTemplate signatures pass one arg per template variable; param count is inherent.
     @SuppressWarnings("java:S107")
     public static class Templates {
+        private Templates() {}
+
         public static native TemplateInstance consentRequests(
                 List<PendingRequestRow> requests, Long pendingCount, boolean isAdmin, String title);
 

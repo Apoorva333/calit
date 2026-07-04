@@ -52,7 +52,7 @@ class HostRemovalInterstitialTest {
     @InjectMock
     CalendarPort calendarPort;
 
-    private final ZoneId AMS = ZoneId.of("Europe/Amsterdam");
+    private static final ZoneId AMS = ZoneId.of("Europe/Amsterdam");
 
     private Instant nextMonday(int hour) {
         var mon = LocalDate.now(AMS).with(TemporalAdjusters.next(DayOfWeek.MONDAY));

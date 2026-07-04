@@ -315,7 +315,7 @@ public class AdminResource {
      * some other host's account.
      */
     private boolean ownerNeedsReconnect() {
-        return GoogleCredential.needsReconnect(currentOwner.id());
+        return GoogleCredential.hasPendingReconnect(currentOwner.id());
     }
 
     @GET
@@ -591,7 +591,7 @@ public class AdminResource {
                     u != null ? u.username : "?",
                     h.role,
                     h.status,
-                    GoogleCredential.needsReconnect(h.ownerId)));
+                    GoogleCredential.hasPendingReconnect(h.ownerId)));
         }
         boolean hasCreatorRow = rows.stream().anyMatch(h -> MeetingTypeHost.CREATOR.equals(h.role()));
         if (!hasCreatorRow) {
@@ -601,7 +601,7 @@ public class AdminResource {
                     owner.username,
                     MeetingTypeHost.CREATOR,
                     MeetingTypeHost.ACCEPTED,
-                    GoogleCredential.needsReconnect(owner.id)));
+                    GoogleCredential.hasPendingReconnect(owner.id)));
         }
         return rows;
     }

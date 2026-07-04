@@ -1,5 +1,6 @@
 package site.asm0dey.calit.i18n;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.quarkus.qute.i18n.Message;
@@ -106,7 +107,7 @@ class MultiHostMessageParityTest {
     private static Properties loadProperties(String classpathResource) {
         var props = new Properties();
         try (var in = MultiHostMessageParityTest.class.getClassLoader().getResourceAsStream(classpathResource)) {
-            assertTrue(in != null, "Missing classpath resource: " + classpathResource);
+            assertNotNull(in, "Missing classpath resource: " + classpathResource);
             props.load(in);
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to load " + classpathResource, e);

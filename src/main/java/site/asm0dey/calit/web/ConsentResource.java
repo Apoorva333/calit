@@ -32,6 +32,8 @@ public class ConsentResource {
 
     @CheckedTemplate
     public static class Templates {
+        private Templates() {}
+
         public static native TemplateInstance confirm(String title, MeetingType type, String creatorName, String token);
 
         public static native TemplateInstance done(String title, String h1, String desc);
@@ -51,7 +53,7 @@ public class ConsentResource {
         MeetingTypeHost host;
         try {
             host = MeetingTypeHost.findByConsentToken(token);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             throw new NotFoundException("No consent request for token " + token);
         }
         if (host == null) {

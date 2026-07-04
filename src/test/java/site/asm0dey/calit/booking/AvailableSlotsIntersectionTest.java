@@ -35,7 +35,7 @@ class AvailableSlotsIntersectionTest {
     @InjectMock
     CalendarPort calendarPort;
 
-    private final ZoneId AMS = ZoneId.of("Europe/Amsterdam");
+    private static final ZoneId AMS = ZoneId.of("Europe/Amsterdam");
 
     /** creator (id 1) free 09-12, cohost free 10-12 -> intersection 10-12. */
     private MeetingType twoHostType() {

@@ -38,7 +38,7 @@ class GroupEditDetailsTest {
     @InjectMock
     CalendarPort calendarPort;
 
-    private final ZoneId AMS = ZoneId.of("Europe/Amsterdam");
+    private static final ZoneId AMS = ZoneId.of("Europe/Amsterdam");
 
     static final AtomicInteger DETAILS_CHANGED = new AtomicInteger();
     static final AtomicInteger GUEST_REMOVED = new AtomicInteger();
@@ -202,7 +202,7 @@ class GroupEditDetailsTest {
         MultiHostFixtures.settings(v.id, "volodya");
         MultiHostFixtures.rule(1L, DayOfWeek.MONDAY, 9, 17);
         MultiHostFixtures.rule(v.id, DayOfWeek.MONDAY, 9, 17);
-        MeetingType type = MultiHostFixtures.acceptedTwoHostType(1L, v.id, "intro", 60, false);
+        MultiHostFixtures.acceptedTwoHostType(1L, v.id, "intro", 60, false);
 
         when(calendarPort.isConnected(1L)).thenReturn(false);
         when(calendarPort.isConnected(v.id)).thenReturn(true);

@@ -58,7 +58,9 @@ public class PendingExpiryScheduler {
     EmailService emailService;
 
     /**
-     * Feature 14 expiry tick. Runs on EVERY replica every 60s, leaderless (FOR UPDATE SKIP LOCKED).
+     * Feature 14 expiry tick. Runs on EVERY replica every 60s, leaderless (exclusivity via a
+     * per-group/per-booking Postgres advisory lock -- see the class javadoc; NOT {@code FOR UPDATE
+     * SKIP LOCKED}, which was dropped after the AB-BA deadlock finding described there).
      * Per expired booking, in the SAME transaction as the claim: flip PENDING -> DECLINED, drop its
      * unsent reminder, and enqueue the declined email to the outbox (crash-safe). OutboxScheduler
      * delivers it. A node dying mid-tick loses nothing: all three commit together or not at all.

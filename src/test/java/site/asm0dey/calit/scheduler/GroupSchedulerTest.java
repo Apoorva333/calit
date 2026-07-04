@@ -252,4 +252,57 @@ class GroupSchedulerTest {
         assertEquals(
                 before.cohost(), EmailOutbox.count("recipient", "Cohost@x.com"), "no declined email for the co-host");
     }
+
+    /**
+     * Single-host counterpart of {@link
+     * #groupExpirySkipsClaimedRowWhenGroupAdvisoryLockIsHeldByAnotherTransaction}: a claimed,
+     * expired PENDING single-host booking (no {@code groupId}, so the scheduler keys its advisory
+     * lock as {@code booking:<id>} rather than {@code group:<id>}) must be SKIPPED -- not declined,
+     * no email -- when that lock is already held by another still-open transaction. Same
+     * technique: manually open and hold a real transaction on this thread that wins the lock
+     * first, so {@link PendingExpiryScheduler}'s own {@code requiringNew()} transaction (a
+     * different connection) must back off.
+     */
+    @Test
+    void singleHostExpirySkipsClaimedRowWhenBookingAdvisoryLockIsHeldByAnotherTransaction() {
+        MeetingType type = twoHostType(true);
+        var start = Instant.now().plus(500, ChronoUnit.HOURS);
+        long bookingId = QuarkusTransaction.requiringNew()
+                .call(() -> seedRow(
+                        type.id,
+                        CREATOR_ID,
+                        null,
+                        start,
+                        BookingStatus.PENDING,
+                        Instant.now().minus(25, ChronoUnit.HOURS)));
+
+        long invitesBefore =
+                QuarkusTransaction.requiringNew().call(() -> EmailOutbox.count("recipient", INVITEE_EMAIL));
+
+        // Manually open (and hold open) a transaction that owns this booking's advisory lock,
+        // standing in for "another tick's still-open transaction" -- mirrors the group-lock test.
+        QuarkusTransaction.begin();
+        try {
+            var acquiredHere =
+                    (Boolean) em.createNativeQuery("select pg_try_advisory_xact_lock(hashtextextended(?1, 0))")
+                            .setParameter(1, "booking:" + bookingId)
+                            .getSingleResult();
+            assertEquals(Boolean.TRUE, acquiredHere, "test setup: this transaction must win the lock first");
+
+            expiryScheduler.expirePendingBookings();
+        } finally {
+            QuarkusTransaction.rollback();
+        }
+
+        QuarkusTransaction.requiringNew()
+                .run(
+                        () -> assertEquals(
+                                BookingStatus.PENDING,
+                                ((Booking) Booking.findById(bookingId)).status,
+                                "claimed single-host row is skipped outright, not declined, while its advisory lock is held elsewhere"));
+        assertEquals(
+                invitesBefore,
+                EmailOutbox.count("recipient", INVITEE_EMAIL),
+                "no declined email for the invitee -- the row was never declined");
+    }
 }

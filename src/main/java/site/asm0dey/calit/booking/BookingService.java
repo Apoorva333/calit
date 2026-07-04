@@ -138,7 +138,7 @@ public class BookingService {
             } else {
                 try {
                     busy = busyIntervals(hostId, fromInstant, toInstant, excludeBookingIds);
-                } catch (CalendarUnavailableException failClosed) {
+                } catch (CalendarUnavailableException _) {
                     return List.of(); // any host's calendar unverifiable -> offer nothing
                 }
             }

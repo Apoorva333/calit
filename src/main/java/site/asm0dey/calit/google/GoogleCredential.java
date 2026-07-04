@@ -79,7 +79,7 @@ public class GoogleCredential extends PanacheEntityBase {
     }
 
     /** True when this owner has a connected Google credential that needs reconnecting. False when not connected at all. */
-    public static boolean needsReconnect(Long ownerId) {
+    public static boolean hasPendingReconnect(Long ownerId) {
         var cred = forOwner(ownerId);
         return cred != null && cred.needsReconnect;
     }

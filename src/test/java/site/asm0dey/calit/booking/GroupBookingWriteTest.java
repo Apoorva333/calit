@@ -34,7 +34,7 @@ class GroupBookingWriteTest {
     @InjectMock
     CalendarPort calendarPort;
 
-    private final ZoneId AMS = ZoneId.of("Europe/Amsterdam");
+    private static final ZoneId AMS = ZoneId.of("Europe/Amsterdam");
 
     private Instant nextMonday10() {
         var mon = LocalDate.now(AMS).with(TemporalAdjusters.next(DayOfWeek.MONDAY));

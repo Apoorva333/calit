@@ -38,7 +38,7 @@ class GroupCancelRescheduleTest {
     @InjectMock
     CalendarPort calendarPort;
 
-    private final ZoneId AMS = ZoneId.of("Europe/Amsterdam");
+    private static final ZoneId AMS = ZoneId.of("Europe/Amsterdam");
 
     // CDI observer counting fired BookingRescheduled events (same pattern as BookServiceTest).
     static final AtomicInteger RESCHEDULED = new AtomicInteger();
@@ -103,7 +103,7 @@ class GroupCancelRescheduleTest {
         bookingService.cancel(cohostRow.manageToken, true);
 
         Booking.<Booking>group(lead.groupId).forEach(r -> assertEquals(BookingStatus.CANCELLED, r.status));
-        verify(calendarPort, times(1)).deleteEvent(eq(1L), eq("evt"));
+        verify(calendarPort, times(1)).deleteEvent(1L, "evt");
         assertNull(Booking.<Booking>leadOfGroup(lead.groupId, 1L).googleEventId);
     }
 
@@ -304,7 +304,7 @@ class GroupCancelRescheduleTest {
             assertEquals(BookingStatus.CONFIRMED, r.status, "auto-confirm group reschedule stays confirmed");
             assertEquals(nextMonday(15), r.startUtc);
         });
-        verify(calendarPort, times(1)).deleteEvent(eq(1L), eq("evt"));
+        verify(calendarPort, times(1)).deleteEvent(1L, "evt");
         verify(calendarPort, times(2))
                 .createEvent(anyLong(), any(), any(), any(), any(), anyList(), anyBoolean(), any());
         assertEquals(rescheduledBefore + 1, RESCHEDULED.get(), "BookingRescheduled fired once");
