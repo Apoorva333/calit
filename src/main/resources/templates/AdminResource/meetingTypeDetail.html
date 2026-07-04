@@ -3,16 +3,22 @@
 {@java.util.List<site.asm0dey.calit.domain.AvailabilityRule> rules}
 {@java.util.List<site.asm0dey.calit.web.WeekRow> week}
 {@java.util.List<site.asm0dey.calit.domain.DateOverride> overrides}
+{@java.util.List<site.asm0dey.calit.web.AdminResource$HostRow> hosts}
 {@site.asm0dey.calit.domain.MeetingType.LocationType[] locationTypes}
 {@site.asm0dey.calit.domain.BookingField.FieldType[] fieldTypes}
 {@java.time.DayOfWeek[] daysOfWeek}
 {@java.lang.Long pendingCount}
 {@java.lang.Boolean isAdmin}
+{@java.lang.String error}
+{@java.lang.String hostTypeaheadScript}
 {@java.lang.String title}
 {#include adminBase title=title pendingCount=pendingCount active="meetingTypes" isAdmin=isAdmin}
   <p class="mb-2"><a class="link link-hover text-sm" href="/me/meeting-types">{adm:adm_detail_back}</a></p>
   <h1 class="text-2xl font-bold">{type.name}</h1>
   <p class="text-sm text-base-content/70 mb-4">/{type.slug} &middot; {type.durationMinutes} {adm:adm_meetingTypes_min} &middot; {type.locationType.display}</p>
+  {#if error}
+  <div class="alert alert-error mb-4 max-w-2xl"><span>{error}</span></div>
+  {/if}
 
   <div class="space-y-3">
     <div class="collapse collapse-arrow bg-base-100 border border-base-300">
@@ -179,5 +185,6 @@
       </div>
     </div>
   </div>
+  {#include AdminResource/_hostlist hosts=hosts type=type hostTypeaheadScript=hostTypeaheadScript /}
   <script src="/workplan.js"></script>
 {/include}

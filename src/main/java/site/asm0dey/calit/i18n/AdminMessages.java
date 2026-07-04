@@ -32,6 +32,9 @@ public interface AdminMessages {
     @Message("Meeting types")
     String adm_nav_meeting_types();
 
+    @Message("Shared")
+    String adm_nav_shared();
+
     @Message("Availability")
     String adm_nav_availability();
 
@@ -63,6 +66,15 @@ public interface AdminMessages {
 
     @Message("Admin — Meeting types")
     String adm_meetingTypes_title();
+
+    @Message("Admin — Shared meeting types")
+    String adm_shared_title();
+
+    @Message("Admin — Co-hosting requests")
+    String adm_shared_requests_title();
+
+    @Message("Admin — Availability for {typeName}")
+    String adm_shared_availability_title(String typeName);
 
     @Message("Admin — ")
     String adm_meetingTypeDetail_title_prefix();
@@ -115,6 +127,9 @@ public interface AdminMessages {
 
     @Message("Meeting types")
     String adm_meetingTypes_h1();
+
+    @Message("Shared →")
+    String adm_meetingTypes_shared_link();
 
     @Message("secret")
     String adm_meetingTypes_badge_secret();
@@ -251,6 +266,96 @@ public interface AdminMessages {
     @Message("Link copied")
     String adm_meetingTypes_toast_copied();
 
+    // ---- Shared meeting types (multi-host) ----
+
+    @Message("Shared meeting types")
+    String adm_shared_h1();
+
+    @Message("Creator")
+    String adm_shared_role_creator();
+
+    @Message("Co-host")
+    String adm_shared_role_cohost();
+
+    @Message("pending")
+    String adm_shared_pending();
+
+    @Message("reconnect Google")
+    String adm_shared_reconnect();
+
+    @Message("No shared meeting types yet.")
+    String adm_shared_empty();
+
+    @Message("Set availability")
+    String adm_shared_card_setAvailability();
+
+    @Message("Leave")
+    String adm_shared_card_leave();
+
+    @Message("Respond to invitation →")
+    String adm_shared_card_respond();
+
+    // ---- Co-host consent requests + shared availability editor (SharedMeetingsResource) ----
+
+    @Message("Pending co-hosting invitations")
+    String adm_shared_requests_h1();
+
+    @Message("No pending co-hosting invitations.")
+    String adm_shared_requests_empty();
+
+    @Message("Invited by {creatorName}")
+    String adm_shared_requests_from(String creatorName);
+
+    @Message("Accept")
+    String adm_shared_requests_accept();
+
+    @Message("Decline")
+    String adm_shared_requests_decline();
+
+    @Message("← Back to requests")
+    String adm_shared_availability_back();
+
+    @Message("Buffers")
+    String adm_shared_availability_section_buffers();
+
+    @Message(
+            "Your own buffer before/after this shared type overrides its default when set; leave blank to use the default.")
+    String adm_shared_availability_buffers_hint();
+
+    @Message("Buffer before (minutes)")
+    String adm_shared_availability_buffer_before_label();
+
+    @Message("Buffer after (minutes)")
+    String adm_shared_availability_buffer_after_label();
+
+    @Message("Save buffers")
+    String adm_shared_availability_btn_save_buffers();
+
+    @Message("Leave this meeting type")
+    String adm_shared_availability_section_revoke();
+
+    @Message(
+            "You can stop co-hosting this meeting type at any time. Your own bookings and availability for it will be affected.")
+    String adm_shared_availability_revoke_hint();
+
+    @Message("Stop co-hosting")
+    String adm_shared_availability_btn_revoke();
+
+    @Message("Stop co-hosting?")
+    String adm_shared_revokeConfirm_title();
+
+    @Message("You have {count} upcoming booking(s) for this shared meeting type. What should happen to them?")
+    String adm_shared_revokeConfirm_count(long count);
+
+    @Message("Keep bookings, just stop co-hosting")
+    String adm_shared_revokeConfirm_keep();
+
+    @Message("Cancel these bookings and stop co-hosting")
+    String adm_shared_revokeConfirm_cancel();
+
+    @Message("Back without removing")
+    String adm_shared_revokeConfirm_back();
+
     // ---- Meeting type detail ----
 
     @Message("← All meeting types")
@@ -383,6 +488,65 @@ public interface AdminMessages {
 
     @Message("Remove frame")
     String adm_detail_remove_frame_aria();
+
+    // ---- Meeting type detail: hosts (Task 17) ----
+
+    @Message("Hosts")
+    String adm_hosts_h2();
+
+    @Message("Remove")
+    String adm_hosts_remove();
+
+    @Message("Add co-host")
+    String adm_hosts_add();
+
+    @Message("username")
+    String adm_hosts_add_placeholder();
+
+    @Message("pending")
+    String adm_hosts_status_pending();
+
+    @Message("accepted")
+    String adm_hosts_status_accepted();
+
+    @Message(
+            "No eligible user with that username -- check spelling, or they may already be a host, disabled, or not yet fully set up.")
+    String adm_hosts_error_not_eligible();
+
+    @Message("The creator cannot be removed from their own meeting type.")
+    String adm_hosts_error_creator_immutable();
+
+    @Message("You already co-host a meeting type with the slug \"{slug}\" -- pick a different slug.")
+    String adm_hosts_error_slug_owned_cohost(String slug);
+
+    @Message("A meeting can have at most {max} hosts.")
+    String adm_hosts_error_cap(int max);
+
+    @Message("{username} already uses the slug \"{slug}\" -- pick a different slug or ask them to free it.")
+    String adm_hosts_error_slug_owned(String username, String slug);
+
+    @Message("{username} already co-hosts a type with slug \"{slug}\"")
+    String adm_hosts_error_slug_cohosts(String username, String slug);
+
+    @Message("A host already uses the slug \"{slug}\"")
+    String adm_hosts_error_slug_across(String slug);
+
+    // ---- Meeting type detail: host removal interstitial (Task 18) ----
+
+    @Message("Remove co-host?")
+    String adm_hosts_removeConfirm_title();
+
+    @Message("{username} has {count} upcoming booking(s) on this meeting type. What should happen to them?")
+    String adm_hosts_removeConfirm_count(String username, long count);
+
+    @Message("Keep bookings, just remove co-host")
+    String adm_hosts_removeConfirm_keep();
+
+    @Message("Cancel those bookings and remove co-host")
+    String adm_hosts_removeConfirm_cancel();
+
+    @Message("Back without removing")
+    String adm_hosts_removeConfirm_back();
 
     // ---- Availability ----
 

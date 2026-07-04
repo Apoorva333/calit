@@ -4,7 +4,7 @@ import static io.restassured.RestAssured.given;
 import static java.time.LocalDate.now;
 import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
 import io.quarkus.narayana.jta.QuarkusTransaction;

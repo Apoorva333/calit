@@ -1,0 +1,131 @@
+{@site.asm0dey.calit.domain.MeetingType type}
+{@site.asm0dey.calit.domain.MeetingTypeHost host}
+{@java.util.List<site.asm0dey.calit.domain.AvailabilityRule> rules}
+{@java.util.List<site.asm0dey.calit.web.WeekRow> week}
+{@java.util.List<site.asm0dey.calit.domain.DateOverride> overrides}
+{@java.time.DayOfWeek[] daysOfWeek}
+{@java.lang.Long pendingCount}
+{@java.lang.Boolean isAdmin}
+{@java.lang.String error}
+{@java.lang.String title}
+{#include adminBase title=title pendingCount=pendingCount active="shared" isAdmin=isAdmin}
+  <p class="mb-2"><a class="link link-hover text-sm" href="/me/shared/requests">{adm:adm_shared_availability_back}</a></p>
+  <h1 class="text-2xl font-bold mb-4">{type.name}</h1>
+  {#if error}
+  <div class="alert alert-error mb-4 max-w-2xl"><span>{error}</span></div>
+  {/if}
+
+  <div class="space-y-3">
+    <div class="collapse collapse-arrow bg-base-100 border border-base-300">
+      <input type="checkbox" checked>
+      <div class="collapse-title font-semibold">{adm:adm_shared_availability_section_buffers}</div>
+      <div class="collapse-content">
+        <p class="text-sm text-base-content/70 mb-2">{adm:adm_shared_availability_buffers_hint}</p>
+        <form method="post" action="/me/shared/{type.id}/buffers" class="fieldset">
+          <input type="hidden" name="{inject:csrf.parameterName}" value="{inject:csrf.token}">
+          <label class="label" for="sh-buffer-before">{adm:adm_shared_availability_buffer_before_label}</label>
+          <input id="sh-buffer-before" class="input w-full" type="number" name="bufferBeforeMinutes" min="0" value="{#if host.bufferBeforeMinutes}{host.bufferBeforeMinutes}{/if}">
+          <label class="label" for="sh-buffer-after">{adm:adm_shared_availability_buffer_after_label}</label>
+          <input id="sh-buffer-after" class="input w-full" type="number" name="bufferAfterMinutes" min="0" value="{#if host.bufferAfterMinutes}{host.bufferAfterMinutes}{/if}">
+          <button type="submit" class="btn btn-primary mt-2">{adm:adm_shared_availability_btn_save_buffers}</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="collapse collapse-arrow bg-base-100 border border-base-300">
+      <input type="checkbox" checked>
+      <div class="collapse-title font-semibold">{adm:adm_detail_section_working_hours}</div>
+      <div class="collapse-content">
+        <p class="text-sm text-base-content/70 mb-2">{adm:adm_detail_working_hours_hint}</p>
+        <form method="post" action="/me/shared/{type.id}/availability/bulk" data-workplan class="space-y-2">
+          <input type="hidden" name="{inject:csrf.parameterName}" value="{inject:csrf.token}">
+          {#for row in week}
+          <div data-day="{row.day}" class="card bg-base-200 border border-base-300">
+            <div class="card-body py-3 gap-2">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <strong class="w-24">{display:of(row.day)}</strong>
+                <div class="flex flex-wrap gap-1">
+                  <button type="button" class="btn btn-ghost btn-xs" data-add-frame="{row.day}">{adm:adm_detail_frame_add}</button>
+                  <button type="button" class="btn btn-ghost btn-xs" data-copy-all="{row.day}">{adm:adm_detail_copy_all}</button>
+                  <button type="button" class="btn btn-ghost btn-xs" data-copy-weekdays="{row.day}">{adm:adm_detail_copy_weekdays}</button>
+                </div>
+              </div>
+              <div data-frames class="space-y-1">
+                {#for fr in row.frames}
+                <div data-frame class="flex items-center gap-2">
+                  <input type="hidden" name="frameDay" value="{row.day}">
+                  <input class="input input-sm" type="time" name="frameStart" value="{fr.startTime}">
+                  <span class="text-base-content/60">{adm:adm_detail_to}</span>
+                  <input class="input input-sm" type="time" name="frameEnd" value="{fr.endTime}">
+                  <button type="button" class="btn btn-ghost btn-xs text-error" data-remove-frame aria-label="{adm:adm_detail_remove_frame_aria}">&times;</button>
+                </div>
+                {/for}
+              </div>
+            </div>
+          </div>
+          {/for}
+
+          <template data-frame-template>
+            <div data-frame class="flex items-center gap-2">
+              <input type="hidden" name="frameDay" value="">
+              <input class="input input-sm" type="time" name="frameStart">
+              <span class="text-base-content/60">{adm:adm_detail_to}</span>
+              <input class="input input-sm" type="time" name="frameEnd">
+              <button type="button" class="btn btn-ghost btn-xs text-error" data-remove-frame aria-label="{adm:adm_detail_remove_frame_aria}">&times;</button>
+            </div>
+          </template>
+
+          <button type="submit" class="btn btn-primary mt-2">{adm:adm_detail_btn_save_hours}</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="collapse collapse-arrow bg-base-100 border border-base-300">
+      <input type="checkbox">
+      <div class="collapse-title font-semibold">{adm:adm_detail_section_overrides}</div>
+      <div class="collapse-content">
+        <p class="text-sm text-base-content/70 mb-2">{adm:adm_detail_overrides_hint}</p>
+        <div class="space-y-2 mb-3">
+        {#for o in overrides}
+          <div class="card bg-base-200 border border-base-300"><div class="card-body py-3 gap-1">
+            <p><strong>{o.overrideDate}</strong></p>
+            {#if o.windows.isEmpty()}
+              <p><span class="badge badge-ghost badge-sm">{adm:adm_detail_badge_day_off}</span> ({adm:adm_common_blocked})</p>
+            {#else}
+              <ul class="list-disc ms-5">{#for w in o.windows}<li>{w.startTime} &ndash; {w.endTime}</li>{/for}</ul>
+            {/if}
+            <form method="post" action="/me/shared/{type.id}/date-overrides/{o.id}/delete"><input type="hidden" name="{inject:csrf.parameterName}" value="{inject:csrf.token}"><button type="submit" class="btn btn-error btn-outline btn-sm">{adm:adm_detail_btn_delete}</button></form>
+          </div></div>
+        {/for}
+        </div>
+        <form method="post" action="/me/shared/{type.id}/date-overrides" class="fieldset">
+          <input type="hidden" name="{inject:csrf.parameterName}" value="{inject:csrf.token}">
+          <label class="label">{adm:adm_detail_label_date}</label>
+          <input class="input w-full" type="date" name="date" required>
+          <fieldset class="fieldset border border-base-300 rounded-box p-3 mt-2">
+            <legend class="fieldset-legend">{adm:adm_detail_windows_legend}</legend>
+            <label class="label">{adm:adm_detail_window_1} <span class="flex items-center gap-2"><input class="input" type="time" name="windowStart"> {adm:adm_detail_to} <input class="input" type="time" name="windowEnd"></span></label>
+            <label class="label">{adm:adm_detail_window_2} <span class="flex items-center gap-2"><input class="input" type="time" name="windowStart"> {adm:adm_detail_to} <input class="input" type="time" name="windowEnd"></span></label>
+            <label class="label">{adm:adm_detail_window_3} <span class="flex items-center gap-2"><input class="input" type="time" name="windowStart"> {adm:adm_detail_to} <input class="input" type="time" name="windowEnd"></span></label>
+          </fieldset>
+          <button type="submit" class="btn btn-primary mt-2">{adm:adm_detail_btn_save_override}</button>
+        </form>
+      </div>
+    </div>
+
+    {#if host.role != 'CREATOR'}
+    <div class="collapse collapse-arrow bg-base-100 border border-error/40">
+      <input type="checkbox">
+      <div class="collapse-title font-semibold text-error">{adm:adm_shared_availability_section_revoke}</div>
+      <div class="collapse-content">
+        <p class="text-sm text-base-content/70 mb-2">{adm:adm_shared_availability_revoke_hint}</p>
+        <form method="post" action="/me/shared/{type.id}/revoke">
+          <input type="hidden" name="{inject:csrf.parameterName}" value="{inject:csrf.token}">
+          <button type="submit" class="btn btn-error btn-outline">{adm:adm_shared_availability_btn_revoke}</button>
+        </form>
+      </div>
+    </div>
+    {/if}
+  </div>
+  <script src="/workplan.js"></script>
+{/include}

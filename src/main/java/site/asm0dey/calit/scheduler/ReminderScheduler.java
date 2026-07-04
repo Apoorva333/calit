@@ -14,6 +14,7 @@ import java.util.List;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import site.asm0dey.calit.booking.Booking;
 import site.asm0dey.calit.booking.events.*;
+import site.asm0dey.calit.domain.MeetingType;
 import site.asm0dey.calit.email.EmailService;
 
 @ApplicationScoped
@@ -78,6 +79,16 @@ public class ReminderScheduler {
             Booking booking = Booking.findById(bookingId);
             if (booking == null) {
                 return;
+            }
+            // Multi-host: a reminder belongs to the group's lead row only -- never N reminders for
+            // one conceptual meeting. BookingConfirmed/BookingApproved/BookingRescheduled already
+            // fire once with the lead id (Tasks 9-11), so this is normally a no-op guard.
+            if (booking.groupId != null) {
+                Long creatorOwnerId = MeetingType.<MeetingType>findById(booking.meetingTypeId).ownerId;
+                Booking lead = Booking.leadOfGroup(booking.groupId, creatorOwnerId);
+                if (!lead.id.equals(booking.id)) {
+                    return;
+                }
             }
             Instant sendAt = booking.startUtc.minus(leadMinutes, ChronoUnit.MINUTES);
             // Booking made inside the lead window: nothing to remind about ahead of time.

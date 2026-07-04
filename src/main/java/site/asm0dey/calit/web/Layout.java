@@ -160,4 +160,45 @@ public final class Layout {
             })();
             </script>
             """;
+
+    /**
+     * Progressive enhancement for the co-host add input in {@code _hostlist.html}: with JS OFF the
+     * plain {@code <input name=cohost>} still submits and is validated server-side (Task 6/17,
+     * {@link site.asm0dey.calit.booking.MeetingHosts#eligibleCohost}); with JS ON this debounces
+     * keystrokes and fills the {@code <datalist>} from {@code GET /me/hosts} so the browser offers
+     * matching, eligible usernames. Never blocks or alters submission — only suggests.
+     *
+     * <p>The stable marker comment {@code CALIT_HOST_TYPEAHEAD} lets @QuarkusTest assert the
+     * script is present without executing it (RestAssured can't run JS).
+     */
+    public static final String HOST_TYPEAHEAD_SCRIPT = """
+            <script>
+            /* CALIT_HOST_TYPEAHEAD - progressive-enhancement co-host autocomplete over a plain input */
+            (function () {
+              var form = document.querySelector('[data-host-add]');
+              if (!form) return;
+              var input = form.querySelector('input[name=cohost]');
+              var list = form.querySelector('datalist');
+              var typeId = form.getAttribute('action').split('/')[3];
+              var t;
+              input.addEventListener('input', function () {
+                clearTimeout(t);
+                var q = input.value.trim();
+                if (q.length < 2) return;
+                t = setTimeout(function () {
+                  fetch('/me/hosts?typeId=' + typeId + '&q=' + encodeURIComponent(q))
+                    .then(function (r) { return r.json(); })
+                    .then(function (rows) {
+                      list.innerHTML = '';
+                      rows.forEach(function (row) {
+                        var o = document.createElement('option');
+                        o.value = row.username;
+                        list.appendChild(o);
+                      });
+                    });
+                }, 200);
+              });
+            })();
+            </script>
+            """;
 }

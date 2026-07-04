@@ -39,7 +39,7 @@
          per-event render methods/call-sites mirror those same param sets 1:1. Exclude both from
          duplication detection only; every other rule still applies. -->
     <sonar.cpd.exclusions>**/templates/email/*.html,**/email/EmailService.java</sonar.cpd.exclusions>
-    <sonar.issue.ignore.multicriteria>e1,e2,e3,e4</sonar.issue.ignore.multicriteria>
+    <sonar.issue.ignore.multicriteria>e1,e2,e3,e4,e5</sonar.issue.ignore.multicriteria>
     <!-- e1: Flyway migrations are PostgreSQL, but Sonar analyses .sql with its Oracle PL/SQL engine
          and flags VARCHAR (suggesting the Oracle-only VARCHAR2). VARCHAR is correct in Postgres. -->
     <sonar.issue.ignore.multicriteria.e1.ruleKey>plsql:VarcharUsageCheck</sonar.issue.ignore.multicriteria.e1.ruleKey>
@@ -55,6 +55,10 @@
          template's variables 1:1 by design; a high param count IS the intended, build-validated contract. -->
     <sonar.issue.ignore.multicriteria.e4.ruleKey>java:S107</sonar.issue.ignore.multicriteria.e4.ruleKey>
     <sonar.issue.ignore.multicriteria.e4.resourceKey>**/email/EmailService.java</sonar.issue.ignore.multicriteria.e4.resourceKey>
+    <!-- e5: S3252 (use static access for inherited static) fires on the Panache active-record idiom
+         (Entity.findById/count/list) which is the intended, codebase-wide pattern — pure noise, suppress. -->
+    <sonar.issue.ignore.multicriteria.e5.ruleKey>java:S3252</sonar.issue.ignore.multicriteria.e5.ruleKey>
+    <sonar.issue.ignore.multicriteria.e5.resourceKey>**/*.java</sonar.issue.ignore.multicriteria.e5.resourceKey>
   </properties>
 
   <dependencyManagement>

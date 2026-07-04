@@ -1,0 +1,15 @@
+{@java.lang.String lang}
+{@java.lang.String greetingName}
+{@java.lang.String creatorName}
+{@java.lang.String meetingTypeName}
+{@java.lang.String consentUrl}
+<!DOCTYPE html>
+<html lang="{lang}" dir="{#if lang == 'he'}rtl{#else}ltr{/if}">
+<head><title>{msg:email_host_consent_title}</title></head>
+<body>
+<p>{msg:email_host_consent_greeting(greetingName)}</p>
+<p>{msg:email_host_consent_body(creatorName,meetingTypeName)}</p>
+<p><a href="{consentUrl}">{msg:email_host_consent_cta}</a></p>
+<p>{msg:email_paste_link_hint}<br>{consentUrl}</p>
+</body>
+</html>

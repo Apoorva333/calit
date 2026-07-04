@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import site.asm0dey.calit.domain.MeetingType;
@@ -102,6 +103,13 @@ public class Booking extends PanacheEntityBase {
     public int icsSequence = 0;
 
     /**
+     * Multi-host: links the N rows (one per host) of a single conceptual booking. NULL means a
+     * single-host booking (the common case).
+     */
+    @Column(name = "group_id")
+    public UUID groupId;
+
+    /**
      * This owner's HELD (PENDING or CONFIRMED) bookings whose [startUtc, endUtc) overlaps the
      * window [from, to). These are the bookings that block THIS OWNER's calendar (a pending
      * approval request holds its slot too — feature 14). CANCELLED/DECLINED are excluded.
@@ -138,5 +146,38 @@ public class Booking extends PanacheEntityBase {
     /** Feature 16: how many bookings this invitee email created in [dayStart, dayEnd). */
     public static long countByEmailCreatedBetween(String email, Instant dayStart, Instant dayEnd) {
         return count("inviteeEmail = ?1 and createdAt >= ?2 and createdAt < ?3", email, dayStart, dayEnd);
+    }
+
+    /** Multi-host: all per-host rows sharing this group_id. */
+    public static List<Booking> group(UUID groupId) {
+        return list("groupId", groupId);
+    }
+
+    /** The creator's row in a group (the invitee-facing lead). */
+    public static Booking leadOfGroup(UUID groupId, Long creatorOwnerId) {
+        return find("groupId = ?1 and ownerId = ?2", groupId, creatorOwnerId).firstResult();
+    }
+
+    /** Counts one per conceptual booking: standalone rows + distinct group_id. */
+    public static long countDistinctBookingsByEmailBetween(String email, Instant dayStart, Instant dayEnd) {
+        Long singles = getEntityManager()
+                .createQuery(
+                        "select count(b) from Booking b where b.inviteeEmail = :e "
+                                + "and b.createdAt >= :s and b.createdAt < :d and b.groupId is null",
+                        Long.class)
+                .setParameter("e", email)
+                .setParameter("s", dayStart)
+                .setParameter("d", dayEnd)
+                .getSingleResult();
+        Long groups = getEntityManager()
+                .createQuery(
+                        "select count(distinct b.groupId) from Booking b where b.inviteeEmail = :e "
+                                + "and b.createdAt >= :s and b.createdAt < :d and b.groupId is not null",
+                        Long.class)
+                .setParameter("e", email)
+                .setParameter("s", dayStart)
+                .setParameter("d", dayEnd)
+                .getSingleResult();
+        return singles + groups;
     }
 }
