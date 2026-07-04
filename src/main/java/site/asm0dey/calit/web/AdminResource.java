@@ -24,6 +24,7 @@ import site.asm0dey.calit.availability.TimeSlot;
 import site.asm0dey.calit.booking.Booking;
 import site.asm0dey.calit.booking.BookingGuest;
 import site.asm0dey.calit.booking.BookingService;
+import site.asm0dey.calit.booking.HostRuleException;
 import site.asm0dey.calit.booking.MeetingHosts;
 import site.asm0dey.calit.domain.*;
 import site.asm0dey.calit.domain.BookingField.FieldType;
@@ -190,6 +191,27 @@ public class AdminResource {
         return adminMsgs.forLocale(activeLocale.current());
     }
 
+    /**
+     * Renders {@code e}'s message localized: a {@link HostRuleException} carries a message key +
+     * args resolved against the current locale's {@link AdminMessages}; any other {@link
+     * IllegalStateException} is assumed to already carry a localized message (see {@code m()}
+     * call sites in this class) and is rendered via {@link Throwable#getMessage()} as-is.
+     */
+    private String localizedMessage(IllegalStateException e) {
+        if (e instanceof HostRuleException hre) {
+            return switch (hre.messageKey) {
+                case "adm_hosts_error_cap" -> m().adm_hosts_error_cap((int) hre.args[0]);
+                case "adm_hosts_error_slug_owned" ->
+                    m().adm_hosts_error_slug_owned((String) hre.args[0], (String) hre.args[1]);
+                case "adm_hosts_error_slug_cohosts" ->
+                    m().adm_hosts_error_slug_cohosts((String) hre.args[0], (String) hre.args[1]);
+                case "adm_hosts_error_slug_across" -> m().adm_hosts_error_slug_across((String) hre.args[0]);
+                default -> e.getMessage();
+            };
+        }
+        return e.getMessage();
+    }
+
     @ConfigProperty(name = "calit.reminder.lead-minutes", defaultValue = "1440")
     int reminderLeadMinutes;
 
@@ -352,7 +374,7 @@ public class AdminResource {
             assertNoOwnerSlugCollision(t.slug);
             meetingHosts.assertSlugFreeAcrossHosts(t, t.slug);
         } catch (IllegalStateException e) {
-            return renderMeetingTypes(e.getMessage());
+            return renderMeetingTypes(localizedMessage(e));
         }
         t.durationMinutes = durationMinutes;
         t.bufferBeforeMinutes = bufferBeforeMinutes;
@@ -621,7 +643,7 @@ public class AdminResource {
             assertNoOwnerSlugCollision(newSlug);
             meetingHosts.assertSlugFreeAcrossHosts(t, newSlug);
         } catch (IllegalStateException e) {
-            return detailInstance(id, e.getMessage());
+            return detailInstance(id, localizedMessage(e));
         }
         t.name = name;
         t.slug = newSlug;
@@ -664,7 +686,7 @@ public class AdminResource {
             AppUser candidate = resolveEligibleCohost(t.id, t.ownerId, cohost);
             meetingHosts.addCohost(t, candidate); // cap / slug-collision -> IllegalStateException
         } catch (IllegalStateException e) {
-            return detailInstance(id, e.getMessage());
+            return detailInstance(id, localizedMessage(e));
         }
         return detailInstance(id);
     }

@@ -104,9 +104,49 @@ class CohostManageTest {
                 .post("/me/meeting-types/" + t.id + "/hosts")
                 .then()
                 .statusCode(200)
-                .body(containsString("alert-error"));
+                .body(containsString("alert-error"))
+                // localized (i18n) alert text, not the raw hardcoded English string -- Task 17fix
+                .body(containsString(candidate.username + " already uses the slug &quot;" + slug + "&quot;"))
+                .body(containsString("pick a different slug or ask them to free it"));
 
         assertNull(MeetingTypeHost.find(t.id, candidate.id), "no cohost row on rejected add");
+    }
+
+    @Test
+    void addCohostBeyondCapShowsLocalizedCapError() {
+        MeetingType t = seedAdminType("cohost-cap-" + System.nanoTime());
+        seedCreatorRow(t.id);
+        for (var i = 0; i < 9; i++) {
+            // MAX_HOSTS is 10: creator + 9 cohosts already fills the type.
+            seedAcceptedCohost(t.id, i);
+        }
+        AppUser extra = seedCandidate("cohost-cap-extra-" + System.nanoTime());
+
+        given().cookie("quarkus-credential", FormAuth.login())
+                .contentType("application/x-www-form-urlencoded")
+                .formParam("cohost", extra.username)
+                .when()
+                .post("/me/meeting-types/" + t.id + "/hosts")
+                .then()
+                .statusCode(200)
+                .body(containsString("alert-error"))
+                // localized (i18n) alert text, not the raw hardcoded English string -- Task 17fix
+                .body(containsString("A meeting can have at most 10 hosts."));
+
+        assertNull(MeetingTypeHost.find(t.id, extra.id), "no cohost row on rejected add past the cap");
+    }
+
+    @Transactional
+    void seedCreatorRow(Long typeId) {
+        MeetingTypeHost.of(typeId, 1L, MeetingTypeHost.CREATOR, MeetingTypeHost.ACCEPTED)
+                .persist();
+    }
+
+    @Transactional
+    void seedAcceptedCohost(Long typeId, int index) {
+        AppUser cohost = MultiHostFixtures.enabledUser("cap-cohost-" + index + "-" + System.nanoTime());
+        MeetingTypeHost.of(typeId, cohost.id, MeetingTypeHost.COHOST, MeetingTypeHost.ACCEPTED)
+                .persist();
     }
 
     @Test

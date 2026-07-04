@@ -111,7 +111,7 @@ public class MeetingHosts {
         ensureCreatorRow(type);
         long hostCount = MeetingTypeHost.count("meetingTypeId", type.id);
         if (hostCount >= MAX_HOSTS) {
-            throw new IllegalStateException("A meeting can have at most " + MAX_HOSTS + " hosts.");
+            throw new HostRuleException("adm_hosts_error_cap", MAX_HOSTS);
         }
         // ponytail: constant cap, revisit only if a real use-case needs more
         assertSlugFreeForCohost(type, candidate);
@@ -127,14 +127,13 @@ public class MeetingHosts {
      */
     public void assertSlugFreeForCohost(MeetingType type, AppUser candidate) {
         if (MeetingType.slugUsedByOwner(candidate.id, type.slug, null)) {
-            throw new IllegalStateException(candidate.username + " already uses the slug " + type.slug
-                    + " -- pick a different slug or ask them to free it.");
+            throw new HostRuleException("adm_hosts_error_slug_owned", candidate.username, type.slug);
         }
         // also reject if candidate is a host of another multi-host type with this slug
         for (MeetingTypeHost h : MeetingTypeHost.cohostedTypesFor(candidate.id)) {
             MeetingType other = MeetingType.findById(h.meetingTypeId);
             if (other != null && !other.id.equals(type.id) && other.slug.equals(type.slug)) {
-                throw new IllegalStateException(candidate.username + " already co-hosts a type with slug " + type.slug);
+                throw new HostRuleException("adm_hosts_error_slug_cohosts", candidate.username, type.slug);
             }
         }
     }
@@ -143,7 +142,7 @@ public class MeetingHosts {
     public void assertSlugFreeAcrossHosts(MeetingType type, String newSlug) {
         for (Long hostId : hostOwnerIds(type)) {
             if (!hostId.equals(type.ownerId) && MeetingType.slugUsedByOwner(hostId, newSlug, null)) {
-                throw new IllegalStateException("A host already uses the slug " + newSlug);
+                throw new HostRuleException("adm_hosts_error_slug_across", newSlug);
             }
         }
     }

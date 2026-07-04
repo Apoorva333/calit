@@ -519,6 +519,18 @@ public interface AdminMessages {
     @Message("You already co-host a meeting type with the slug \"{slug}\" -- pick a different slug.")
     String adm_hosts_error_slug_owned_cohost(String slug);
 
+    @Message("A meeting can have at most {max} hosts.")
+    String adm_hosts_error_cap(int max);
+
+    @Message("{username} already uses the slug \"{slug}\" -- pick a different slug or ask them to free it.")
+    String adm_hosts_error_slug_owned(String username, String slug);
+
+    @Message("{username} already co-hosts a type with slug \"{slug}\"")
+    String adm_hosts_error_slug_cohosts(String username, String slug);
+
+    @Message("A host already uses the slug \"{slug}\"")
+    String adm_hosts_error_slug_across(String slug);
+
     // ---- Meeting type detail: host removal interstitial (Task 18) ----
 
     @Message("Remove co-host?")
