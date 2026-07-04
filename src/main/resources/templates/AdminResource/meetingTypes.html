@@ -36,7 +36,7 @@
   </div>
 
   <h2 class="text-xl font-semibold mt-8 mb-3">{adm:adm_meetingTypes_create_h2}</h2>
-  <form method="post" action="/me/meeting-types" class="space-y-3">
+  <form method="post" action="/me/meeting-types" class="space-y-3 max-w-2xl">
     <input type="hidden" name="{inject:csrf.parameterName}" value="{inject:csrf.token}">
     <div class="collapse collapse-arrow bg-base-100 border border-base-300">
       <input type="checkbox" checked>

@@ -43,6 +43,11 @@
           {#if type.requiresApproval}
             <p class="text-sm text-base-content/70">{msg:pub_book_approval_hint}</p>
           {/if}
+          {! JS-only echo of the picked slot; populated by CALIT_BOOKING_SUMMARY below. !}
+          <p id="booking-summary" class="mt-4 flex items-center gap-2 rounded-lg bg-primary/10 p-3 text-sm font-semibold text-primary" hidden>
+            <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+            <span data-summary-text></span>
+          </p>
         </div>
 
         <div>
@@ -57,6 +62,7 @@
               <div class="booking-grid">
                 <div id="calendar" class="calendar"></div>
                 <div class="time-column">
+                  <div class="slots-scroll">
                   {#for day in days}
                     <section class="day-slots" data-date="{day.isoDate}">
                       <h3>{day.label}</h3>
@@ -68,6 +74,7 @@
                       {/for}
                     </section>
                   {/for}
+                  </div>
                 </div>
               </div>
 
@@ -109,6 +116,22 @@
           {/if}
           {tzScript.raw}
           {calScript.raw}
+          <script>
+          /* CALIT_BOOKING_SUMMARY — echo the picked day + time into the left rail (JS-only nicety). */
+          (function () {
+            var box = document.getElementById('booking-summary');
+            if (!box) { return; }
+            var out = box.querySelector('[data-summary-text]');
+            document.addEventListener('change', function (e) {
+              var r = e.target;
+              if (!r || r.name !== 'startUtc' || !r.checked) { return; }
+              var t = r.closest('.slot').querySelector('time');
+              var h = r.closest('.day-slots').querySelector('h3');
+              out.textContent = h.textContent + ' · ' + t.textContent;
+              box.hidden = false;
+            });
+          })();
+          </script>
         </div>
       </div>
     </div>

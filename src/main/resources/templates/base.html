@@ -22,7 +22,7 @@
   {/if}
   {#insert head}{/insert}
 </head>
-<body class="canvas {bodyClass ?: ''} bg-base-200 text-base-content min-h-screen"{#if forceTheme??} data-theme="{forceTheme}"{/if}>
+<body class="canvas {bodyClass ?: ''} bg-base-200 text-base-content min-h-screen flex flex-col"{#if forceTheme??} data-theme="{forceTheme}"{/if}>
   <div class="fixed top-3 end-3 z-50">
     <label class="swap swap-rotate btn btn-ghost btn-circle btn-sm" title="Toggle theme" aria-label="Toggle theme">
       <input type="checkbox" class="theme-controller" value="calit-dark" id="calit-theme-toggle">
@@ -30,7 +30,7 @@
       <svg class="swap-on h-5 w-5 fill-current" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.39 5.39 0 0 1-4.4 2.26 5.4 5.4 0 0 1-5.4-5.4c0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1"/></svg>
     </label>
   </div>
-  <main class="container py-8">
+  <main class="container mx-auto px-4 py-8 w-full flex-1">
     {#insert}{/insert}
   </main>
   {#if !(ownFooter??)}{#include footer /}{/if}

@@ -1,9 +1,9 @@
 {@java.util.List<site.asm0dey.calit.web.AdminResource$HostRow> hosts}
 {@site.asm0dey.calit.domain.MeetingType type}
 {@java.lang.String hostTypeaheadScript}
-<section class="mt-6">
+<section class="mt-6 max-w-2xl">
   <h2 class="font-semibold mb-2">{adm:adm_hosts_h2}</h2>
-  <div class="input tokenfield">
+  <div class="input tokenfield tokenfield-tall">
     {#for h in hosts}
     {#if h.role == 'CREATOR'}
     <span class="badge badge-neutral gap-1">
