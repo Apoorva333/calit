@@ -369,6 +369,40 @@ public class AdminResource {
         } catch (IllegalStateException e) {
             return renderMeetingTypes(localizedMessage(e));
         }
+        applyEditableFields(
+                t,
+                durationMinutes,
+                bufferBeforeMinutes,
+                bufferAfterMinutes,
+                secret,
+                minNoticeMinutes,
+                horizonDays,
+                locationType,
+                locationDetail,
+                slotIntervalMinutes,
+                requiresApproval);
+        t.persist(); // need the generated id before scoping child rules/overrides to it
+        createInitialWorkingHours(t.id, t.ownerId, form);
+        createInitialDateOverride(t.id, t.ownerId, form);
+        return renderMeetingTypes();
+    }
+
+    /**
+     * Copy the editable scheduling fields shared by create + edit from the submitted form params.
+     * Name/slug are handled separately by each caller (they differ in uniqueness/guard handling).
+     */
+    private void applyEditableFields(
+            MeetingType t,
+            int durationMinutes,
+            int bufferBeforeMinutes,
+            int bufferAfterMinutes,
+            String secret,
+            int minNoticeMinutes,
+            int horizonDays,
+            String locationType,
+            String locationDetail,
+            String slotIntervalMinutes,
+            String requiresApproval) {
         t.durationMinutes = durationMinutes;
         t.bufferBeforeMinutes = bufferBeforeMinutes;
         t.bufferAfterMinutes = bufferAfterMinutes;
@@ -382,10 +416,6 @@ public class AdminResource {
                 ? null
                 : Integer.valueOf(slotIntervalMinutes);
         t.requiresApproval = "on".equals(requiresApproval);
-        t.persist(); // need the generated id before scoping child rules/overrides to it
-        createInitialWorkingHours(t.id, t.ownerId, form);
-        createInitialDateOverride(t.id, t.ownerId, form);
-        return renderMeetingTypes();
     }
 
     /**
@@ -441,6 +471,15 @@ public class AdminResource {
         o.meetingTypeId = typeId;
         o.overrideDate = LocalDate.parse(date);
         o.persist(); // need the generated id before persisting child windows
+        persistWindows(o.id, form);
+    }
+
+    /**
+     * Zip parallel {@code windowStart[]}/{@code windowEnd[]} form arrays into
+     * {@link DateOverrideWindow} rows under a persisted {@link DateOverride}; a row with a blank
+     * start or end is skipped (none → zero windows = day off).
+     */
+    private void persistWindows(Long dateOverrideId, MultivaluedMap<String, String> form) {
         List<String> starts = form.getOrDefault("windowStart", List.of());
         List<String> ends = form.getOrDefault("windowEnd", List.of());
         for (var i = 0; i < starts.size() && i < ends.size(); i++) {
@@ -448,7 +487,7 @@ public class AdminResource {
                 continue;
             }
             DateOverrideWindow w = new DateOverrideWindow();
-            w.dateOverrideId = o.id;
+            w.dateOverrideId = dateOverrideId;
             w.startTime = LocalTime.parse(starts.get(i));
             w.endTime = LocalTime.parse(ends.get(i));
             w.persist();
@@ -640,18 +679,18 @@ public class AdminResource {
         }
         t.name = name;
         t.slug = newSlug;
-        t.durationMinutes = durationMinutes;
-        t.bufferBeforeMinutes = bufferBeforeMinutes;
-        t.bufferAfterMinutes = bufferAfterMinutes;
-        t.secret = "on".equals(secret);
-        t.minNoticeMinutes = minNoticeMinutes;
-        t.horizonDays = horizonDays;
-        t.locationType = parseLocationType(locationType);
-        t.locationDetail = (locationDetail == null || locationDetail.isBlank()) ? null : locationDetail;
-        t.slotIntervalMinutes = (slotIntervalMinutes == null || slotIntervalMinutes.isBlank())
-                ? null
-                : Integer.valueOf(slotIntervalMinutes);
-        t.requiresApproval = "on".equals(requiresApproval);
+        applyEditableFields(
+                t,
+                durationMinutes,
+                bufferBeforeMinutes,
+                bufferAfterMinutes,
+                secret,
+                minNoticeMinutes,
+                horizonDays,
+                locationType,
+                locationDetail,
+                slotIntervalMinutes,
+                requiresApproval);
         return detailInstance(id); // managed entity flushes on commit
     }
 
@@ -845,18 +884,7 @@ public class AdminResource {
         o.meetingTypeId = id;
         o.overrideDate = LocalDate.parse(date);
         o.persist(); // need the generated id before persisting child windows
-        List<String> starts = form.getOrDefault("windowStart", List.of());
-        List<String> ends = form.getOrDefault("windowEnd", List.of());
-        for (var i = 0; i < starts.size() && i < ends.size(); i++) {
-            if (starts.get(i).isBlank() || ends.get(i).isBlank()) {
-                continue;
-            }
-            DateOverrideWindow w = new DateOverrideWindow();
-            w.dateOverrideId = o.id;
-            w.startTime = LocalTime.parse(starts.get(i));
-            w.endTime = LocalTime.parse(ends.get(i));
-            w.persist();
-        }
+        persistWindows(o.id, form);
         return detailInstance(id);
     }
 
@@ -1157,19 +1185,7 @@ public class AdminResource {
         o.overrideDate = LocalDate.parse(date);
         o.meetingTypeId = typeId; // null = global override
         o.persist(); // need the generated id before persisting child windows
-        // Zip parallel windowStart[]/windowEnd[] into windows; none → zero windows = day off.
-        List<String> starts = form.getOrDefault("windowStart", List.of());
-        List<String> ends = form.getOrDefault("windowEnd", List.of());
-        for (var i = 0; i < starts.size() && i < ends.size(); i++) {
-            if (starts.get(i).isBlank() || ends.get(i).isBlank()) {
-                continue;
-            }
-            DateOverrideWindow w = new DateOverrideWindow();
-            w.dateOverrideId = o.id;
-            w.startTime = LocalTime.parse(starts.get(i));
-            w.endTime = LocalTime.parse(ends.get(i));
-            w.persist();
-        }
+        persistWindows(o.id, form);
         return Templates.dateOverrides(
                 overridesWithWindows(),
                 MeetingType.listForOwner(currentOwner.id()),

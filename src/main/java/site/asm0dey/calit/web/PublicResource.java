@@ -25,6 +25,7 @@ import site.asm0dey.calit.domain.OwnerSettings;
 import site.asm0dey.calit.google.CalendarUnavailableException;
 import site.asm0dey.calit.i18n.ActiveLocale;
 import site.asm0dey.calit.i18n.AppMessageResolver;
+import site.asm0dey.calit.i18n.AppMessages;
 import site.asm0dey.calit.user.AppUser;
 import site.asm0dey.calit.user.CurrentOwner;
 import site.asm0dey.calit.user.Usernames;
@@ -195,25 +196,13 @@ public class PublicResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance book(@PathParam("user") String user, @PathParam("slug") String slug) {
         var m = messages.forLocale(activeLocale.current());
-        AppUser urlUser = resolveOwner(user); // 404 if unknown; binds CurrentOwner (may be a co-host alias)
-        // resolveForAlias: urlUser's own type wins, else a multi-host type urlUser is an ACCEPTED
-        // co-host of (secret types still reachable by direct link, as before).
-        MeetingType type = MeetingType.resolveForAlias(urlUser.id, slug);
-        if (type == null) {
-            throw new NotFoundException("No meeting type with slug " + slug);
+        BookingTarget target = resolveBookingTarget(user, slug, m);
+        if (target.earlyExit() != null) {
+            return target.earlyExit();
         }
-        // Owner/slot/booking context is always the type's CREATOR, regardless of which alias URL
-        // was used to reach it.
-        AppUser creator = AppUser.findById(type.ownerId);
-        currentOwner.set(creator);
-        OwnerSettings settings = OwnerSettings.forOwner(type.ownerId);
-        if (settings == null) {
-            return Templates.notReady(m.pub_not_ready_title());
-        }
-        if (!meetingHosts.bookable(type)) {
-            // A co-host invite is still PENDING (or a host got disabled) — no aliases can book yet.
-            return Templates.hostPending(m.pub_host_pending_title());
-        }
+        AppUser urlUser = target.urlUser();
+        MeetingType type = target.type();
+        OwnerSettings settings = target.settings();
         List<DaySlots> byDate;
         try {
             byDate = daySlots(type);
@@ -246,6 +235,36 @@ public class PublicResource {
 
     private String turnstileSiteKey() {
         return turnstileSiteKeyConfig.orElse("");
+    }
+
+    /** Resolved booking target; a non-null {@code earlyExit} page means "render it and stop". */
+    private record BookingTarget(
+            MeetingType type, OwnerSettings settings, AppUser urlUser, TemplateInstance earlyExit) {}
+
+    /**
+     * Resolve {@code {user}/{slug}} to a bookable type: 404 on unknown, bind {@link CurrentOwner} to
+     * the type's CREATOR (context is always the creator, whichever alias URL was used), then gate on
+     * owner-setup + host readiness. Returns an {@code earlyExit} page (notReady / hostPending)
+     * instead of a target when the type isn't bookable yet. Shared by the GET and POST handlers.
+     */
+    private BookingTarget resolveBookingTarget(String user, String slug, AppMessages m) {
+        AppUser urlUser = resolveOwner(user); // 404 if unknown; binds CurrentOwner (may be a co-host alias)
+        // resolveForAlias: urlUser's own type wins, else a multi-host type urlUser is an ACCEPTED
+        // co-host of (secret types still reachable by direct link, as before).
+        MeetingType type = MeetingType.resolveForAlias(urlUser.id, slug);
+        if (type == null) {
+            throw new NotFoundException("No meeting type with slug " + slug);
+        }
+        currentOwner.set(AppUser.findById(type.ownerId));
+        OwnerSettings settings = OwnerSettings.forOwner(type.ownerId);
+        if (settings == null) {
+            return new BookingTarget(type, null, urlUser, Templates.notReady(m.pub_not_ready_title()));
+        }
+        if (!meetingHosts.bookable(type)) {
+            // A co-host invite is still PENDING (or a host got disabled) — no aliases can book yet.
+            return new BookingTarget(type, settings, urlUser, Templates.hostPending(m.pub_host_pending_title()));
+        }
+        return new BookingTarget(type, settings, urlUser, null);
     }
 
     /** The username a landing entry should book at: the owner's own for their types, else the creator's. */
@@ -283,21 +302,13 @@ public class PublicResource {
             @RestForm("cf-turnstile-response") String turnstileToken,
             MultivaluedMap<String, String> form) {
         var m = messages.forLocale(activeLocale.current());
-        AppUser urlUser = resolveOwner(user); // 404 if unknown; binds CurrentOwner (may be a co-host alias)
-        MeetingType type = MeetingType.resolveForAlias(urlUser.id, slug);
-        if (type == null) {
-            throw new NotFoundException("No meeting type with slug " + slug);
+        BookingTarget target = resolveBookingTarget(user, slug, m);
+        if (target.earlyExit() != null) {
+            return target.earlyExit();
         }
-        AppUser creator = AppUser.findById(type.ownerId);
-        currentOwner.set(creator);
-        OwnerSettings settings = OwnerSettings.forOwner(type.ownerId);
-        if (settings == null) {
-            return Templates.notReady(m.pub_not_ready_title());
-        }
-        if (!meetingHosts.bookable(type)) {
-            // Reject submissions while a co-host is still PENDING — same disabled page as the GET.
-            return Templates.hostPending(m.pub_host_pending_title());
-        }
+        AppUser urlUser = target.urlUser();
+        MeetingType type = target.type();
+        OwnerSettings settings = target.settings();
         String bookTitle = m.pub_book_title_prefix() + " " + type.name;
 
         // Collect every "answers.<fieldKey>" form param into the answers map (strip the prefix).
