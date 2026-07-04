@@ -1,0 +1,32 @@
+{@java.util.List<site.asm0dey.calit.web.SharedMeetingsResource$PendingRequestRow> requests}
+{@java.lang.Long pendingCount}
+{@java.lang.Boolean isAdmin}
+{@java.lang.String title}
+{#include adminBase title=title pendingCount=pendingCount active="shared" isAdmin=isAdmin}
+  <h1 class="text-2xl font-bold mb-4">{adm:adm_shared_requests_h1}</h1>
+
+  {#if requests.isEmpty()}
+  <p class="text-base-content/70">{adm:adm_shared_requests_empty}</p>
+  {#else}
+  <div class="space-y-2 max-w-xl">
+  {#for r in requests}
+    <div class="card bg-base-100 border border-base-300">
+      <div class="card-body py-3 gap-2">
+        <h2 class="font-semibold">{r.type.name}</h2>
+        <p class="text-sm text-base-content/70">{adm:adm_shared_requests_from(r.creatorName)}</p>
+        <div class="flex gap-2">
+          <form method="post" action="/me/shared/requests/{r.type.id}/accept">
+            <input type="hidden" name="{inject:csrf.parameterName}" value="{inject:csrf.token}">
+            <button type="submit" class="btn btn-primary btn-sm">{adm:adm_shared_requests_accept}</button>
+          </form>
+          <form method="post" action="/me/shared/requests/{r.type.id}/decline">
+            <input type="hidden" name="{inject:csrf.parameterName}" value="{inject:csrf.token}">
+            <button type="submit" class="btn btn-ghost btn-sm">{adm:adm_shared_requests_decline}</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  {/for}
+  </div>
+  {/if}
+{/include}

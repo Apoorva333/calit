@@ -1,0 +1,41 @@
+{@java.util.List<site.asm0dey.calit.web.AdminResource$SharedRow> rows}
+{@java.lang.String baseUrl}
+{@java.lang.Long pendingCount}
+{@java.lang.Boolean isAdmin}
+{@java.lang.String title}
+{#include adminBase title=title pendingCount=pendingCount active="shared" isAdmin=isAdmin}
+  <h1 class="text-2xl font-bold mb-4">{adm:adm_shared_h1}</h1>
+
+  {#if rows.isEmpty()}
+  <p class="text-base-content/70">{adm:adm_shared_empty}</p>
+  {#else}
+  <div class="space-y-3">
+  {#for r in rows}
+    {#include AdminResource/_meetingtypecard type=r.type username=r.creatorUsername baseUrl=baseUrl}
+      {#badges}
+        {#if r.role == 'CREATOR'}
+        <span class="badge badge-sm">{adm:adm_shared_role_creator}</span>
+        {#else}
+        <span class="badge badge-sm">{adm:adm_shared_role_cohost}</span>
+        {/if}
+        {#if r.status == 'PENDING'}<span class="badge badge-warning badge-sm">{adm:adm_shared_pending}</span>{/if}
+        {#if r.needsReconnect}<span class="badge badge-error badge-sm">{adm:adm_shared_reconnect}</span>{/if}
+      {/badges}
+      {#if r.role == 'CREATOR'}
+      <a href="/me/meeting-types/{r.type.id}" class="btn btn-outline btn-sm">{adm:adm_meetingTypes_btn_edit}</a>
+      {#else if r.status == 'PENDING'}
+      <a href="/me/shared/requests" class="btn btn-outline btn-sm">{adm:adm_shared_card_respond}</a>
+      {#else}
+      <a href="/me/shared/{r.type.id}/availability" class="btn btn-outline btn-sm">{adm:adm_shared_card_setAvailability}</a>
+      <form method="post" action="/me/shared/{r.type.id}/revoke">
+        <input type="hidden" name="{inject:csrf.parameterName}" value="{inject:csrf.token}">
+        <button type="submit" class="btn btn-error btn-outline btn-sm">{adm:adm_shared_card_leave}</button>
+      </form>
+      {/if}
+    {/include}
+  {/for}
+  </div>
+  {/if}
+
+  {#include AdminResource/_copyToast /}
+{/include}

@@ -156,6 +156,16 @@ public interface AppMessages {
             "Connect each user's own Google account. Bookings create events and auto-generate a Meet link — or run fully degraded.")
     String pub_landing_feat_calendar_p();
 
+    @Message("Group meetings")
+    String pub_landing_feat_multihost_k();
+
+    @Message("Meetings that need everyone")
+    String pub_landing_feat_multihost_h3();
+
+    @Message(
+            "A meeting type can require several hosts. calit only offers slots when every host is free, books one event on every calendar, and each co-host confirms before it goes live.")
+    String pub_landing_feat_multihost_p();
+
     @Message("Control")
     String pub_landing_feat_control_k();
 
@@ -437,6 +447,50 @@ public interface AppMessages {
     @Message("The owner hasn't finished setting up calit. Please check back soon.")
     String pub_not_ready_desc();
 
+    // ---- Host-pending page (hostPending.html) ----
+
+    @Message("Not bookable yet")
+    String pub_host_pending_title();
+
+    @Message("This meeting isn't bookable yet")
+    String pub_host_pending_h1();
+
+    @Message("This meeting has a co-host who hasn't confirmed yet. Please check back soon.")
+    String pub_host_pending_desc();
+
+    // ---- Co-host consent page (ConsentResource) ----
+
+    @Message("Co-host invitation")
+    String pub_consent_confirm_title();
+
+    @Message("Accept co-hosting \"{typeName}\" with {creatorName}?")
+    String pub_consent_confirm_h1(String typeName, String creatorName);
+
+    @Message(
+            "Accepting adds you as a co-host: your own availability applies, and every booking needs both of you free.")
+    String pub_consent_confirm_desc();
+
+    @Message("Accept")
+    String pub_consent_accept_btn();
+
+    @Message("Decline")
+    String pub_consent_decline_btn();
+
+    @Message("Co-host invitation")
+    String pub_consent_result_title();
+
+    @Message("You're now a co-host")
+    String pub_consent_accepted_h1();
+
+    @Message("You can set your own availability for this meeting type from your calit dashboard.")
+    String pub_consent_accepted_desc();
+
+    @Message("Invitation declined")
+    String pub_consent_declined_h1();
+
+    @Message("You won't be added as a co-host for this meeting type.")
+    String pub_consent_declined_desc();
+
     // ---- Email subjects ----
 
     @Message("Booking request received: {meetingTypeName}")
@@ -468,6 +522,9 @@ public interface AppMessages {
 
     @Message("Action needed: reconnect your Google Calendar")
     String email_google_disconnected_subject();
+
+    @Message("You're invited to co-host: {meetingTypeName}")
+    String email_host_consent_subject(String meetingTypeName);
 
     // ---- Email date/time formatting ----
 
@@ -686,6 +743,21 @@ public interface AppMessages {
     @Message(
             "This usually happens when access was revoked, your password changed, or the connection sat unused for a long time. Reconnecting takes a few seconds.")
     String email_google_disconnected_why();
+
+    // ---- Email body — host consent ----
+
+    @Message("Co-host invitation")
+    String email_host_consent_title();
+
+    @Message("Hi {name},")
+    String email_host_consent_greeting(String name);
+
+    @Message(
+            "{creatorName} invited you to co-host \"{meetingTypeName}\" on calit. Accept to start receiving bookings together.")
+    String email_host_consent_body(String creatorName, String meetingTypeName);
+
+    @Message("Accept co-host invitation")
+    String email_host_consent_cta();
 
     // ---- Auth / bootstrap pages ----
 

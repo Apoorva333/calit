@@ -1,8 +1,10 @@
 {@java.lang.String initial}
 <label class="label" for="guest-entry">{msg:pub_book_guests_label}</label>
-<div id="guests-chips" class="flex flex-wrap gap-2 mb-2"></div>
-<input id="guest-entry" class="input w-full" type="email" autocomplete="off"
-       placeholder="{msg:pub_book_guests_hint}">
+<div class="input tokenfield">
+  <div id="guests-chips" class="contents"></div>
+  <input id="guest-entry" class="grow min-w-[8rem] border-0 outline-none bg-transparent p-0" type="email" autocomplete="off"
+         placeholder="{msg:pub_book_guests_hint}">
+</div>
 {! Source of truth: pre-filled with existing guests so a no-JS reschedule still submits them.
    The script below clears the visible field and lets chips own this value. !}
 <input type="hidden" name="guests" id="guests-data" value="{initial ?: ''}">

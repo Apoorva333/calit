@@ -9,28 +9,25 @@ import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedMap;
-import java.time.DayOfWeek;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.ZoneId;
+import java.time.*;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.resteasy.reactive.RestForm;
 import site.asm0dey.calit.availability.TimeSlot;
-import site.asm0dey.calit.booking.Booking;
-import site.asm0dey.calit.booking.BookingGuest;
-import site.asm0dey.calit.booking.BookingService;
+import site.asm0dey.calit.booking.*;
 import site.asm0dey.calit.domain.*;
 import site.asm0dey.calit.domain.BookingField.FieldType;
 import site.asm0dey.calit.domain.MeetingType.LocationType;
 import site.asm0dey.calit.google.GoogleCalendar;
+import site.asm0dey.calit.google.GoogleCredential;
 import site.asm0dey.calit.i18n.ActiveLocale;
 import site.asm0dey.calit.i18n.AdminMessageResolver;
 import site.asm0dey.calit.i18n.AdminMessages;
+import site.asm0dey.calit.user.AppUser;
 
 @Path("/me")
 @RolesAllowed("user")
@@ -51,7 +48,12 @@ public class AdminResource {
                 boolean isAdmin,
                 String username,
                 String baseUrl,
+                boolean hasShared,
+                String error,
                 String title);
+
+        public static native TemplateInstance shared(
+                List<SharedRow> rows, String baseUrl, Long pendingCount, boolean isAdmin, String title);
 
         public static native TemplateInstance meetingTypeDetail(
                 MeetingType type,
@@ -59,11 +61,14 @@ public class AdminResource {
                 List<AvailabilityRule> rules,
                 List<WeekRow> week,
                 List<DateOverride> overrides,
+                List<HostRow> hosts,
                 LocationType[] locationTypes,
                 BookingField.FieldType[] fieldTypes,
                 DayOfWeek[] daysOfWeek,
                 Long pendingCount,
                 boolean isAdmin,
+                String error,
+                String hostTypeaheadScript,
                 String title);
 
         public static native TemplateInstance availability(
@@ -119,10 +124,40 @@ public class AdminResource {
 
         public static native TemplateInstance approvalResult(
                 Long pendingCount, boolean isAdmin, String title, String h1, String desc);
+
+        public static native TemplateInstance removeHostConfirm(
+                MeetingType type,
+                Long cohostOwnerId,
+                String cohostUsername,
+                long futureBookingCount,
+                Long pendingCount,
+                boolean isAdmin,
+                String title);
     }
+
+    /**
+     * One row of the Shared page: a multi-host meeting type this owner is a host of, either as the
+     * type's CREATOR or as a COHOST — {@code role}/{@code status} are {@link MeetingTypeHost}
+     * constants. {@code needsReconnect} flags this owner's own Google connection, not any other
+     * host's — see {@link #shared()}. {@code creatorUsername} is the type's CREATOR's username,
+     * used for the card's copy-link URL — a co-hosted type's canonical booking link always lives
+     * under the creator's username, never this (possibly co-host) owner's.
+     */
+    public record SharedRow(
+            MeetingType type, String role, String status, boolean needsReconnect, String creatorUsername) {}
+
+    /**
+     * One row of the meeting-type detail page's host list (Task 17): resolves {@link
+     * MeetingTypeHost#ownerId} to a display username and this host's own Google reconnect status,
+     * so the template never has to look either up.
+     */
+    public record HostRow(Long ownerId, String username, String role, String status, boolean needsReconnect) {}
 
     @Inject
     BookingService bookingService;
+
+    @Inject
+    MeetingHosts meetingHosts;
 
     @Inject
     site.asm0dey.calit.user.CurrentOwner currentOwner;
@@ -147,6 +182,27 @@ public class AdminResource {
     /** Returns the localized admin message bundle for the current request's locale. */
     private AdminMessages m() {
         return adminMsgs.forLocale(activeLocale.current());
+    }
+
+    /**
+     * Renders {@code e}'s message localized: a {@link HostRuleException} carries a message key +
+     * args resolved against the current locale's {@link AdminMessages}; any other {@link
+     * IllegalStateException} is assumed to already carry a localized message (see {@code m()}
+     * call sites in this class) and is rendered via {@link Throwable#getMessage()} as-is.
+     */
+    private String localizedMessage(IllegalStateException e) {
+        if (e instanceof HostRuleException hre) {
+            return switch (hre.messageKey) {
+                case "adm_hosts_error_cap" -> m().adm_hosts_error_cap((int) hre.args[0]);
+                case "adm_hosts_error_slug_owned" ->
+                    m().adm_hosts_error_slug_owned((String) hre.args[0], (String) hre.args[1]);
+                case "adm_hosts_error_slug_cohosts" ->
+                    m().adm_hosts_error_slug_cohosts((String) hre.args[0], (String) hre.args[1]);
+                case "adm_hosts_error_slug_across" -> m().adm_hosts_error_slug_across((String) hre.args[0]);
+                default -> e.getMessage();
+            };
+        }
+        return e.getMessage();
     }
 
     @ConfigProperty(name = "calit.reminder.lead-minutes", defaultValue = "1440")
@@ -197,20 +253,87 @@ public class AdminResource {
         return Templates.dashboard(upcoming, pendingCount, Layout.TZ_SCRIPT, isAdmin(), m().adm_dashboard_title());
     }
 
-    @GET
-    @Path("/meeting-types")
-    @Produces(MediaType.TEXT_HTML)
-    public TemplateInstance meetingTypes() {
+    /**
+     * This owner's SINGLE-host meeting types only — multi-host types (whether created or co-hosted
+     * by this owner) live on the Shared page instead. Includes secret types (owner view).
+     */
+    private List<MeetingType> singleHostTypes() {
+        return MeetingType.listForOwner(currentOwner.id()).stream()
+                .filter(t -> !MeetingTypeHost.isMultiHost(t.id))
+                .toList();
+    }
+
+    /** True when this owner is a host (CREATOR or COHOST) of any multi-host type — drives the Main-page "Shared" link. */
+    private boolean hasShared() {
+        return MeetingTypeHost.count(
+                        "ownerId = ?1 and (role = ?2 or role = ?3)",
+                        currentOwner.id(),
+                        MeetingTypeHost.CREATOR,
+                        MeetingTypeHost.COHOST)
+                > 0;
+    }
+
+    /** Re-render the Main meeting-types page (shared by the GET and every mutating POST below). */
+    private TemplateInstance renderMeetingTypes() {
+        return renderMeetingTypes(null);
+    }
+
+    /** Re-render the Main meeting-types page with an error alert (create's slug-collision guard). */
+    private TemplateInstance renderMeetingTypes(String error) {
         // Pass LocationType.values() so the form can render the location dropdown options.
         return Templates.meetingTypes(
-                MeetingType.listForOwner(currentOwner.id()),
+                singleHostTypes(),
                 allowedLocationTypes(),
                 DayOfWeek.values(),
                 pendingCount(),
                 isAdmin(),
                 currentOwner.require().username,
                 baseUrl,
+                hasShared(),
+                error,
                 m().adm_meetingTypes_title()); // includes secret
+    }
+
+    @GET
+    @Path("/meeting-types")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance meetingTypes() {
+        return renderMeetingTypes();
+    }
+
+    /**
+     * This owner's own Google reconnect status — used for every {@link SharedRow} on the Shared
+     * page, since every row there reflects THIS owner's participation (as creator or co-host), not
+     * some other host's account.
+     */
+    private boolean ownerNeedsReconnect() {
+        return GoogleCredential.hasPendingReconnect(currentOwner.id());
+    }
+
+    @GET
+    @Path("/shared")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance shared() {
+        var needsReconnect = ownerNeedsReconnect();
+        String ownUsername = currentOwner.require().username;
+        List<SharedRow> rows = new java.util.ArrayList<>();
+        for (MeetingType t : MeetingType.listForOwner(currentOwner.id())) {
+            if (MeetingTypeHost.isMultiHost(t.id)) {
+                // This owner IS the creator here (listForOwner filters by t.ownerId), so the
+                // canonical link's username is this owner's own username.
+                rows.add(new SharedRow(
+                        t, MeetingTypeHost.CREATOR, MeetingTypeHost.ACCEPTED, needsReconnect, ownUsername));
+            }
+        }
+        for (MeetingTypeHost h : MeetingTypeHost.cohostedTypesFor(currentOwner.id())) {
+            MeetingType t = MeetingType.findById(h.meetingTypeId);
+            if (t != null) {
+                AppUser creator = AppUser.findById(t.ownerId);
+                String creatorUsername = creator != null ? creator.username : "";
+                rows.add(new SharedRow(t, MeetingTypeHost.COHOST, h.status, needsReconnect, creatorUsername));
+            }
+        }
+        return Templates.shared(rows, baseUrl, pendingCount(), isAdmin(), m().adm_shared_title());
     }
 
     @POST
@@ -237,6 +360,49 @@ public class AdminResource {
         t.name = name;
         String slugBase = (slug == null || slug.isBlank()) ? Slugs.slugify(name) : Slugs.slugify(slug);
         t.slug = Slugs.uniqueMeetingTypeSlug(currentOwner.id(), slugBase, null);
+        // Task 17 slug guards -- validated on the transient (unpersisted) t, so a rejection never
+        // leaves a half-created row behind. assertSlugFreeAcrossHosts is always a no-op here (a
+        // brand-new type has no host rows yet); kept for parity with editMeetingType below.
+        try {
+            assertNoOwnerSlugCollision(t.slug);
+            meetingHosts.assertSlugFreeAcrossHosts(t, t.slug);
+        } catch (IllegalStateException e) {
+            return renderMeetingTypes(localizedMessage(e));
+        }
+        applyEditableFields(
+                t,
+                durationMinutes,
+                bufferBeforeMinutes,
+                bufferAfterMinutes,
+                secret,
+                minNoticeMinutes,
+                horizonDays,
+                locationType,
+                locationDetail,
+                slotIntervalMinutes,
+                requiresApproval);
+        t.persist(); // need the generated id before scoping child rules/overrides to it
+        createInitialWorkingHours(t.id, t.ownerId, form);
+        createInitialDateOverride(t.id, t.ownerId, form);
+        return renderMeetingTypes();
+    }
+
+    /**
+     * Copy the editable scheduling fields shared by create + edit from the submitted form params.
+     * Name/slug are handled separately by each caller (they differ in uniqueness/guard handling).
+     */
+    private void applyEditableFields(
+            MeetingType t,
+            int durationMinutes,
+            int bufferBeforeMinutes,
+            int bufferAfterMinutes,
+            String secret,
+            int minNoticeMinutes,
+            int horizonDays,
+            String locationType,
+            String locationDetail,
+            String slotIntervalMinutes,
+            String requiresApproval) {
         t.durationMinutes = durationMinutes;
         t.bufferBeforeMinutes = bufferBeforeMinutes;
         t.bufferAfterMinutes = bufferAfterMinutes;
@@ -250,18 +416,21 @@ public class AdminResource {
                 ? null
                 : Integer.valueOf(slotIntervalMinutes);
         t.requiresApproval = "on".equals(requiresApproval);
-        t.persist(); // need the generated id before scoping child rules/overrides to it
-        createInitialWorkingHours(t.id, t.ownerId, form);
-        createInitialDateOverride(t.id, t.ownerId, form);
-        return Templates.meetingTypes(
-                MeetingType.listForOwner(currentOwner.id()),
-                allowedLocationTypes(),
-                DayOfWeek.values(),
-                pendingCount(),
-                isAdmin(),
-                currentOwner.require().username,
-                baseUrl,
-                m().adm_meetingTypes_title());
+    }
+
+    /**
+     * Task 17: a slug this owner picks for their OWN type must not collide with a type they
+     * co-host under someone else's ownership — {@link MeetingType#resolveForAlias} tries the
+     * owner's own type first, so the new own-type would silently shadow the cohosted one at the
+     * same {@code /{username}/{slug}} alias.
+     */
+    private void assertNoOwnerSlugCollision(String slug) {
+        for (MeetingTypeHost h : MeetingTypeHost.cohostedTypesFor(currentOwner.id())) {
+            MeetingType other = MeetingType.findById(h.meetingTypeId);
+            if (other != null && other.slug.equals(slug)) {
+                throw new IllegalStateException(m().adm_hosts_error_slug_owned_cohost(slug));
+            }
+        }
     }
 
     /**
@@ -302,6 +471,15 @@ public class AdminResource {
         o.meetingTypeId = typeId;
         o.overrideDate = LocalDate.parse(date);
         o.persist(); // need the generated id before persisting child windows
+        persistWindows(o.id, form);
+    }
+
+    /**
+     * Zip parallel {@code windowStart[]}/{@code windowEnd[]} form arrays into
+     * {@link DateOverrideWindow} rows under a persisted {@link DateOverride}; a row with a blank
+     * start or end is skipped (none → zero windows = day off).
+     */
+    private void persistWindows(Long dateOverrideId, MultivaluedMap<String, String> form) {
         List<String> starts = form.getOrDefault("windowStart", List.of());
         List<String> ends = form.getOrDefault("windowEnd", List.of());
         for (var i = 0; i < starts.size() && i < ends.size(); i++) {
@@ -309,7 +487,7 @@ public class AdminResource {
                 continue;
             }
             DateOverrideWindow w = new DateOverrideWindow();
-            w.dateOverrideId = o.id;
+            w.dateOverrideId = dateOverrideId;
             w.startTime = LocalTime.parse(starts.get(i));
             w.endTime = LocalTime.parse(ends.get(i));
             w.persist();
@@ -324,15 +502,7 @@ public class AdminResource {
     public TemplateInstance toggleActive(@PathParam("id") Long id) {
         MeetingType t = requireType(id);
         t.active = !t.active;
-        return Templates.meetingTypes(
-                MeetingType.listForOwner(currentOwner.id()),
-                allowedLocationTypes(),
-                DayOfWeek.values(),
-                pendingCount(),
-                isAdmin(),
-                currentOwner.require().username,
-                baseUrl,
-                m().adm_meetingTypes_title());
+        return renderMeetingTypes();
     }
 
     @POST
@@ -343,15 +513,7 @@ public class AdminResource {
     public TemplateInstance deleteMeetingType(@PathParam("id") Long id) {
         requireType(id);
         MeetingType.deleteById(id);
-        return Templates.meetingTypes(
-                MeetingType.listForOwner(currentOwner.id()),
-                allowedLocationTypes(),
-                DayOfWeek.values(),
-                pendingCount(),
-                isAdmin(),
-                currentOwner.require().username,
-                baseUrl,
-                m().adm_meetingTypes_title());
+        return renderMeetingTypes();
     }
 
     /** Date overrides scoped to one meeting type, each with its (transient) windows loaded. */
@@ -364,7 +526,7 @@ public class AdminResource {
      * one-per-override (N+1). Preserves the given override ordering and per-override start-time
      * window ordering. Overrides with no windows get an empty list (day off).
      */
-    private static List<DateOverride> withWindows(List<DateOverride> overrides) {
+    static List<DateOverride> withWindows(List<DateOverride> overrides) {
         if (overrides.isEmpty()) {
             return overrides;
         }
@@ -416,6 +578,11 @@ public class AdminResource {
 
     /** Re-render the detail page for one meeting type (shared by every detail-scoped handler). */
     private TemplateInstance detailInstance(Long id) {
+        return detailInstance(id, null);
+    }
+
+    /** Re-render the detail page with an error alert (co-host add + slug-collision guards). */
+    private TemplateInstance detailInstance(Long id, String error) {
         MeetingType t = requireType(id);
         List<BookingField> fields = BookingField.list("meetingTypeId = ?1 order by position", id);
         List<AvailabilityRule> rules = AvailabilityRule.list("meetingTypeId = ?1 order by dayOfWeek", id);
@@ -427,12 +594,47 @@ public class AdminResource {
                 rules,
                 weekRows(rules),
                 overrides,
+                hostRows(t),
                 LocationType.values(),
                 BookingField.FieldType.values(),
                 DayOfWeek.values(),
                 pendingCount(),
                 isAdmin(),
+                error,
+                Layout.HOST_TYPEAHEAD_SCRIPT,
                 title);
+    }
+
+    /**
+     * This type's host rows for the Hosts tokenfield. A plain single-host type holds no {@link
+     * MeetingTypeHost} rows at all (the CREATOR row is only materialized once a co-host is added,
+     * and removed again once the last co-host is removed -- see {@link
+     * site.asm0dey.calit.booking.MeetingHosts}), so a synthetic CREATOR row for the current owner
+     * is prepended whenever no real CREATOR row is present. This keeps the owner's chip always
+     * visible, whether the type is single- or multi-host.
+     */
+    private List<HostRow> hostRows(MeetingType type) {
+        List<HostRow> rows = new java.util.ArrayList<>();
+        for (MeetingTypeHost h : MeetingTypeHost.forType(type.id)) {
+            AppUser u = AppUser.findById(h.ownerId);
+            rows.add(new HostRow(
+                    h.ownerId,
+                    u != null ? u.username : "?",
+                    h.role,
+                    h.status,
+                    GoogleCredential.hasPendingReconnect(h.ownerId)));
+        }
+        boolean hasCreatorRow = rows.stream().anyMatch(h -> MeetingTypeHost.CREATOR.equals(h.role()));
+        if (!hasCreatorRow) {
+            AppUser owner = currentOwner.require();
+            rows.addFirst(new HostRow(
+                    owner.id,
+                    owner.username,
+                    MeetingTypeHost.CREATOR,
+                    MeetingTypeHost.ACCEPTED,
+                    GoogleCredential.hasPendingReconnect(owner.id)));
+        }
+        return rows;
     }
 
     @GET
@@ -464,22 +666,122 @@ public class AdminResource {
             @RestForm String slotIntervalMinutes,
             @RestForm String requiresApproval) {
         MeetingType t = requireType(id);
-        t.name = name;
         String slugBase = (slug == null || slug.isBlank()) ? Slugs.slugify(name) : Slugs.slugify(slug);
-        t.slug = Slugs.uniqueMeetingTypeSlug(currentOwner.id(), slugBase, id);
-        t.durationMinutes = durationMinutes;
-        t.bufferBeforeMinutes = bufferBeforeMinutes;
-        t.bufferAfterMinutes = bufferAfterMinutes;
-        t.secret = "on".equals(secret);
-        t.minNoticeMinutes = minNoticeMinutes;
-        t.horizonDays = horizonDays;
-        t.locationType = parseLocationType(locationType);
-        t.locationDetail = (locationDetail == null || locationDetail.isBlank()) ? null : locationDetail;
-        t.slotIntervalMinutes = (slotIntervalMinutes == null || slotIntervalMinutes.isBlank())
-                ? null
-                : Integer.valueOf(slotIntervalMinutes);
-        t.requiresApproval = "on".equals(requiresApproval);
+        String newSlug = Slugs.uniqueMeetingTypeSlug(currentOwner.id(), slugBase, id);
+        // Task 17 slug guards -- validated against the candidate newSlug BEFORE any field on the
+        // managed entity `t` is mutated, so a rejection leaves it untouched (a caught exception
+        // does not roll back the transaction; only the field assignments below would flush).
+        try {
+            assertNoOwnerSlugCollision(newSlug);
+            meetingHosts.assertSlugFreeAcrossHosts(t, newSlug);
+        } catch (IllegalStateException e) {
+            return detailInstance(id, localizedMessage(e));
+        }
+        t.name = name;
+        t.slug = newSlug;
+        applyEditableFields(
+                t,
+                durationMinutes,
+                bufferBeforeMinutes,
+                bufferAfterMinutes,
+                secret,
+                minNoticeMinutes,
+                horizonDays,
+                locationType,
+                locationDetail,
+                slotIntervalMinutes,
+                requiresApproval);
         return detailInstance(id); // managed entity flushes on commit
+    }
+
+    /**
+     * Resolves a submitted username to an {@link AppUser} eligible to co-host {@code typeId}:
+     * known, enabled, onboarded, not the creator, and not already a host (any status). Throws
+     * {@link IllegalStateException} on any failure so the caller can render one uniform alert.
+     */
+    private AppUser resolveEligibleCohost(Long typeId, Long creatorOwnerId, String username) {
+        AppUser candidate = (username == null || username.isBlank()) ? null : AppUser.findByUsername(username);
+        if (!meetingHosts.eligibleCohost(typeId, creatorOwnerId, candidate)) {
+            throw new IllegalStateException(m().adm_hosts_error_not_eligible());
+        }
+        return candidate;
+    }
+
+    @POST
+    @Path("/meeting-types/{id}/hosts")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    @Transactional
+    public TemplateInstance addCohost(@PathParam("id") Long id, @RestForm String cohost) {
+        MeetingType t = requireType(id);
+        try {
+            AppUser candidate = resolveEligibleCohost(t.id, t.ownerId, cohost);
+            meetingHosts.addCohost(t, candidate); // cap / slug-collision -> IllegalStateException
+        } catch (IllegalStateException e) {
+            return detailInstance(id, localizedMessage(e));
+        }
+        return detailInstance(id);
+    }
+
+    /**
+     * Removes a co-host. Task 18: when the co-host still has future (PENDING|CONFIRMED) group
+     * bookings on this type, a plain POST (no {@code choice}) renders a keep-vs-cancel interstitial
+     * instead of removing right away — {@code choice=keep} removes the host and leaves those
+     * bookings as-is; {@code choice=cancel} cancels every one of them first (see {@link
+     * BookingService#cancelFutureGroupBookingsForHost}), then removes the host. No future bookings
+     * -> unchanged behavior: removed immediately. Reverts to single-host automatically once the
+     * last co-host is gone (see {@link MeetingHosts#removeHost}).
+     *
+     * <p>Task 17 review fix: the CREATOR row must never be removable — the {@code _hostlist.html}
+     * remove button is already hidden for the CREATOR row client-side, but a direct POST with the
+     * owner's own id used to pass {@link #requireType} (the owner owns the type) and delete the
+     * CREATOR row, silently dropping the owner out of {@link MeetingHosts#hostOwnerIds} and NPE-ing
+     * every later booking. Checked here (localizable) before ever calling {@link
+     * MeetingHosts#removeHost}, which also carries the same guard as defense-in-depth.
+     */
+    @POST
+    @Path("/meeting-types/{id}/hosts/{cohostOwnerId}/remove")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    @Transactional
+    public TemplateInstance removeCohost(
+            @PathParam("id") Long id,
+            @PathParam("cohostOwnerId") Long cohostOwnerId,
+            @QueryParam("choice") String choice) {
+        MeetingType t = requireType(id);
+        try {
+            if (cohostOwnerId.equals(t.ownerId)) {
+                throw new IllegalStateException(m().adm_hosts_error_creator_immutable());
+            }
+            if ("cancel".equals(choice)) {
+                bookingService.cancelFutureGroupBookingsForHost(t, cohostOwnerId);
+                meetingHosts.removeHost(t, cohostOwnerId);
+            } else if ("keep".equals(choice)) {
+                meetingHosts.removeHost(t, cohostOwnerId);
+            } else {
+                long futureCount = meetingHosts.countFutureBookings(t, cohostOwnerId);
+                if (futureCount > 0) {
+                    return removeHostConfirmInstance(t, cohostOwnerId, futureCount);
+                }
+                meetingHosts.removeHost(t, cohostOwnerId);
+            }
+        } catch (IllegalStateException e) {
+            return detailInstance(id, e.getMessage());
+        }
+        return detailInstance(id);
+    }
+
+    /** Renders the Task 18 keep-vs-cancel interstitial for removing a co-host with future bookings. */
+    private TemplateInstance removeHostConfirmInstance(MeetingType t, Long cohostOwnerId, long futureCount) {
+        AppUser cohost = AppUser.findById(cohostOwnerId);
+        return Templates.removeHostConfirm(
+                t,
+                cohostOwnerId,
+                cohost != null ? cohost.username : "?",
+                futureCount,
+                pendingCount(),
+                isAdmin(),
+                m().adm_hosts_removeConfirm_title());
     }
 
     @POST
@@ -582,18 +884,7 @@ public class AdminResource {
         o.meetingTypeId = id;
         o.overrideDate = LocalDate.parse(date);
         o.persist(); // need the generated id before persisting child windows
-        List<String> starts = form.getOrDefault("windowStart", List.of());
-        List<String> ends = form.getOrDefault("windowEnd", List.of());
-        for (var i = 0; i < starts.size() && i < ends.size(); i++) {
-            if (starts.get(i).isBlank() || ends.get(i).isBlank()) {
-                continue;
-            }
-            DateOverrideWindow w = new DateOverrideWindow();
-            w.dateOverrideId = o.id;
-            w.startTime = LocalTime.parse(starts.get(i));
-            w.endTime = LocalTime.parse(ends.get(i));
-            w.persist();
-        }
+        persistWindows(o.id, form);
         return detailInstance(id);
     }
 
@@ -695,9 +986,10 @@ public class AdminResource {
     /**
      * Zip parallel frameDay[]/frameStart[]/frameEnd[] arrays into AvailabilityRule rows for one
      * scope (meetingTypeId null = global, non-null = per-type). Skips a frame whose start or end is
-     * blank, or whose end is not strictly after its start.
+     * blank, whose end is not strictly after its start, or whose day/start/end cannot be parsed
+     * (crafted/garbage input) — a single bad frame must never 500 the whole save.
      */
-    private void persistFrames(Long ownerId, Long meetingTypeId, MultivaluedMap<String, String> form) {
+    static void persistFrames(Long ownerId, Long meetingTypeId, MultivaluedMap<String, String> form) {
         List<String> days = form.getOrDefault("frameDay", List.of());
         List<String> starts = form.getOrDefault("frameStart", List.of());
         List<String> ends = form.getOrDefault("frameEnd", List.of());
@@ -705,15 +997,23 @@ public class AdminResource {
             if (starts.get(i).isBlank() || ends.get(i).isBlank()) {
                 continue;
             }
-            var start = LocalTime.parse(starts.get(i));
-            var end = LocalTime.parse(ends.get(i));
+            DayOfWeek day;
+            LocalTime start;
+            LocalTime end;
+            try {
+                day = DayOfWeek.valueOf(days.get(i));
+                start = LocalTime.parse(starts.get(i));
+                end = LocalTime.parse(ends.get(i));
+            } catch (DateTimeParseException | IllegalArgumentException _) {
+                continue; // unparseable frame — skip it rather than 500 the whole save
+            }
             if (!end.isAfter(start)) {
                 continue;
             } // drop zero-length / inverted frames
             AvailabilityRule r = new AvailabilityRule();
             r.ownerId = ownerId;
             r.meetingTypeId = meetingTypeId;
-            r.dayOfWeek = DayOfWeek.valueOf(days.get(i));
+            r.dayOfWeek = day;
             r.startTime = start;
             r.endTime = end;
             r.persist();
@@ -885,19 +1185,7 @@ public class AdminResource {
         o.overrideDate = LocalDate.parse(date);
         o.meetingTypeId = typeId; // null = global override
         o.persist(); // need the generated id before persisting child windows
-        // Zip parallel windowStart[]/windowEnd[] into windows; none → zero windows = day off.
-        List<String> starts = form.getOrDefault("windowStart", List.of());
-        List<String> ends = form.getOrDefault("windowEnd", List.of());
-        for (var i = 0; i < starts.size() && i < ends.size(); i++) {
-            if (starts.get(i).isBlank() || ends.get(i).isBlank()) {
-                continue;
-            }
-            DateOverrideWindow w = new DateOverrideWindow();
-            w.dateOverrideId = o.id;
-            w.startTime = LocalTime.parse(starts.get(i));
-            w.endTime = LocalTime.parse(ends.get(i));
-            w.persist();
-        }
+        persistWindows(o.id, form);
         return Templates.dateOverrides(
                 overridesWithWindows(),
                 MeetingType.listForOwner(currentOwner.id()),
@@ -986,8 +1274,11 @@ public class AdminResource {
     public TemplateInstance ownerReschedule(@PathParam("id") Long id, @RestForm String startUtc) {
         Booking b = requireOwnedBooking(id);
         // Time only -- guests untouched (null). Host edits guests via /me/bookings/{id}/edit-details.
-        bookingService.reschedule(b.manageToken, Instant.parse(startUtc), null, true); // host-initiated
-        return dashboard(); // re-render /me; rescheduled booking reflects its new time (or moves to pending queue)
+        // initiatorOwnerId = this acting host: for a multi-host GROUP booking, spares their own row
+        // instead of resetting every host back to PENDING (see reschedule's javadoc).
+        bookingService.reschedule(b.manageToken, Instant.parse(startUtc), null, true, currentOwner.id());
+        return dashboard(); // re-render /me; rescheduled booking reflects its new time (stays confirmed -- an
+        // owner-initiated reschedule never reverts an approval booking to pending, see reschedule's javadoc)
     }
 
     @POST
