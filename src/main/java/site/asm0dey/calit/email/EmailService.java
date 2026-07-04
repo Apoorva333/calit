@@ -39,7 +39,6 @@ public class EmailService {
     private static final String INVITEE_ROLE = "invitee";
 
     private static final String OWNER_ROLE = "owner";
-    private static final String GUEST_ROLE = "guest";
 
     @Inject
     MailSender mailSender;
