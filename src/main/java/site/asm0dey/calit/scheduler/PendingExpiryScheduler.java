@@ -138,55 +138,64 @@ public class PendingExpiryScheduler {
                 // just the one that happened to be claimed, and send a single declined email (fanned
                 // out per host by EmailService) keyed on the group's lead row.
                 if (b.groupId != null) {
-                    Long creatorOwnerId = MeetingType.<MeetingType>findById(b.meetingTypeId).ownerId;
-                    Long leadId = Booking.leadOfGroup(b.groupId, creatorOwnerId).id;
-                    // Cheap idempotency guard (kept alongside the advisory lock, which is the primary
-                    // serialization point): the advisory lock only guarantees no OTHER tick is
-                    // concurrently declining this group THIS round -- the group could already have
-                    // been declined in an earlier round (e.g. a host action), so re-check the lead row.
-                    // PESSIMISTIC_WRITE is safe here: only the advisory-lock owner ever reaches this
-                    // line for a given group, and we hold no other row locks, so it can't cycle.
-                    Booking lead = Booking.findById(leadId, LockModeType.PESSIMISTIC_WRITE);
-                    if (lead.status == BookingStatus.DECLINED) {
-                        // Already processed -- nothing to do, and critically no second declined
-                        // email. NOTE: the lead row need not have been PENDING to begin with (e.g.
-                        // lead already CONFIRMED, a sibling still PENDING and expired) -- only
-                        // DECLINED means "already processed".
-                        continue;
-                    }
-                    for (Booking r : Booking.<Booking>group(b.groupId)) {
-                        if (r.status == BookingStatus.DECLINED) {
-                            continue; // already declined (e.g. by a concurrent host action); idempotent skip
-                        }
-                        r.status = BookingStatus.DECLINED; // flipped while holding the group's advisory lock
-                        Reminder.deleteUnsentFor(r.id); // was ReminderScheduler.onDeclined observer
-                    }
-                    // Guard covers a render/load failure (throws before any persist): the flip +
-                    // cleanup still commit, one mail dropped. A crash (not caught) rolls back the
-                    // whole tx pre-commit and the row is reclaimed next tick -- the crash-safety
-                    // guarantee.
-                    try {
-                        emailService.enqueueDeclined(lead.id); // durable, same tx
-                    } catch (Exception ex) {
-                        Log.errorf(
-                                ex,
-                                "declined enqueue failed for group %s lead booking %d (declined, mail dropped)",
-                                b.groupId,
-                                lead.id);
-                    }
+                    declineGroup(b);
+                    continue;
                 } else {
-                    b.status = BookingStatus.DECLINED; // flipped while holding this booking's advisory lock
-                    Reminder.deleteUnsentFor(id); // was ReminderScheduler.onDeclined observer
-                    // Guard covers a render/load failure (throws before any persist): the flip + cleanup
-                    // still commit, one mail dropped. A crash (not caught) rolls back the whole tx pre-commit
-                    // and the row is reclaimed next tick -- the crash-safety guarantee.
-                    try {
-                        emailService.enqueueDeclined(id); // was EmailService.onDeclined observer; durable, same tx
-                    } catch (Exception ex) {
-                        Log.errorf(ex, "declined enqueue failed for booking %d (declined, mail dropped)", id);
-                    }
+                    declineSingle(id, b);
                 }
             }
         });
+    }
+
+    private void declineGroup(Booking b) {
+        Long creatorOwnerId = MeetingType.<MeetingType>findById(b.meetingTypeId).ownerId;
+        Long leadId = Booking.leadOfGroup(b.groupId, creatorOwnerId).id;
+        // Cheap idempotency guard (kept alongside the advisory lock, which is the primary
+        // serialization point): the advisory lock only guarantees no OTHER tick is
+        // concurrently declining this group THIS round -- the group could already have
+        // been declined in an earlier round (e.g. a host action), so re-check the lead row.
+        // PESSIMISTIC_WRITE is safe here: only the advisory-lock owner ever reaches this
+        // line for a given group, and we hold no other row locks, so it can't cycle.
+        Booking lead = Booking.findById(leadId, LockModeType.PESSIMISTIC_WRITE);
+        if (lead.status == BookingStatus.DECLINED) {
+            // Already processed -- nothing to do, and critically no second declined
+            // email. NOTE: the lead row need not have been PENDING to begin with (e.g.
+            // lead already CONFIRMED, a sibling still PENDING and expired) -- only
+            // DECLINED means "already processed".
+            return;
+        }
+        for (Booking r : Booking.<Booking>group(b.groupId)) {
+            if (r.status == BookingStatus.DECLINED) {
+                continue; // already declined (e.g. by a concurrent host action); idempotent skip
+            }
+            r.status = BookingStatus.DECLINED; // flipped while holding the group's advisory lock
+            Reminder.deleteUnsentFor(r.id); // was ReminderScheduler.onDeclined observer
+        }
+        // Guard covers a render/load failure (throws before any persist): the flip +
+        // cleanup still commit, one mail dropped. A crash (not caught) rolls back the
+        // whole tx pre-commit and the row is reclaimed next tick -- the crash-safety
+        // guarantee.
+        try {
+            emailService.enqueueDeclined(lead.id); // durable, same tx
+        } catch (Exception ex) {
+            Log.errorf(
+                    ex,
+                    "declined enqueue failed for group %s lead booking %d (declined, mail dropped)",
+                    b.groupId,
+                    lead.id);
+        }
+    }
+
+    private void declineSingle(Long id, Booking b) {
+        b.status = BookingStatus.DECLINED; // flipped while holding this booking's advisory lock
+        Reminder.deleteUnsentFor(id); // was ReminderScheduler.onDeclined observer
+        // Guard covers a render/load failure (throws before any persist): the flip + cleanup
+        // still commit, one mail dropped. A crash (not caught) rolls back the whole tx pre-commit
+        // and the row is reclaimed next tick -- the crash-safety guarantee.
+        try {
+            emailService.enqueueDeclined(id); // was EmailService.onDeclined observer; durable, same tx
+        } catch (Exception ex) {
+            Log.errorf(ex, "declined enqueue failed for booking %d (declined, mail dropped)", id);
+        }
     }
 }
