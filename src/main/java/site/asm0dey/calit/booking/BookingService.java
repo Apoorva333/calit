@@ -129,10 +129,15 @@ public class BookingService {
         var singleHost = hostIds.size() == 1;
         Map<Instant, TimeSlot> candidate = null;
         for (Long hostId : hostIds) {
-            Map<Instant, TimeSlot> hostFree =
-                    hostFreeSlots(type, hostId, from, to, excludeBookingIds, earliest, latest, singleHost);
-            if (hostFree == null) {
-                return List.of(); // any host's calendar unverifiable (multi-host) -> offer nothing
+            Map<Instant, TimeSlot> hostFree;
+            if (singleHost) {
+                hostFree = hostFreeSlots(type, hostId, from, to, excludeBookingIds, earliest, latest, singleHost);
+            } else {
+                try {
+                    hostFree = hostFreeSlots(type, hostId, from, to, excludeBookingIds, earliest, latest, singleHost);
+                } catch (CalendarUnavailableException _) {
+                    return List.of(); // any host's calendar unverifiable (multi-host) -> offer nothing
+                }
             }
             if (candidate == null) {
                 candidate = hostFree;
@@ -148,14 +153,14 @@ public class BookingService {
 
     /**
      * One host's free slot-start set for {@code [from, to]}: raw slots (buffer/min-notice/horizon
-     * filters applied) whose buffered interval does not overlap that host's busy set. Single-host
-     * keeps the pre-multi-host contract of letting {@link CalendarUnavailableException} from {@link
-     * #busyIntervals} propagate (the web layer renders the "temporarily unavailable" page for it);
-     * multi-host catches it and returns {@code null} as a fail-closed sentinel -- the caller must
-     * then return an empty slot list for the whole request, since it can't sensibly render
-     * "unavailable" for just one host out of several bookable ones. Split out of {@link
-     * #availableSlots(MeetingType, LocalDate, LocalDate, Set)} to keep that method's cognitive
-     * complexity in check.
+     * filters applied) whose buffered interval does not overlap that host's busy set. Always
+     * returns a real map -- never {@code null}. Lets {@link CalendarUnavailableException} from
+     * {@link #busyIntervals} propagate to the caller; the single-host caller lets it bubble up
+     * further (the web layer renders the "temporarily unavailable" page for it), while the
+     * multi-host caller catches it and fails closed to an empty slot list for the whole request,
+     * since it can't sensibly render "unavailable" for just one host out of several bookable ones.
+     * Split out of {@link #availableSlots(MeetingType, LocalDate, LocalDate, Set)} to keep that
+     * method's cognitive complexity in check.
      */
     private Map<Instant, TimeSlot> hostFreeSlots(
             MeetingType type,
@@ -169,16 +174,7 @@ public class BookingService {
         ZoneId zone = ZoneId.of(OwnerSettings.forOwner(hostId).timezone);
         var fromInstant = from.atStartOfDay(zone).toInstant();
         var toInstant = to.plusDays(1).atStartOfDay(zone).toInstant();
-        List<Interval> busy;
-        if (singleHost) {
-            busy = busyIntervals(hostId, fromInstant, toInstant, excludeBookingIds);
-        } else {
-            try {
-                busy = busyIntervals(hostId, fromInstant, toInstant, excludeBookingIds);
-            } catch (CalendarUnavailableException _) {
-                return null; // any host's calendar unverifiable -> caller offers nothing
-            }
-        }
+        List<Interval> busy = busyIntervals(hostId, fromInstant, toInstant, excludeBookingIds);
         int bufBefore = meetingHosts.effectiveBufferBefore(type, hostId);
         int bufAfter = meetingHosts.effectiveBufferAfter(type, hostId);
         Map<Instant, TimeSlot> hostFree = new LinkedHashMap<>();

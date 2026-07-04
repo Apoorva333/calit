@@ -278,7 +278,7 @@ public class SharedMeetingsResource {
         }
         try {
             return LocalDate.parse(raw);
-        } catch (DateTimeParseException e) {
+        } catch (DateTimeParseException _) {
             return null;
         }
     }
@@ -289,7 +289,7 @@ public class SharedMeetingsResource {
         }
         try {
             return LocalTime.parse(raw);
-        } catch (DateTimeParseException e) {
+        } catch (DateTimeParseException _) {
             return null;
         }
     }
@@ -336,7 +336,7 @@ public class SharedMeetingsResource {
         try {
             var value = Integer.parseInt(raw.trim());
             return Math.max(value, 0);
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException _) {
             return null;
         }
     }

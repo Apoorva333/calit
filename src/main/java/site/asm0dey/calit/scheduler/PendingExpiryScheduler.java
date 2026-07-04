@@ -106,45 +106,56 @@ public class PendingExpiryScheduler {
                 // Defensive parse: driver/Hibernate version can return a uuid column as either
                 // java.util.UUID or its String form from a scalar native query.
                 var groupId = row[1] == null ? null : UUID.fromString(row[1].toString());
-
-                // Non-blocking: two ticks racing on the same group/booking never wait on each
-                // other, so no wait-for cycle -- and thus no deadlock -- can ever form. The prefix
-                // keeps the group and single-booking key spaces disjoint (a group_id and a booking
-                // id could otherwise theoretically collide once hashed).
-                var lockKey = groupId != null ? GROUP_LOCK_PREFIX + groupId : SINGLE_LOCK_PREFIX + id;
-                boolean owns = Boolean.TRUE.equals(
-                        em.createNativeQuery("select pg_try_advisory_xact_lock(hashtextextended(?1, 0))")
-                                .setParameter(1, lockKey)
-                                .getSingleResult());
-                if (!owns) {
-                    // Another tick already owns this group/booking this round -- it will process
-                    // (or has already processed) it under its own advisory lock. We hold NO row
-                    // lock on this candidate, so skipping here can never block or deadlock anyone.
-                    continue;
-                }
-
-                // We now exclusively own this group/booking for the round. Nobody else can be
-                // concurrently declining it, but its status may have changed since the lock-free
-                // SELECT above -- either a sibling candidate row of the SAME group earlier in THIS
-                // batch already declined it, or (single-booking case) it was handled by a fully
-                // separate previous round. Re-check before acting.
-                Booking b = Booking.findById(id);
-                if (b.status != BookingStatus.PENDING) {
-                    continue;
-                }
-
-                // Multi-host: the hold window elapsing on ANY row without full approval means the
-                // whole conceptual meeting failed to convene -- decline every row in the group, not
-                // just the one that happened to be claimed, and send a single declined email (fanned
-                // out per host by EmailService) keyed on the group's lead row.
-                if (b.groupId != null) {
-                    declineGroup(b);
-                    continue;
-                } else {
-                    declineSingle(id, b);
-                }
+                processCandidate(id, groupId);
             }
         });
+    }
+
+    /**
+     * Per-candidate: try the non-blocking advisory lock, skip on loss, reload the booking and
+     * re-check its status, then dispatch to {@link #declineGroup} or {@link #declineSingle}. Runs
+     * synchronously inside the SAME {@code requiringNew()} transaction started by the caller's loop
+     * in {@link #claimAndDeclineExpired()} -- this is a plain private helper, not a separate
+     * transactional boundary, so the advisory lock and the eventual flip + email enqueue still
+     * commit or roll back together. Split out to keep {@code claimAndDeclineExpired}'s cognitive
+     * complexity in check.
+     */
+    private void processCandidate(Long id, UUID groupId) {
+        // Non-blocking: two ticks racing on the same group/booking never wait on each
+        // other, so no wait-for cycle -- and thus no deadlock -- can ever form. The prefix
+        // keeps the group and single-booking key spaces disjoint (a group_id and a booking
+        // id could otherwise theoretically collide once hashed).
+        var lockKey = groupId != null ? GROUP_LOCK_PREFIX + groupId : SINGLE_LOCK_PREFIX + id;
+        boolean owns =
+                Boolean.TRUE.equals(em.createNativeQuery("select pg_try_advisory_xact_lock(hashtextextended(?1, 0))")
+                        .setParameter(1, lockKey)
+                        .getSingleResult());
+        if (!owns) {
+            // Another tick already owns this group/booking this round -- it will process
+            // (or has already processed) it under its own advisory lock. We hold NO row
+            // lock on this candidate, so skipping here can never block or deadlock anyone.
+            return;
+        }
+
+        // We now exclusively own this group/booking for the round. Nobody else can be
+        // concurrently declining it, but its status may have changed since the lock-free
+        // SELECT above -- either a sibling candidate row of the SAME group earlier in THIS
+        // batch already declined it, or (single-booking case) it was handled by a fully
+        // separate previous round. Re-check before acting.
+        Booking b = Booking.findById(id);
+        if (b.status != BookingStatus.PENDING) {
+            return;
+        }
+
+        // Multi-host: the hold window elapsing on ANY row without full approval means the
+        // whole conceptual meeting failed to convene -- decline every row in the group, not
+        // just the one that happened to be claimed, and send a single declined email (fanned
+        // out per host by EmailService) keyed on the group's lead row.
+        if (b.groupId != null) {
+            declineGroup(b);
+        } else {
+            declineSingle(id, b);
+        }
     }
 
     private void declineGroup(Booking b) {

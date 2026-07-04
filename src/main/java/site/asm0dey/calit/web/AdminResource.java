@@ -984,7 +984,7 @@ public class AdminResource {
                 day = DayOfWeek.valueOf(days.get(i));
                 start = LocalTime.parse(starts.get(i));
                 end = LocalTime.parse(ends.get(i));
-            } catch (DateTimeParseException | IllegalArgumentException e) {
+            } catch (DateTimeParseException | IllegalArgumentException _) {
                 continue; // unparseable frame — skip it rather than 500 the whole save
             }
             if (!end.isAfter(start)) {
