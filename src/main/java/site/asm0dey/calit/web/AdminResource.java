@@ -15,6 +15,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -965,7 +966,8 @@ public class AdminResource {
     /**
      * Zip parallel frameDay[]/frameStart[]/frameEnd[] arrays into AvailabilityRule rows for one
      * scope (meetingTypeId null = global, non-null = per-type). Skips a frame whose start or end is
-     * blank, or whose end is not strictly after its start.
+     * blank, whose end is not strictly after its start, or whose day/start/end cannot be parsed
+     * (crafted/garbage input) — a single bad frame must never 500 the whole save.
      */
     static void persistFrames(Long ownerId, Long meetingTypeId, MultivaluedMap<String, String> form) {
         List<String> days = form.getOrDefault("frameDay", List.of());
@@ -975,15 +977,23 @@ public class AdminResource {
             if (starts.get(i).isBlank() || ends.get(i).isBlank()) {
                 continue;
             }
-            var start = LocalTime.parse(starts.get(i));
-            var end = LocalTime.parse(ends.get(i));
+            DayOfWeek day;
+            LocalTime start;
+            LocalTime end;
+            try {
+                day = DayOfWeek.valueOf(days.get(i));
+                start = LocalTime.parse(starts.get(i));
+                end = LocalTime.parse(ends.get(i));
+            } catch (DateTimeParseException | IllegalArgumentException e) {
+                continue; // unparseable frame — skip it rather than 500 the whole save
+            }
             if (!end.isAfter(start)) {
                 continue;
             } // drop zero-length / inverted frames
             AvailabilityRule r = new AvailabilityRule();
             r.ownerId = ownerId;
             r.meetingTypeId = meetingTypeId;
-            r.dayOfWeek = DayOfWeek.valueOf(days.get(i));
+            r.dayOfWeek = day;
             r.startTime = start;
             r.endTime = end;
             r.persist();

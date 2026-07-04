@@ -11,6 +11,7 @@ import java.time.LocalTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.calit.domain.AvailabilityRule;
+import site.asm0dey.calit.domain.DateOverride;
 import site.asm0dey.calit.domain.MeetingType;
 import site.asm0dey.calit.domain.MeetingTypeHost;
 import site.asm0dey.calit.test.MultiHostFixtures;
@@ -145,5 +146,94 @@ class CohostAvailabilityAuthzTest {
         List<AvailabilityRule> bRules = AvailabilityRule.list("ownerId = ?1 and meetingTypeId = ?2", cohostB.id, t.id);
         assertEquals(1, bRules.size(), "cohost B's own row must be written under their own owner_id");
         assertEquals(DayOfWeek.WEDNESDAY, bRules.get(0).dayOfWeek);
+    }
+
+    // ---- Task 19-fix: crafted/garbage input must never 500 ----
+
+    @Test
+    @TestSecurity(
+            user = "cohost-buf-nonnumeric",
+            roles = {"user"})
+    void nonNumericBufferIsTreatedAsUnsetNot500() {
+        AppUser cohost = seedUser("cohost-buf-nonnumeric");
+        MeetingType t = seedTwoHostType(1L, cohost.id, "authz-buf-nonnum-" + System.nanoTime());
+
+        given().contentType("application/x-www-form-urlencoded")
+                .formParam("bufferBeforeMinutes", "not-a-number")
+                .formParam("bufferAfterMinutes", "also-bogus")
+                .when()
+                .post("/me/shared/" + t.id + "/buffers")
+                .then()
+                .statusCode(200);
+
+        MeetingTypeHost h = MeetingTypeHost.find(t.id, cohost.id);
+        assertEquals(null, h.bufferBeforeMinutes, "non-numeric buffer must be treated as unset (inherit default)");
+        assertEquals(null, h.bufferAfterMinutes, "non-numeric buffer must be treated as unset (inherit default)");
+    }
+
+    @Test
+    @TestSecurity(
+            user = "cohost-buf-negative",
+            roles = {"user"})
+    void negativeBufferIsClampedToZeroNot500() {
+        AppUser cohost = seedUser("cohost-buf-negative");
+        MeetingType t = seedTwoHostType(1L, cohost.id, "authz-buf-neg-" + System.nanoTime());
+
+        given().contentType("application/x-www-form-urlencoded")
+                .formParam("bufferBeforeMinutes", "-15")
+                .formParam("bufferAfterMinutes", "10")
+                .when()
+                .post("/me/shared/" + t.id + "/buffers")
+                .then()
+                .statusCode(200);
+
+        MeetingTypeHost h = MeetingTypeHost.find(t.id, cohost.id);
+        assertEquals(0, h.bufferBeforeMinutes, "negative buffer must be clamped to 0, never persisted as negative");
+        assertEquals(10, h.bufferAfterMinutes);
+    }
+
+    @Test
+    @TestSecurity(
+            user = "cohost-frame-bad",
+            roles = {"user"})
+    void malformedFrameTimeIsSkippedValidFramesStillSaved() {
+        AppUser cohost = seedUser("cohost-frame-bad");
+        MeetingType t = seedTwoHostType(1L, cohost.id, "authz-frame-bad-" + System.nanoTime());
+
+        given().contentType("application/x-www-form-urlencoded")
+                .formParam("frameDay", "MONDAY", "TUESDAY")
+                .formParam("frameStart", "not-a-time", "09:00")
+                .formParam("frameEnd", "17:00", "17:00")
+                .when()
+                .post("/me/shared/" + t.id + "/availability/bulk")
+                .then()
+                .statusCode(200);
+
+        List<AvailabilityRule> rules = AvailabilityRule.list("ownerId = ?1 and meetingTypeId = ?2", cohost.id, t.id);
+        assertEquals(1, rules.size(), "the malformed frame must be skipped, the valid one persisted");
+        assertEquals(DayOfWeek.TUESDAY, rules.get(0).dayOfWeek);
+    }
+
+    @Test
+    @TestSecurity(
+            user = "cohost-date-bad",
+            roles = {"user"})
+    void malformedOverrideDateIsSkippedNot500() {
+        AppUser cohost = seedUser("cohost-date-bad");
+        MeetingType t = seedTwoHostType(1L, cohost.id, "authz-date-bad-" + System.nanoTime());
+
+        given().contentType("application/x-www-form-urlencoded")
+                .formParam("date", "not-a-date")
+                .formParam("windowStart", "09:00")
+                .formParam("windowEnd", "17:00")
+                .when()
+                .post("/me/shared/" + t.id + "/date-overrides")
+                .then()
+                .statusCode(200);
+
+        assertEquals(
+                0,
+                DateOverride.count("ownerId = ?1 and meetingTypeId = ?2", cohost.id, t.id),
+                "a malformed override date must not be persisted");
     }
 }

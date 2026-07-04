@@ -19,6 +19,7 @@ import jakarta.ws.rs.core.MultivaluedMap;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import org.jboss.resteasy.reactive.RestForm;
@@ -239,10 +240,15 @@ public class SharedMeetingsResource {
     public TemplateInstance addOverride(
             @PathParam("typeId") Long typeId, @RestForm String date, MultivaluedMap<String, String> form) {
         requireAcceptedHost(typeId);
+        var overrideDate = parseDateOrNull(date);
+        if (overrideDate == null) {
+            // Malformed/crafted date: skip the whole override rather than 500ing the save.
+            return availabilityInstance(typeId, null);
+        }
         DateOverride o = new DateOverride();
         o.ownerId = currentOwner.id();
         o.meetingTypeId = typeId;
-        o.overrideDate = LocalDate.parse(date);
+        o.overrideDate = overrideDate;
         o.persist(); // need the generated id before persisting child windows
         List<String> starts = form.getOrDefault("windowStart", List.of());
         List<String> ends = form.getOrDefault("windowEnd", List.of());
@@ -250,13 +256,40 @@ public class SharedMeetingsResource {
             if (starts.get(i).isBlank() || ends.get(i).isBlank()) {
                 continue;
             }
+            var start = parseTimeOrNull(starts.get(i));
+            var end = parseTimeOrNull(ends.get(i));
+            if (start == null || end == null) {
+                continue; // unparseable window — skip it, keep the rest of the save
+            }
             DateOverrideWindow w = new DateOverrideWindow();
             w.dateOverrideId = o.id;
-            w.startTime = LocalTime.parse(starts.get(i));
-            w.endTime = LocalTime.parse(ends.get(i));
+            w.startTime = start;
+            w.endTime = end;
             w.persist();
         }
         return availabilityInstance(typeId, null);
+    }
+
+    private static LocalDate parseDateOrNull(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(raw);
+        } catch (DateTimeParseException e) {
+            return null;
+        }
+    }
+
+    private static LocalTime parseTimeOrNull(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalTime.parse(raw);
+        } catch (DateTimeParseException e) {
+            return null;
+        }
     }
 
     @POST
@@ -284,13 +317,26 @@ public class SharedMeetingsResource {
             @RestForm String bufferBeforeMinutes,
             @RestForm String bufferAfterMinutes) {
         MeetingTypeHost h = requireAcceptedHost(typeId);
-        h.bufferBeforeMinutes = parseOrNull(bufferBeforeMinutes);
-        h.bufferAfterMinutes = parseOrNull(bufferAfterMinutes);
+        h.bufferBeforeMinutes = parseNonNegativeIntOrNull(bufferBeforeMinutes);
+        h.bufferAfterMinutes = parseNonNegativeIntOrNull(bufferAfterMinutes);
         return availabilityInstance(typeId, null);
     }
 
-    private static Integer parseOrNull(String raw) {
-        return (raw == null || raw.isBlank()) ? null : Integer.valueOf(raw);
+    /**
+     * Blank/non-numeric input → {@code null} (inherit the type's default buffer); a negative
+     * number clamps to {@code 0} rather than being persisted (a negative buffer would wrongly
+     * widen availability). Never lets a {@link NumberFormatException} escape to a 500.
+     */
+    private static Integer parseNonNegativeIntOrNull(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            var value = Integer.parseInt(raw.trim());
+            return Math.max(value, 0);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     // ---- Co-host self-revoke (Task 18's keep-vs-cancel interstitial, from the co-host's side) ----
