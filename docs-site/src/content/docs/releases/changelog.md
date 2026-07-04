@@ -7,7 +7,7 @@ This changelog is maintained manually. The canonical release notes, including
 asset downloads, are on
 [GitHub Releases](https://github.com/asm0dey/calit/releases).
 
-## Unreleased
+## 1.16.0
 
 Multi-host meeting types — a meeting type can now require more than one host.
 
@@ -55,6 +55,16 @@ Multi-host meeting types — a meeting type can now require more than one host.
   *enhance* it. The multi-host co-host autocomplete is the first feature
   built this way: typing a username works and suggests matches with
   JavaScript on, and still works as a plain text field with JavaScript off.
+- **Booking page layout fixes.** The time-slots column now matches the
+  calendar's height and scrolls on its own instead of looking stunted (or
+  running longer than the calendar) beside it; available times render as a
+  compact grid rather than one lonely full-width button per row, and the day
+  and time you pick are echoed in the sidebar. The month calendar is
+  right-sized instead of oversized.
+- **Cleaner, more consistent screens.** Public pages are centered with the
+  footer pinned to the bottom — now a single row with a clearer language
+  switcher. Admin forms share one comfortable width, the co-host box is a
+  roomier card, and time fields no longer overlap their picker icon.
 
 ## 1.15.1
 
