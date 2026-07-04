@@ -9,6 +9,15 @@ asset downloads, are on
 
 ## Unreleased
 
+- **Invite users by email.** When a site admin adds a user, calit now sends
+  the person an **invitation email** with a link to set their own password,
+  instead of the admin setting a temporary password to share out-of-band. The
+  new account stays dormant (cannot log in) and shows **Awaiting activation**
+  until the link is used; the activation link is valid for **48 hours**, and
+  admins can **Resend invite** for a fresh link. Uses the existing `MAIL_*` and
+  `APP_BASE_URL` config — no new settings. See
+  [Users & admin](/calit/usage/users-admin/).
+
 - **Self-hosted ALTCHA CAPTCHA.** The booking form's bot protection is now
   pluggable via `CAPTCHA_PROVIDER` (`none` | `turnstile` | `altcha`). The new
   **ALTCHA** option is a privacy-first, self-hosted proof-of-work challenge —
