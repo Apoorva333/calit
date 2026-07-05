@@ -88,4 +88,20 @@ class LayoutLocaleMarkerTest {
                 // Calendar script derives month/weekday names via Intl
                 .body(containsString("Intl.DateTimeFormat"));
     }
+
+    /** The tz-bar text itself is server-rendered, so it must be localized (was hardcoded English). */
+    @Test
+    void tzBarIsLocalized() {
+        when(calendarPort.isConnected(anyLong())).thenReturn(true);
+        when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
+        seed();
+
+        given().header("Accept-Language", "de")
+                .when()
+                .get("/layouttest/lt-intro")
+                .then()
+                .statusCode(200)
+                .body(containsString("Zeiten angezeigt in:"))
+                .body(org.hamcrest.Matchers.not(containsString("Times shown in:")));
+    }
 }

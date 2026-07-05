@@ -1,5 +1,7 @@
 package site.asm0dey.calit.web;
 
+import site.asm0dey.calit.i18n.AppMessages;
+
 /**
  * The invitee-only timezone-picker bar + reformat script, and the booking-page calendar
  * enhancement script. Styling comes from Tailwind v4 + daisyUI 5 compiled to {@code /calit.css}.
@@ -64,15 +66,17 @@ public final class Layout {
             </script>
             """;
 
-    /** Reusable timezone-picker bar (detected zone selected client-side by TZ_SCRIPT). */
-    public static final String TZ_BAR = """
-            <div class="tz-bar">
-              Times shown in: <strong><span id="tz-label">your local time</span></strong>
-              <label style="display:inline">Change:
-                <select id="tz-picker"></select>
-              </label>
-            </div>
-            """;
+    /** Reusable timezone-picker bar (detected zone selected client-side by TZ_SCRIPT), localized. */
+    public static String tzBar(AppMessages m) {
+        return """
+                <div class="tz-bar">
+                  %s <strong><span id="tz-label">%s</span></strong>
+                  <label style="display:inline">%s
+                    <select id="tz-picker"></select>
+                  </label>
+                </div>
+                """.formatted(m.tz_bar_shown_in(), m.tz_bar_local_default(), m.tz_bar_change());
+    }
 
     /**
      * Vanilla-JS progressive enhancement for the booking/reschedule slot picker. The server

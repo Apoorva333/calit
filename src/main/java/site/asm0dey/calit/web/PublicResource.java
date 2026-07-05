@@ -226,7 +226,7 @@ public class PublicResource {
                 byDate,
                 fields,
                 null,
-                Layout.TZ_BAR,
+                Layout.tzBar(m),
                 Layout.TZ_SCRIPT,
                 Layout.CALENDAR_SCRIPT,
                 captchaProviderConfig.provider(),
@@ -354,7 +354,7 @@ public class PublicResource {
                     daySlots(type),
                     BookingField.formFor(type.ownerId, type.id),
                     be.getMessage(),
-                    Layout.TZ_BAR,
+                    Layout.tzBar(m),
                     Layout.TZ_SCRIPT,
                     Layout.CALENDAR_SCRIPT,
                     captchaProviderConfig.provider(),
@@ -391,7 +391,7 @@ public class PublicResource {
                 location,
                 when,
                 startUtcIso,
-                Layout.TZ_BAR,
+                Layout.tzBar(m),
                 Layout.TZ_SCRIPT);
     }
 
@@ -433,7 +433,7 @@ public class PublicResource {
                 current,
                 currentUtcIso,
                 byDate,
-                Layout.TZ_BAR,
+                Layout.tzBar(m),
                 Layout.TZ_SCRIPT,
                 Layout.CALENDAR_SCRIPT,
                 guestsCsv,
@@ -552,7 +552,11 @@ public class PublicResource {
         for (TimeSlot slot : bookingService.availableSlots(type, from, to)) {
             String isoDate = slot.start().toLocalDate().toString();
             var day = byIso.computeIfAbsent(
-                    isoDate, k -> new DaySlots(k, slot.start().format(DATE_FMT), new java.util.ArrayList<>()));
+                    isoDate,
+                    k -> new DaySlots(
+                            k,
+                            slot.start().format(DATE_FMT.withLocale(activeLocale.current())),
+                            new java.util.ArrayList<>()));
             day.slots()
                     .add(new SlotView(
                             slot.start().format(TIME_FMT),

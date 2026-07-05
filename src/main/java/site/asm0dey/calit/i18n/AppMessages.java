@@ -923,4 +923,14 @@ public interface AppMessages {
 
     @Message("Continue signing in")
     String auth_bridge_noscript_btn();
+
+    // -- Timezone bar (invitee-facing slot picker / confirmation / manage pages) --
+    @Message("Times shown in:")
+    String tz_bar_shown_in();
+
+    @Message("your local time")
+    String tz_bar_local_default();
+
+    @Message("Change:")
+    String tz_bar_change();
 }

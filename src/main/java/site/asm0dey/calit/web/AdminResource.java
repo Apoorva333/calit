@@ -28,6 +28,7 @@ import site.asm0dey.calit.google.GoogleCredential;
 import site.asm0dey.calit.i18n.ActiveLocale;
 import site.asm0dey.calit.i18n.AdminMessageResolver;
 import site.asm0dey.calit.i18n.AdminMessages;
+import site.asm0dey.calit.i18n.AppMessageResolver;
 import site.asm0dey.calit.user.AppUser;
 
 @Path("/me")
@@ -173,6 +174,9 @@ public class AdminResource {
     AdminMessageResolver adminMsgs;
 
     @Inject
+    AppMessageResolver appMsgs;
+
+    @Inject
     ActiveLocale activeLocale;
 
     /** True when the logged-in user holds the site-admin role (drives the Users nav link). */
@@ -225,7 +229,9 @@ public class AdminResource {
             var day = byIso.computeIfAbsent(
                     isoDate,
                     k -> new PublicResource.DaySlots(
-                            k, slot.start().format(MANAGE_DATE_FMT), new java.util.ArrayList<>()));
+                            k,
+                            slot.start().format(MANAGE_DATE_FMT.withLocale(activeLocale.current())),
+                            new java.util.ArrayList<>()));
             day.slots()
                     .add(new PublicResource.SlotView(
                             slot.start().format(MANAGE_TIME_FMT),
@@ -1312,7 +1318,7 @@ public class AdminResource {
                 guestsCsv,
                 pendingCount(),
                 isAdmin(),
-                Layout.TZ_BAR,
+                Layout.tzBar(appMsgs.forLocale(activeLocale.current())),
                 Layout.TZ_SCRIPT,
                 Layout.CALENDAR_SCRIPT,
                 m().adm_dashboard_h2(),
