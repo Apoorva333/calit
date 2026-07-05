@@ -3,29 +3,29 @@
 [![CI](https://github.com/asm0dey/calit/actions/workflows/ci.yml/badge.svg)](https://github.com/asm0dey/calit/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/asm0dey/calit?sort=semver)](https://github.com/asm0dey/calit/releases/latest)
 [![Container](https://img.shields.io/badge/ghcr.io-asm0dey%2Fcalit-2496ED?logo=docker&logoColor=white)](https://github.com/asm0dey/calit/pkgs/container/calit)
+[![Docs](https://img.shields.io/badge/docs-asm0dey.github.io%2Fcalit-3b82f6)](https://asm0dey.github.io/calit/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
-[![Quarkus](https://img.shields.io/badge/Quarkus-3.36-4695EB?logo=quarkus&logoColor=white)](https://quarkus.io)
+[![Quarkus](https://img.shields.io/badge/Quarkus-3.37-4695EB?logo=quarkus&logoColor=white)](https://quarkus.io)
 [![Java](https://img.shields.io/badge/Java-25-orange?logo=openjdk&logoColor=white)](https://bell-sw.com/libericajdk/)
 
-A **multi-user** scheduling app built on Quarkus — each user runs their own independent
-scheduling page: isolated meeting types, availability, bookings, settings, and Google account, served
-from a personal public URL `/<username>/<slug>`. You publish bookable meeting types; invitees pick
-a slot and book. Bookings sync to Google Calendar (optional), auto-create a Google Meet link, and
-email both parties. Includes per-type buffers, min-notice/booking-horizon, date-specific availability
-overrides, an approval workflow, custom booking-form fields, reminders, and public-form abuse
-protection (Cloudflare Turnstile + honeypot + per-email daily cap).
+**calit** is a self-hosted, multi-user scheduling app — a Calendly alternative built on Quarkus. Every
+user runs their own independent scheduling page at `/<username>/<slug>`: isolated meeting types,
+availability, bookings, settings, and Google account. Invitees pick a slot and book; bookings
+optionally sync to Google Calendar (auto Meet link) and email both parties. Pages are server-rendered
+with **no runtime JavaScript required**, and it runs as **N stateless replicas** behind a load
+balancer with all shared state in Postgres.
 
-**Users & isolation.** Every user is an `app_user` row (passwords hashed with **argon2id**). All
-tenant data carries an `owner_id`, and every query is owner-scoped — one user can never see or edit
-another's meeting types, bookings, settings, or calendar. Site admins (`is_admin`) manage users at
-`/me/users`: create users (with a one-time temporary password), grant/revoke admin, and lock/unlock
-accounts (a locked account can no longer log in, and its existing session cookie stops working).
+Features: per-type buffers, min-notice / booking-horizon, date-specific availability overrides, an
+approval workflow, custom booking-form fields, reminder emails, multi-user tenancy with per-user
+owner-scoping (argon2id passwords), site-admin user management, optional **Google Calendar** sync,
+optional **OIDC / SSO** login, and public-form abuse protection (Cloudflare Turnstile **or**
+self-hosted ALTCHA, plus honeypot + per-email daily cap). UI localised to **en / de / he**.
 
-It runs as **N identical stateless replicas** behind a load balancer — there is no in-process session
-state, all shared state lives in Postgres, and background work (reminders, pending-booking expiry) is
-multi-node-safe via Postgres `SELECT … FOR UPDATE SKIP LOCKED` with no leader election.
+## 📖 Documentation
 
----
+**Full docs — install, configuration, reverse-proxy, Google / Turnstile / ALTCHA / OIDC setup, usage,
+and changelog — live at <https://asm0dey.github.io/calit/>.** This README is intentionally short; the
+site is the source of truth.
 
 ## Screenshots
 
@@ -37,426 +37,40 @@ multi-node-safe via Postgres `SELECT … FOR UPDATE SKIP LOCKED` with no leader 
 |---|---|
 | ![Owner dashboard showing upcoming bookings and a side navigation](src/main/resources/META-INF/resources/img/product-dashboard.png) | ![Booking confirmation screen shown to the invitee after they pick a time](src/main/resources/META-INF/resources/img/product-confirmation.png) |
 
----
+## Run it
 
-## User accounts & onboarding
-
-- **First run (bootstrap).** When the database has no users, every request redirects to `/setup`,
-  which creates the first user as a **site admin**. Once any user exists, `/setup` returns 404.
-- **Admin-created users.** A site admin creates accounts at `/me/users` with a username and a
-  temporary password. The new user must change that password and complete the settings wizard on
-  first login.
-- **Opt-in self-service sign-up.** Public `/signup` is **off by default**. Set `SIGNUP_ENABLED=true`
-  to let anyone register (username + their own password); when off, `/signup` returns 404. Changing
-  the flag requires a restart — there is no runtime toggle.
-- **Sign in with Google.** When a Google OAuth client is configured, `/login` shows a
-  "Sign in with Google" button. A returning user (matched by the Google account's stable id, or
-  auto-linked on first use when their *verified* Google email matches exactly one existing account)
-  is logged straight in. An unknown Google account is provisioned a new user **only when
-  `SIGNUP_ENABLED=true`** (otherwise sign-in is refused), and is sent through the first-login wizard
-  with their email pre-filled. Register **both** `${APP_BASE_URL}/api/google/callback` (calendar) and
-  `${APP_BASE_URL}/api/google/login/callback` (sign-in) as authorized redirect URIs in Google. The
-  sign-in consent requests only your identity (email), not calendar access.
-- **First-login wizard (`/me/setup`).** On first login a user is sent to `/me/setup` and kept there
-  until onboarding is done: set a new password (only for admin-created temp-password accounts) and
-  fill in display name, email, and timezone. After that they land on `/me`.
-
-### URL scheme
-
-| Path | Audience |
-|---|---|
-| `/me`, `/me/meeting-types`, `/me/availability`, `/me/settings`, … | The logged-in user's own management UI. |
-| `/me/users` | Site admins only — user management. |
-| `/me/setup` | First-login onboarding wizard. |
-| `/{username}` | A user's public landing page (their active meeting types). |
-| `/{username}/{slug}` | Public booking page for one meeting type. |
-| `/setup` | First-run bootstrap (404 once a user exists). |
-| `/signup` | Self-service registration (404 unless `SIGNUP_ENABLED=true`). |
-| `/privacy`, `/terms` | Public privacy policy and terms of service (operator-customizable; required for Google OAuth verification). |
-
----
-
-## Requirements
-
-- **Java 25** and **Maven** to build (the Maven wrapper `./mvnw` is included). The Docker image builds
-  and runs on **BellSoft Liberica JDK/JRE 26**.
-- **Bun** to compile the stylesheet. The UI is styled with **Tailwind CSS v4 + daisyUI 5** (custom
-  `calit-light` theme); `bun run css:build` compiles `src/main/css/input.css` into the self-hosted
-  `/calit.css` — there is **no runtime CDN dependency** (web fonts aside). No JavaScript ships at runtime.
-- **PostgreSQL** at runtime. (For local dev/tests, Quarkus Dev Services starts a throwaway Postgres in
-  **Docker** automatically — Docker must be running to run the test suite or `quarkus:dev`.)
-- An **SMTP** account for outbound email.
-- *(Optional)* A **Google Cloud** OAuth client to sync each user's calendar + create Meet links.
-- *(Optional)* A **Cloudflare Turnstile** widget to harden the public booking form.
-
----
-
-## Quick start (local dev)
+Prebuilt multi-arch images are published to **`ghcr.io/asm0dey/calit`** (tags: `latest`, `1.18.0`,
+`1.18.0-native`). The fastest path is Docker Compose:
 
 ```bash
-# Docker must be running (Dev Services provisions Postgres + a mock mailbox).
-bun install            # once
-bun run css:watch &    # compiles src/main/css/input.css -> /calit.css and rebuilds on change
-mvn quarkus:dev
+cp .env.example .env    # set at least DB_PASSWORD, SESSION_ENCRYPTION_KEY, APP_BASE_URL, MAIL_*
+docker compose up -d    # pulls the image; Flyway migrates on boot
 ```
 
-(`/calit.css` is gitignored, so build it at least once or the pages render unstyled.)
+Full self-hosting instructions (compose file, required/optional env vars, reverse proxy, scaling,
+upgrade notes) → **[Installation docs](https://asm0dey.github.io/calit/)**.
 
-`bun install` also wires a [lefthook](https://github.com/evilmartians/lefthook) pre-commit hook that
-auto-formats staged files: Java with **Spotless + palantir-java-format**, and JS/CSS with **Prettier**
-(run `bun run format` to format the whole tree manually; `mvn verify` fails on unformatted Java).
+## Develop
 
-- Public booking site: <http://localhost:8080/>
-- Management UI: <http://localhost:8080/me> (form login at `/login`). On a fresh database, visit any
-  page and you'll be redirected to `/setup` to create the first (admin) user — there is **no** default
-  password.
-- Health: `/q/health/live`, `/q/health/ready`.
-
-In dev/test the mailer is mocked (no real email is sent) and Google/Turnstile are disabled by default,
-so you can exercise the whole booking flow with no external accounts.
-
-Run the tests (Docker required):
+Prereqs: **JDK 26** (build; the app targets Java 25), **Bun** (CSS), and **Docker** (Dev Services
+provisions a throwaway Postgres + mock mailer for dev and tests).
 
 ```bash
-mvn test
+bun install            # once — installs the Tailwind/daisyUI CLI + wires the lefthook pre-commit hook
+bun run css:watch &    # compiles src/main/css/input.css -> /calit.css (gitignored; build once)
+mvn quarkus:dev        # dev server at http://localhost:8080  (Docker must be running)
+mvn test               # full suite (Docker required)
 ```
 
-## Run with Docker Compose (recommended for self-hosting)
-
-The repo ships a `Dockerfile` (multi-stage: Bun compiles the CSS, BellSoft **Liberica JDK 26** builds
-the app, **Liberica JRE 26** runs it) and a `docker-compose.yml` that runs the app plus its Postgres.
-
-```bash
-cp .env.example .env          # then edit .env — at minimum set DB_PASSWORD, SESSION_ENCRYPTION_KEY,
-                              # APP_BASE_URL, and the MAIL_* values
-docker compose up --build -d
-```
-
-The app image builds from source (tests are skipped in the image — run `mvn test` on the host with
-Docker first), waits for a healthy Postgres, and Flyway applies the `V1…V14` migrations at boot. The
-DB is persisted in the `calit-db` volume. Reach it at `http://localhost:${APP_PORT:-8080}/`.
-
-Scale the stateless app behind your own load balancer:
-
-```bash
-docker compose up -d --scale app=3
-```
-
-(Everything below also applies to the compose deployment — the same env vars, set in `.env`.)
-
-### Or run the prebuilt image (no local build)
-
-Released versions are published as multi-arch images (linux/amd64 + linux/arm64) to GitHub
-Container Registry: **`ghcr.io/asm0dey/calit`** (tags: `latest`, `1.8.0`, `1.8`). To deploy without
-building from source, drop the `build:` and pull the image instead. Save this as `compose.yaml`:
-
-```yaml
-services:
-  db:
-    image: postgres:18
-    environment:
-      POSTGRES_DB: ${DB_NAME:-calit}
-      POSTGRES_USER: ${DB_USER:-calit}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
-    volumes:
-      - calit-db:/var/lib/postgresql   # postgres:18 default PGDATA moved under here
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-calit} -d ${DB_NAME:-calit}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-
-  app:
-    image: ghcr.io/asm0dey/calit:1.18.0   # or :latest (native variant: :1.18.0-native)
-    depends_on:
-      db:
-        condition: service_healthy
-    env_file:
-      - path: .env
-        required: false
-    environment:
-      DB_URL: jdbc:postgresql://db:5432/${DB_NAME:-calit}
-      DB_USER: ${DB_USER:-calit}
-      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
-    ports:
-      - "${APP_PORT:-8080}:8080"
-    restart: unless-stopped
-
-volumes:
-  calit-db:
-```
-
-```bash
-cp .env.example .env   # set DB_PASSWORD, SESSION_ENCRYPTION_KEY, APP_BASE_URL, MAIL_*
-docker compose up -d   # pulls the image; Flyway migrates on boot
-```
-
-The image is public — no `docker login` needed. (If you fork and keep the package private, run
-`docker login ghcr.io` with a token that has `read:packages` first.)
-
-## Build & run for production
-
-```bash
-mvn package
-java -Dquarkus.profile=prod -jar target/quarkus-app/quarkus-run.jar
-```
-
-The schema is created and kept up to date automatically: **Flyway runs the `V1…V14` migrations at
-boot** (`quarkus.flyway.migrate-at-start=true`), and Hibernate validates the entities against it.
-Point all replicas at the same database; each can serve any request.
-
----
-
-## Configuration (environment variables)
-
-All production config is supplied via environment variables (12-factor). Everything is read at startup;
-the same values must be present on every replica.
-
-### Required
-
-| Variable | Purpose |
-|---|---|
-| `DB_PASSWORD` | Postgres password. |
-| `SESSION_ENCRYPTION_KEY` | Encrypts the login cookie (>=16 chars). Must be the same on every replica. Generate with `openssl rand -hex 32`. **Required in prod.** |
-| `TOKEN_ENCRYPTION_KEY` | AES-256-GCM key for Google OAuth tokens at rest. 64 hex chars (`openssl rand -hex 32`). Must be the same on every replica; keep it stable. **Required in prod.** |
-| `APP_BASE_URL` | Public origin, e.g. `https://book.example.com`. Used to build invitee manage links in emails and the Google OAuth redirect; must match what users hit. |
-| `MAIL_HOST`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` | SMTP server + the "from" address. |
-
-### Common / defaulted
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `DB_URL` | `jdbc:postgresql://localhost:5432/calit` | JDBC URL. |
-| `DB_USER` | `calit` | Postgres user. |
-| `MAIL_PORT` | `587` | SMTP port. `587` for STARTTLS, `465` for implicit TLS. |
-| `MAIL_START_TLS` | `REQUIRED` | STARTTLS policy (`REQUIRED`/`OPTIONAL`/`DISABLED`). Use `REQUIRED` on port 587. |
-| `MAIL_TLS` | `false` | Implicit TLS (SMTPS). Set `true` for port 465; keep `false` for STARTTLS on 587. |
-| `REMINDER_LEAD_MINUTES` | `1440` | How long before a meeting the reminder email fires (24h). Also shown on the `/me/settings` page. |
-| `APPROVAL_HOLD_HOURS` | `24` | How long an approval-mode booking is held as PENDING before it auto-declines (or until its start, whichever comes first). |
-| `SCHEDULER_GRACE_SECONDS` | `30` | Treat reminder / pending-expiry rows as due up to N seconds early, so replicas on unsynchronised tick timers fire on time. `0` = exact. |
-| `PER_EMAIL_DAILY_CAP` | `10` | Max bookings one invitee email may create per day (abuse guard). |
-| `SIGNUP_ENABLED` | `false` | Allow public self-service sign-up at `/signup`. When `false`, `/signup` returns 404. |
-
-### Public site & Google verification (optional)
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `GOOGLE_SITE_VERIFICATION` | _(empty)_ | Google Search Console domain-verification token. When set, every page renders `<meta name="google-site-verification">`. Leave empty to verify via DNS TXT instead. |
-| `OPERATOR_NAME` | `APP_BASE_URL` | Legal entity shown as the data controller on `/privacy` and `/terms`. |
-| `PRIVACY_CONTACT_EMAIL` | _(empty)_ | Contact address shown on `/privacy` for privacy/data requests. Hidden when unset. |
-
-### Google Calendar sync (optional)
-
-Leave these unset to run in **degraded mode**: bookings still work, but no calendar events or Meet
-links are created and the app emails the invitee directly (instead of Google sending the invite).
-
-| Variable | Purpose |
-|---|---|
-| `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` | OAuth client credentials (see below). |
-| `GOOGLE_OAUTH_REDIRECT_URI` | **Optional.** Calendar-connect redirect URI. Defaults to `${APP_BASE_URL}/api/google/callback` — set it only to override (e.g. an unusual proxy path). Must match an authorized redirect URI registered with Google. |
-| `GOOGLE_OAUTH_LOGIN_REDIRECT_URI` | **Optional.** "Sign in with Google" redirect URI (separate from the calendar one). Defaults to `${APP_BASE_URL}/api/google/login/callback` — set it only to override. Must be registered as an authorized redirect URI in the same Google OAuth client. |
-| `GOOGLE_OAUTH_STATE_SECRET` | A strong random string shared by all replicas (signs the stateless OAuth CSRF token). Generate e.g. `openssl rand -hex 32`. |
-| `GOOGLE_PROBE_INTERVAL` | **Optional.** How often connected Google accounts are checked for disconnection, and how often the "reconnect your Google" alert email is (re-)evaluated. Duration string. Default `1h`. If an account's grant has died, calit fails the booking page closed (no slots) and emails the owner once per outage. |
-
-### CAPTCHA / bot protection (optional)
-
-`CAPTCHA_PROVIDER` picks the booking-form CAPTCHA: `none` (default), `turnstile` (Cloudflare,
-external), or `altcha` (self-hosted proof-of-work, no third party). When unset, it falls back to
-`turnstile` if `TURNSTILE_ENABLED=true` (back-compat with older configs), else `none`.
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `CAPTCHA_PROVIDER` | `none` | `none` \| `turnstile` \| `altcha`. Unset falls back to `turnstile` when `TURNSTILE_ENABLED=true`, else `none`. |
-| `TURNSTILE_ENABLED` | `false` | Legacy switch: enable the Turnstile widget + server verification together. Still implies the `turnstile` provider when `CAPTCHA_PROVIDER` is unset. |
-| `TURNSTILE_SITE_KEY` | — | Public site key (rendered into the booking page). Used when the effective provider is `turnstile`. |
-| `TURNSTILE_SECRET_KEY` | — | Secret key (server-side verification only; never rendered). Used when the effective provider is `turnstile`. |
-| `ALTCHA_HMAC_KEY` | — | Required when `CAPTCHA_PROVIDER=altcha` (startup fails if blank). Long random secret signing the proof-of-work challenge; never rendered. |
-| `ALTCHA_MAX_NUMBER` | `100000` | ALTCHA proof-of-work difficulty — the max number the client brute-forces to solve a challenge. Used when the effective provider is `altcha`. |
-
-> The honeypot field and the per-email daily cap are always on and need no configuration.
-
-### OIDC / SSO (Authelia)
-
-Leave `OIDC_ENABLED=false` (the default) to run with form login only. Set it to `true` and fill in
-the rest to add a "Sign in with SSO" button, backed by any OpenID Connect provider (Authelia,
-Keycloak, Auth0, Zitadel, Authentik, …).
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `OIDC_ENABLED` | `false` | Enables the SSO login button and the `/api/oidc/login` code-flow endpoint. |
-| `OIDC_ISSUER_URL` | — | Base issuer URL; calit discovers endpoints from `${OIDC_ISSUER_URL}/.well-known/openid-configuration`. |
-| `OIDC_CLIENT_ID` | — | Client ID registered with the provider. |
-| `OIDC_CLIENT_SECRET` | — | Client secret registered with the provider (plaintext here, even if the provider stores it hashed — see Authelia note below). |
-| `OIDC_ADMIN_GROUP` | _(empty)_ | Group name whose members get calit admin on login. Leave blank for no OIDC-driven admin. |
-
-Register `${APP_BASE_URL}/api/oidc/login` (e.g. `https://book.example.com/api/oidc/login`) as the
-client's redirect URI with your provider, and request the `openid email profile groups` scopes.
-calit reads the `sub`, `email`, `email_verified`, and `groups` claims from the ID token.
-
-- **Account linking**: an OIDC login links to the existing calit user whose settings email matches
-  the token's `email`, but only if the provider marked it `email_verified`. Otherwise a new account
-  is provisioned. If the verified email matches more than one calit account, the SSO login is
-  rejected (the user must sign in with a password instead) rather than calit picking one — resolve
-  it by making the accounts' settings emails unique.
-- **Provisioning is gated by `SIGNUP_ENABLED`**: if no matching local user exists, a new account is
-  only auto-created when `SIGNUP_ENABLED=true`; otherwise the SSO login is rejected.
-- **Admin is grant-only**: membership in `OIDC_ADMIN_GROUP` grants calit admin on every login where
-  it's present, and is re-evaluated (and revoked) on each subsequent login if the group membership
-  is removed. It **never demotes** a locally-granted admin — an admin made via `/me/users` stays
-  admin regardless of OIDC group membership.
-
-For Authelia specifically, define the client under `identity_providers.oidc.clients` in
-`configuration.yml` with `redirect_uris: [https://book.example.com/api/oidc/login]` and
-`scopes: [openid, email, profile, groups]`. Authelia stores the client secret **hashed**
-(`authelia crypto hash generate pbkdf2 ...`) in its own config, while calit's `OIDC_CLIENT_SECRET`
-must be the **plaintext** secret you hashed — a mismatch fails the token exchange silently and
-sends the user back to `/login`.
-
----
-
-## How to obtain the keys
-
-### Google OAuth client (Calendar + Meet)
-
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and create (or pick) a project.
-2. **APIs & Services → Library → enable the "Google Calendar API"**.
-3. **APIs & Services → OAuth consent screen**: configure it (External or Internal), add each user's
-   Google account as a test user if the app stays in "testing", and add the scope
-   `https://www.googleapis.com/auth/calendar`.
-4. **APIs & Services → Credentials → Create Credentials → OAuth client ID → Web application**.
-5. Under **Authorized redirect URIs** add exactly `${APP_BASE_URL}/api/google/callback`
-   (e.g. `https://book.example.com/api/google/callback`).
-6. Copy the **Client ID** and **Client secret** into `GOOGLE_OAUTH_CLIENT_ID` /
-   `GOOGLE_OAUTH_CLIENT_SECRET`.
-7. After deploy, each user connects their calendar **once** from the management UI (`/me/google` →
-   Connect Google), grants offline access, and selects which calendars to read for busy time and which
-   one to write events to. The refresh token is stored in Postgres, so any replica can call Google.
-
-For Google to remove the "unverified app" warning and lift the 100-user cap, complete OAuth verification in Google Cloud Console: set `OPERATOR_NAME` and `PRIVACY_CONTACT_EMAIL`, link `${APP_BASE_URL}/privacy` as the consent-screen privacy policy, and verify domain ownership (via `GOOGLE_SITE_VERIFICATION` or a DNS TXT record). Calendar scopes are *sensitive* (not *restricted*), so no third-party security assessment is required.
-
-### Cloudflare Turnstile
-
-1. In the [Cloudflare dashboard → Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile),
-   add a site/widget for your booking domain.
-2. Copy the **Site Key** → `TURNSTILE_SITE_KEY` and the **Secret Key** → `TURNSTILE_SECRET_KEY`, then
-   set `TURNSTILE_ENABLED=true`.
-
-### SMTP
-
-Use any provider (e.g. a transactional-email service or your own server). Set `MAIL_HOST`,
-`MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`, and the encryption mode to match it:
-
-- **Port 587 (STARTTLS)** — `MAIL_PORT=587`, `MAIL_START_TLS=REQUIRED`, `MAIL_TLS=false`.
-- **Port 465 (implicit TLS / SMTPS)** — `MAIL_PORT=465`, `MAIL_TLS=true`, `MAIL_START_TLS=OPTIONAL`.
-
-The port number alone does **not** pick the mode — set `MAIL_TLS` explicitly for 465.
-
----
-
-## First-run checklist
-
-1. Deploy with at least the **required** env vars set (DB, `SESSION_ENCRYPTION_KEY`, SMTP, `APP_BASE_URL`).
-2. Visit any page; you'll be redirected to `/setup`. Create the first user — they become a **site admin**.
-   There is no default password.
-3. On first login you're sent to the **`/me/setup`** wizard: set your password (if applicable) and fill
-   in display name, email, and IANA **timezone** (the canonical zone for all stored-time interpretation,
-   emails, your management pages, and Google events). Then you land on `/me`.
-4. *(Optional)* **Google** (`/me/google`): connect the calendar and choose read/write calendars.
-5. **Availability**: set weekly work hours (global and/or per meeting type); add date-specific overrides.
-6. **Meeting types**: create your bookable types (duration, buffers, min-notice, horizon, slot interval,
-   location type — Google Meet / phone / in-person / custom, approval-required, and `secret` for
-   link-only types).
-7. *(Optional)* **Booking fields**: add custom questions to the booking form.
-8. *(Admins)* Add more users at **`/me/users`** (each with a temporary password), or enable public
-   `/signup` with `SIGNUP_ENABLED=true`.
-9. Share your booking links. Your public types appear on `/{username}`; secret types are reachable only
-   by direct link `/{username}/{slug}`.
-
----
-
-## Notes & operational details
-
-- **Authentication:** users live in the `app_user` table with **argon2id**-hashed passwords — there is
-  **no** `ADMIN_PASSWORD` or embedded/env user. Login is via the `/login` form; the session is an
-  encrypted **stateless cookie** (no server-side session store), so any replica can validate it. Account
-  locks are enforced at authentication time — a locked user can't log in and their existing cookie stops
-  working.
-- **Per-user isolation:** every tenant table carries an `owner_id` and all queries are owner-scoped, so
-  no user can see or edit another's data. `meeting_type.slug` is unique **per user**, so two users can
-  both have e.g. `intro-call`.
-- **Timezones:** each user's timezone is authoritative for storage interpretation, emails, and Google
-  events. Invitee-facing pages additionally relabel times into the *viewer's* local timezone in the
-  browser (the booked instant is unchanged). Invitee timezones are never stored.
-- **Degraded mode:** with Google not connected, bookings are confirmed without a calendar event/Meet
-  link and the app emails the invitee directly. When connected, Google emails the invite/change/cancel
-  (`sendUpdates=all`) and the app suppresses the duplicate invitee mail; the user always gets the app
-  email (unless opted out).
-- **Background jobs** run on every replica every 60s and are single-delivery via `FOR UPDATE SKIP
-  LOCKED` — reminder dispatch and pending-booking auto-expiry. No clustered scheduler is needed.
-- **Double-booking** is prevented at the database level by a Postgres exclusion constraint covering
-  PENDING+CONFIRMED bookings, so concurrent replicas cannot both win the same slot.
-- **TLS / reverse proxy:** calit listens on plain HTTP and expects to run behind a TLS-terminating
-  reverse proxy in production. The `%prod` profile trusts `X-Forwarded-*` headers
-  (`quarkus.http.proxy.proxy-address-forwarding=true`) so the request scheme is seen as HTTPS — which
-  is what marks the login cookie `Secure`. Only expose calit through that proxy; if it can be reached
-  directly, restrict trust with `quarkus.http.proxy.trusted-proxies=<proxy CIDR>`.
-- **Migrations** are plain SQL under `src/main/resources/db/migration` (`V1`…`V14`) and run at boot.
-
-### Health probes
-
-- `GET /q/health/live` — liveness: the process is up. Does **not** check SMTP or Google (a flapping
-  external dependency must not get a healthy replica restarted).
-- `GET /q/health/ready` — readiness. Includes **informational** SMTP and Google checks: they always
-  report `UP` and expose reachability under `data.state` (`reachable` / `unreachable` /
-  `mocked-or-unconfigured` / `not-configured`). They never mark a replica `DOWN` — a down mail
-  server doesn't pull the replica from rotation, because outgoing mail falls back to the outbox.
-
-### Email delivery & SMTP outages
-
-Mail is sent synchronously. If an SMTP send fails, the mail is parked in the `email_outbox` table
-instead of being lost; a background tick (every 60s, on every replica, `FOR UPDATE SKIP LOCKED` so
-it is multi-node-safe) retries with exponential backoff (1 min, doubling up to 1 h, capped at 10
-attempts). Booking and password-reset flows never fail because SMTP is unavailable. No configuration
-required.
-
----
-
-## Upgrading
-
-### ⚠️ BREAKING in v1.4.0 — set `TOKEN_ENCRYPTION_KEY` before deploying
-
-**Applies when upgrading from v1.3.x (or earlier) to v1.4.0.** v1.4.0 encrypts stored Google OAuth
-tokens at rest and adds a **new required production secret**, `TOKEN_ENCRYPTION_KEY`. A `%prod`
-deployment **fails to boot** until it is set (fail-closed, by design — the app will not serve traffic
-with no key).
-
-**Migration steps for existing operators:**
-
-1. Generate a key — **once**, and keep it forever-stable:
-   ```bash
-   openssl rand -hex 32      # 64 hex characters = 32 bytes (AES-256)
-   ```
-2. Set `TOKEN_ENCRYPTION_KEY` to that value in the environment of **every replica** (same value
-   everywhere, exactly like `SESSION_ENCRYPTION_KEY`).
-3. Deploy the new image. On first boot the app transparently **encrypts existing plaintext tokens in
-   place** — no user has to reconnect; every already-connected Google Calendar keeps working.
-
-**Do not rotate this key.** Changing it makes all previously-encrypted tokens undecryptable, which
-disconnects every user's calendar and forces a full reconnect. Treat it as a permanent secret.
-If you do not use Google Calendar at all the key is still required in prod (one fewer way to
-misconfigure), but it is never used.
-
----
+On a fresh database, any page redirects to `/setup` to create the first (admin) user — there is no
+default password. See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full contributor guide (testing,
+formatting, i18n, migrations, docs).
 
 ## License
 
-Licensed under the **GNU Affero General Public License v3.0** (AGPL-3.0). If you run a modified version
-to provide a network service, you must offer its complete source to that service's users. See
-[LICENSE](LICENSE) for the full text.
+Licensed under the **GNU Affero General Public License v3.0** (AGPL-3.0) — see [LICENSE](LICENSE). If
+you run a modified version as a network service, you must offer its complete source to that service's
+users.
 
-### Trademarks
-
-"Calendly" is a trademark of Calendly LLC. calit is an independent, self-hosted project and is **not
-affiliated with, endorsed by, or sponsored by Calendly**. The name is used only descriptively, to
-indicate the category of tool calit replaces.
+"Calendly" is a trademark of Calendly LLC. calit is an independent, self-hosted project **not
+affiliated with, endorsed by, or sponsored by Calendly**; the name is used only descriptively.
