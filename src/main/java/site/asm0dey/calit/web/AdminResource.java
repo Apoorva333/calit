@@ -222,6 +222,7 @@ public class AdminResource {
     // so this server label is only a fallback. ponytail: extract a shared helper if a 3rd consumer appears.
     private static final DateTimeFormatter MANAGE_DATE_FMT = DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy");
     private static final DateTimeFormatter MANAGE_TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
+    private static final String PENDING_BY_OWNER_QUERY = "ownerId = ?1 and status = ?2 order by startUtc";
 
     /** Available slots for a meeting type as an ordered per-day list (reuses the public view records). */
     private List<PublicResource.DaySlots> daySlots(MeetingType type) {
@@ -1282,8 +1283,7 @@ public class AdminResource {
     @Path("/pending")
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance pending() {
-        List<Booking> pending = Booking.list(
-                "ownerId = ?1 and status = ?2 order by startUtc", currentOwner.id(), BookingStatus.PENDING);
+        List<Booking> pending = Booking.list(PENDING_BY_OWNER_QUERY, currentOwner.id(), BookingStatus.PENDING);
         return Templates.pending(pending, Layout.TZ_SCRIPT, isAdmin(), m().adm_pending_title());
     }
 
@@ -1393,8 +1393,7 @@ public class AdminResource {
     public TemplateInstance approveBooking(@PathParam("id") Long id) {
         requireOwnedBooking(id);
         bookingService.approve(id); // PENDING→CONFIRMED (+ Google event if connected)
-        List<Booking> pending = Booking.list(
-                "ownerId = ?1 and status = ?2 order by startUtc", currentOwner.id(), BookingStatus.PENDING);
+        List<Booking> pending = Booking.list(PENDING_BY_OWNER_QUERY, currentOwner.id(), BookingStatus.PENDING);
         return Templates.pending(pending, Layout.TZ_SCRIPT, isAdmin(), m().adm_pending_title());
     }
 
@@ -1405,8 +1404,7 @@ public class AdminResource {
     public TemplateInstance declineBooking(@PathParam("id") Long id) {
         requireOwnedBooking(id);
         bookingService.decline(id); // PENDING→DECLINED
-        List<Booking> pending = Booking.list(
-                "ownerId = ?1 and status = ?2 order by startUtc", currentOwner.id(), BookingStatus.PENDING);
+        List<Booking> pending = Booking.list(PENDING_BY_OWNER_QUERY, currentOwner.id(), BookingStatus.PENDING);
         return Templates.pending(pending, Layout.TZ_SCRIPT, isAdmin(), m().adm_pending_title());
     }
 
