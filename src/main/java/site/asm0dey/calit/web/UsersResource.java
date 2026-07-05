@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.util.List;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.resteasy.reactive.RestForm;
+import site.asm0dey.calit.audit.AuditLog;
 import site.asm0dey.calit.booking.Booking;
 import site.asm0dey.calit.booking.BookingStatus;
 import site.asm0dey.calit.domain.OwnerSettings;
@@ -36,32 +37,44 @@ public class UsersResource {
                 List<AppUser> users, String error, boolean isAdmin, Long pendingCount, String title);
     }
 
-    @Inject
-    CurrentOwner currentOwner;
+    final CurrentOwner currentOwner;
 
     /** Audit-event target prefix for a user-directed admin action. */
     private static final String USER_TARGET = "user:";
 
-    @Inject
-    SecurityIdentity identity;
+    final SecurityIdentity identity;
+
+    final AuditLog audit;
+
+    final AdminMessageResolver adminMsgs;
+
+    final ActiveLocale activeLocale;
+
+    final PasswordResetService resetService;
+
+    final EmailService emailService;
 
     @Inject
-    site.asm0dey.calit.audit.AuditLog audit;
+    public UsersResource(
+            CurrentOwner currentOwner,
+            SecurityIdentity identity,
+            AuditLog audit,
+            AdminMessageResolver adminMsgs,
+            ActiveLocale activeLocale,
+            PasswordResetService resetService,
+            EmailService emailService,
+            @ConfigProperty(name = "app.base-url") String baseUrl) {
+        this.currentOwner = currentOwner;
+        this.identity = identity;
+        this.audit = audit;
+        this.adminMsgs = adminMsgs;
+        this.activeLocale = activeLocale;
+        this.resetService = resetService;
+        this.emailService = emailService;
+        this.baseUrl = baseUrl;
+    }
 
-    @Inject
-    AdminMessageResolver adminMsgs;
-
-    @Inject
-    ActiveLocale activeLocale;
-
-    @Inject
-    PasswordResetService resetService;
-
-    @Inject
-    EmailService emailService;
-
-    @ConfigProperty(name = "app.base-url")
-    String baseUrl;
+    final String baseUrl;
 
     /** This admin's own pending-approval count — drives the shared nav badge (consistent with other /me pages). */
     private long pendingCount() {

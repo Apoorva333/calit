@@ -20,11 +20,15 @@ public class TokenBackfill {
 
     private static final Logger LOG = Logger.getLogger(TokenBackfill.class);
 
-    @Inject
-    EntityManager em;
+    final EntityManager em;
+
+    final TokenCipher cipher;
 
     @Inject
-    TokenCipher cipher;
+    public TokenBackfill(EntityManager em, TokenCipher cipher) {
+        this.em = em;
+        this.cipher = cipher;
+    }
 
     @Transactional
     void onStart(@Observes StartupEvent ev) {

@@ -20,8 +20,12 @@ import java.util.Locale;
 @Unremovable
 public class LocaleOptions {
 
+    final ActiveLocale activeLocale;
+
     @Inject
-    ActiveLocale activeLocale;
+    public LocaleOptions(ActiveLocale activeLocale) {
+        this.activeLocale = activeLocale;
+    }
 
     /**
      * Returns one {@link LocaleOption} per supported locale, in config order.

@@ -1,6 +1,7 @@
 package site.asm0dey.calit.health;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.Optional;
@@ -27,14 +28,21 @@ public class SmtpHealthCheck implements HealthCheck {
 
     private static final String STATE = "state";
 
-    @ConfigProperty(name = "quarkus.mailer.mock", defaultValue = "false")
-    boolean mock;
+    final boolean mock;
 
-    @ConfigProperty(name = "quarkus.mailer.host")
-    Optional<String> host;
+    final Optional<String> host;
 
-    @ConfigProperty(name = "quarkus.mailer.port", defaultValue = "587")
-    int port;
+    final int port;
+
+    @Inject
+    public SmtpHealthCheck(
+            @ConfigProperty(name = "quarkus.mailer.mock", defaultValue = "false") boolean mock,
+            @ConfigProperty(name = "quarkus.mailer.host") Optional<String> host,
+            @ConfigProperty(name = "quarkus.mailer.port", defaultValue = "587") int port) {
+        this.mock = mock;
+        this.host = host;
+        this.port = port;
+    }
 
     @Override
     public HealthCheckResponse call() {

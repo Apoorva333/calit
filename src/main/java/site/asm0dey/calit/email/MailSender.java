@@ -23,12 +23,16 @@ public class MailSender {
 
     private static final String ICS_CONTENT_TYPE = "text/calendar; charset=UTF-8; method=REQUEST";
 
+    final Mailer mailer;
+
     @Inject
-    Mailer mailer;
+    public MailSender(Mailer mailer, @ConfigProperty(name = "app.mail-from") String mailFrom) {
+        this.mailer = mailer;
+        this.mailFrom = mailFrom;
+    }
 
     /** Bare sending address; the per-message display name (when present) is prefixed onto this. */
-    @ConfigProperty(name = "app.mail-from")
-    String mailFrom;
+    final String mailFrom;
 
     /** Direct send; throws on SMTP failure. {@code fromName} null → From left to config default. */
     public void sendNow(String fromName, String to, String subject, String html, byte[] ics) {

@@ -3,6 +3,7 @@ package site.asm0dey.calit.booking;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
@@ -18,29 +19,41 @@ public class CaptchaProviderConfig {
 
     private static final Set<String> VALID = Set.of("none", "turnstile", "altcha");
 
-    @ConfigProperty(name = "calit.captcha.provider")
-    Optional<String> explicit;
+    final Optional<String> explicit;
 
     // Reuse the existing render flag (both turnstile flags come from ${TURNSTILE_ENABLED}).
-    @ConfigProperty(name = "calit.turnstile.enabled", defaultValue = "false")
-    boolean turnstileEnabled;
+    final boolean turnstileEnabled;
 
-    @ConfigProperty(name = "calit.captcha.altcha.hmac-key")
-    Optional<String> altchaHmacKey;
+    final Optional<String> altchaHmacKey;
 
-    @ConfigProperty(name = "calit.captcha.altcha.max-number", defaultValue = "100000")
-    long altchaMaxNumber;
+    final long altchaMaxNumber;
 
-    @ConfigProperty(name = "calit.abuse.turnstile.secret")
-    Optional<String> turnstileSecret;
+    final Optional<String> turnstileSecret;
 
-    @ConfigProperty(
-            name = "calit.abuse.turnstile.verify-url",
-            defaultValue = "https://challenges.cloudflare.com/turnstile/v0/siteverify")
-    String turnstileVerifyUrl;
+    final String turnstileVerifyUrl;
 
-    @ConfigProperty(name = "calit.turnstile.site-key")
-    Optional<String> turnstileSiteKey;
+    final Optional<String> turnstileSiteKey;
+
+    @Inject
+    public CaptchaProviderConfig(
+            @ConfigProperty(name = "calit.captcha.provider") Optional<String> explicit,
+            @ConfigProperty(name = "calit.turnstile.enabled", defaultValue = "false") boolean turnstileEnabled,
+            @ConfigProperty(name = "calit.captcha.altcha.hmac-key") Optional<String> altchaHmacKey,
+            @ConfigProperty(name = "calit.captcha.altcha.max-number", defaultValue = "100000") long altchaMaxNumber,
+            @ConfigProperty(name = "calit.abuse.turnstile.secret") Optional<String> turnstileSecret,
+            @ConfigProperty(
+                            name = "calit.abuse.turnstile.verify-url",
+                            defaultValue = "https://challenges.cloudflare.com/turnstile/v0/siteverify")
+                    String turnstileVerifyUrl,
+            @ConfigProperty(name = "calit.turnstile.site-key") Optional<String> turnstileSiteKey) {
+        this.explicit = explicit;
+        this.turnstileEnabled = turnstileEnabled;
+        this.altchaHmacKey = altchaHmacKey;
+        this.altchaMaxNumber = altchaMaxNumber;
+        this.turnstileSecret = turnstileSecret;
+        this.turnstileVerifyUrl = turnstileVerifyUrl;
+        this.turnstileSiteKey = turnstileSiteKey;
+    }
 
     public String provider() {
         return resolve(explicit.orElse(null), turnstileEnabled);

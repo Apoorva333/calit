@@ -12,10 +12,8 @@ import jakarta.ws.rs.core.MultivaluedMap;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.resteasy.reactive.RestForm;
 import site.asm0dey.calit.availability.TimeSlot;
@@ -25,11 +23,9 @@ import site.asm0dey.calit.domain.BookingField.FieldType;
 import site.asm0dey.calit.domain.MeetingType.LocationType;
 import site.asm0dey.calit.google.GoogleCalendar;
 import site.asm0dey.calit.google.GoogleCredential;
-import site.asm0dey.calit.i18n.ActiveLocale;
-import site.asm0dey.calit.i18n.AdminMessageResolver;
-import site.asm0dey.calit.i18n.AdminMessages;
-import site.asm0dey.calit.i18n.AppMessageResolver;
+import site.asm0dey.calit.i18n.*;
 import site.asm0dey.calit.user.AppUser;
+import site.asm0dey.calit.user.CurrentOwner;
 
 @Path("/me")
 @RolesAllowed("user")
@@ -65,7 +61,7 @@ public class AdminResource {
                 List<DateOverride> overrides,
                 List<HostRow> hosts,
                 LocationType[] locationTypes,
-                BookingField.FieldType[] fieldTypes,
+                FieldType[] fieldTypes,
                 DayOfWeek[] daysOfWeek,
                 Long pendingCount,
                 boolean isAdmin,
@@ -91,11 +87,7 @@ public class AdminResource {
                 String title);
 
         public static native TemplateInstance bookingFields(
-                List<BookingField> fields,
-                BookingField.FieldType[] fieldTypes,
-                Long pendingCount,
-                boolean isAdmin,
-                String title);
+                List<BookingField> fields, FieldType[] fieldTypes, Long pendingCount, boolean isAdmin, String title);
 
         public static native TemplateInstance dateOverrides(
                 List<DateOverride> overrides,
@@ -155,29 +147,43 @@ public class AdminResource {
      */
     public record HostRow(Long ownerId, String username, String role, String status, boolean needsReconnect) {}
 
-    @Inject
-    BookingService bookingService;
+    final BookingService bookingService;
+
+    final MeetingHosts meetingHosts;
+
+    final CurrentOwner currentOwner;
+
+    final String baseUrl;
+
+    final SecurityIdentity identity;
+
+    final AdminMessageResolver adminMsgs;
+
+    final AppMessageResolver appMsgs;
+
+    final ActiveLocale activeLocale;
 
     @Inject
-    MeetingHosts meetingHosts;
-
-    @Inject
-    site.asm0dey.calit.user.CurrentOwner currentOwner;
-
-    @ConfigProperty(name = "app.base-url")
-    String baseUrl;
-
-    @Inject
-    SecurityIdentity identity;
-
-    @Inject
-    AdminMessageResolver adminMsgs;
-
-    @Inject
-    AppMessageResolver appMsgs;
-
-    @Inject
-    ActiveLocale activeLocale;
+    public AdminResource(
+            BookingService bookingService,
+            MeetingHosts meetingHosts,
+            CurrentOwner currentOwner,
+            SecurityIdentity identity,
+            AdminMessageResolver adminMsgs,
+            AppMessageResolver appMsgs,
+            ActiveLocale activeLocale,
+            @ConfigProperty(name = "app.base-url") String baseUrl,
+            @ConfigProperty(name = "calit.reminder.lead-minutes", defaultValue = "1440") int reminderLeadMinutes) {
+        this.bookingService = bookingService;
+        this.meetingHosts = meetingHosts;
+        this.currentOwner = currentOwner;
+        this.identity = identity;
+        this.adminMsgs = adminMsgs;
+        this.appMsgs = appMsgs;
+        this.activeLocale = activeLocale;
+        this.baseUrl = baseUrl;
+        this.reminderLeadMinutes = reminderLeadMinutes;
+    }
 
     /** True when the logged-in user holds the site-admin role (drives the Users nav link). */
     private boolean isAdmin() {
@@ -210,8 +216,7 @@ public class AdminResource {
         return e.getMessage();
     }
 
-    @ConfigProperty(name = "calit.reminder.lead-minutes", defaultValue = "1440")
-    int reminderLeadMinutes;
+    final int reminderLeadMinutes;
 
     // Mirrors PublicResource.daySlots formatting; the client TZ script relabels to the viewer's zone,
     // so this server label is only a fallback. ponytail: extract a shared helper if a 3rd consumer appears.
@@ -231,19 +236,18 @@ public class AdminResource {
                     k -> new PublicResource.DaySlots(
                             k,
                             slot.start().format(MANAGE_DATE_FMT.withLocale(activeLocale.current())),
-                            new java.util.ArrayList<>()));
+                            new ArrayList<>()));
             day.slots()
                     .add(new PublicResource.SlotView(
                             slot.start().format(MANAGE_TIME_FMT),
                             slot.start().toInstant().toString()));
         }
-        return new java.util.ArrayList<>(byIso.values());
+        return new ArrayList<>(byIso.values());
     }
 
     /** Pending-approval count for the shared admin nav badge. */
     private long pendingCount() {
-        return Booking.count(
-                "ownerId = ?1 and status = ?2", currentOwner.id(), site.asm0dey.calit.booking.BookingStatus.PENDING);
+        return Booking.count("ownerId = ?1 and status = ?2", currentOwner.id(), BookingStatus.PENDING);
     }
 
     @GET
@@ -254,8 +258,8 @@ public class AdminResource {
         List<Booking> upcoming = Booking.list(
                 "ownerId = ?1 and status = ?2 and startUtc >= ?3 order by startUtc",
                 currentOwner.id(),
-                site.asm0dey.calit.booking.BookingStatus.CONFIRMED,
-                java.time.Instant.now());
+                BookingStatus.CONFIRMED,
+                Instant.now());
         var pendingCount = pendingCount();
         return Templates.dashboard(upcoming, pendingCount, Layout.TZ_SCRIPT, isAdmin(), m().adm_dashboard_title());
     }
@@ -325,7 +329,7 @@ public class AdminResource {
     public TemplateInstance shared() {
         var needsReconnect = ownerNeedsReconnect();
         String ownUsername = currentOwner.require().username;
-        List<SharedRow> rows = new java.util.ArrayList<>();
+        List<SharedRow> rows = new ArrayList<>();
         // Creator side: this owner's own multi-host types. One query for the multi-host set instead
         // of isMultiHost() (a COUNT) per type.
         List<MeetingType> ownTypes = MeetingType.listForOwner(currentOwner.id());
@@ -345,13 +349,13 @@ public class AdminResource {
         if (!cohostRows.isEmpty()) {
             List<Long> typeIds = cohostRows.stream().map(h -> h.meetingTypeId).toList();
             Map<Long, MeetingType> typeById = MeetingType.<MeetingType>list("id in ?1", typeIds).stream()
-                    .collect(java.util.stream.Collectors.toMap(t -> t.id, t -> t));
+                    .collect(Collectors.toMap(t -> t.id, t -> t));
             Set<Long> creatorIds =
-                    typeById.values().stream().map(t -> t.ownerId).collect(java.util.stream.Collectors.toSet());
+                    typeById.values().stream().map(t -> t.ownerId).collect(Collectors.toSet());
             Map<Long, String> usernameById = creatorIds.isEmpty()
                     ? Map.of()
                     : AppUser.<AppUser>list("id in ?1", creatorIds).stream()
-                            .collect(java.util.stream.Collectors.toMap(u -> u.id, u -> u.username));
+                            .collect(Collectors.toMap(u -> u.id, u -> u.username));
             for (MeetingTypeHost h : cohostRows) {
                 MeetingType t = typeById.get(h.meetingTypeId);
                 if (t != null) {
@@ -570,7 +574,7 @@ public class AdminResource {
         List<Long> ids = overrides.stream().map(o -> o.id).toList();
         Map<Long, List<DateOverrideWindow>> byOverride =
                 DateOverrideWindow.<DateOverrideWindow>list("dateOverrideId in ?1 order by startTime asc", ids).stream()
-                        .collect(java.util.stream.Collectors.groupingBy(w -> w.dateOverrideId));
+                        .collect(Collectors.groupingBy(w -> w.dateOverrideId));
         for (DateOverride o : overrides) {
             o.windows = byOverride.getOrDefault(o.id, List.of());
         }
@@ -583,7 +587,7 @@ public class AdminResource {
      */
     private LocationType[] allowedLocationTypes() {
         if (GoogleCalendar.writeTargetBlocksMeet(currentOwner.id())) {
-            return java.util.Arrays.stream(LocationType.values())
+            return Arrays.stream(LocationType.values())
                     .filter(lt -> lt != LocationType.GOOGLE_MEET)
                     .toArray(LocationType[]::new);
         }
@@ -633,7 +637,7 @@ public class AdminResource {
                 overrides,
                 hostRows(t),
                 LocationType.values(),
-                BookingField.FieldType.values(),
+                FieldType.values(),
                 DayOfWeek.values(),
                 pendingCount(),
                 isAdmin(),
@@ -646,12 +650,12 @@ public class AdminResource {
      * This type's host rows for the Hosts tokenfield. A plain single-host type holds no {@link
      * MeetingTypeHost} rows at all (the CREATOR row is only materialized once a co-host is added,
      * and removed again once the last co-host is removed -- see {@link
-     * site.asm0dey.calit.booking.MeetingHosts}), so a synthetic CREATOR row for the current owner
+     * MeetingHosts}), so a synthetic CREATOR row for the current owner
      * is prepended whenever no real CREATOR row is present. This keeps the owner's chip always
      * visible, whether the type is single- or multi-host.
      */
     private List<HostRow> hostRows(MeetingType type) {
-        List<HostRow> rows = new java.util.ArrayList<>();
+        List<HostRow> rows = new ArrayList<>();
         for (MeetingTypeHost h : MeetingTypeHost.forType(type.id)) {
             AppUser u = AppUser.findById(h.ownerId);
             rows.add(new HostRow(
@@ -1095,7 +1099,7 @@ public class AdminResource {
 
     /** All IANA zone ids, sorted — for the Settings timezone combobox. */
     private static List<String> zoneIds() {
-        return java.time.ZoneId.getAvailableZoneIds().stream().sorted().toList();
+        return ZoneId.getAvailableZoneIds().stream().sorted().toList();
     }
 
     @GET
@@ -1132,7 +1136,7 @@ public class AdminResource {
             row.ownerName = ownerName;
             row.ownerEmail = ownerEmail;
             row.timezone = timezone;
-            row.locale = site.asm0dey.calit.i18n.AppLocales.isSupported(locale) ? locale : "en";
+            row.locale = AppLocales.isSupported(locale) ? locale : "en";
             // Unchecked checkbox sends no value → notifications OFF (owner opt-out).
             row.ownerNotificationsEnabled = "on".equals(ownerNotificationsEnabled);
             row.persist();
@@ -1140,7 +1144,7 @@ public class AdminResource {
         });
         // The locale filter already ran (before this handler) with the OLD value; refresh the
         // request-scoped locale so THIS response (title, {adm:} keys, language dropdown) is in the new language.
-        activeLocale.set(site.asm0dey.calit.i18n.AppLocales.pick(s.locale));
+        activeLocale.set(AppLocales.pick(s.locale));
         return Templates.settings(
                 s, reminderLeadMinutes, pendingCount(), zoneIds(), isAdmin(), m().adm_settings_title());
     }
@@ -1279,9 +1283,7 @@ public class AdminResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance pending() {
         List<Booking> pending = Booking.list(
-                "ownerId = ?1 and status = ?2 order by startUtc",
-                currentOwner.id(),
-                site.asm0dey.calit.booking.BookingStatus.PENDING);
+                "ownerId = ?1 and status = ?2 order by startUtc", currentOwner.id(), BookingStatus.PENDING);
         return Templates.pending(pending, Layout.TZ_SCRIPT, isAdmin(), m().adm_pending_title());
     }
 
@@ -1307,9 +1309,8 @@ public class AdminResource {
         ZoneId zone = ZoneId.of(OwnerSettings.forOwner(type.ownerId).timezone);
         String current =
                 b.startUtc.atZone(zone).format(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy 'at' HH:mm (z)"));
-        String guestsCsv = BookingGuest.activeForBooking(b.id).stream()
-                .map(g -> g.email)
-                .collect(java.util.stream.Collectors.joining(","));
+        String guestsCsv =
+                BookingGuest.activeForBooking(b.id).stream().map(g -> g.email).collect(Collectors.joining(","));
         return Templates.manageBooking(
                 b,
                 current,
@@ -1379,7 +1380,7 @@ public class AdminResource {
         if (raw == null || raw.isBlank()) {
             return List.of();
         }
-        return java.util.Arrays.stream(raw.split("[,\\s]+"))
+        return Arrays.stream(raw.split("[,\\s]+"))
                 .map(String::trim)
                 .filter(s -> !s.isBlank())
                 .toList();
@@ -1393,9 +1394,7 @@ public class AdminResource {
         requireOwnedBooking(id);
         bookingService.approve(id); // PENDING→CONFIRMED (+ Google event if connected)
         List<Booking> pending = Booking.list(
-                "ownerId = ?1 and status = ?2 order by startUtc",
-                currentOwner.id(),
-                site.asm0dey.calit.booking.BookingStatus.PENDING);
+                "ownerId = ?1 and status = ?2 order by startUtc", currentOwner.id(), BookingStatus.PENDING);
         return Templates.pending(pending, Layout.TZ_SCRIPT, isAdmin(), m().adm_pending_title());
     }
 
@@ -1407,9 +1406,7 @@ public class AdminResource {
         requireOwnedBooking(id);
         bookingService.decline(id); // PENDING→DECLINED
         List<Booking> pending = Booking.list(
-                "ownerId = ?1 and status = ?2 order by startUtc",
-                currentOwner.id(),
-                site.asm0dey.calit.booking.BookingStatus.PENDING);
+                "ownerId = ?1 and status = ?2 order by startUtc", currentOwner.id(), BookingStatus.PENDING);
         return Templates.pending(pending, Layout.TZ_SCRIPT, isAdmin(), m().adm_pending_title());
     }
 
@@ -1440,7 +1437,7 @@ public class AdminResource {
         }
         String h1;
         String desc;
-        if (b.status != site.asm0dey.calit.booking.BookingStatus.PENDING) {
+        if (b.status != BookingStatus.PENDING) {
             h1 = m().adm_approve_gone_h1();
             desc = m().adm_approve_gone_desc();
         } else if (approve) {

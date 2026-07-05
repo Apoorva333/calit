@@ -26,8 +26,12 @@ public class GoogleHealthCheck implements HealthCheck {
 
     private static final String STATE = "state";
 
+    final GoogleOAuthConfig config;
+
     @Inject
-    GoogleOAuthConfig config;
+    public GoogleHealthCheck(GoogleOAuthConfig config) {
+        this.config = config;
+    }
 
     @Override
     public HealthCheckResponse call() {

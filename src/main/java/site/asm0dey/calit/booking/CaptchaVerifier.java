@@ -20,8 +20,12 @@ import org.altcha.altcha.v1.Altcha;
 @ApplicationScoped
 public class CaptchaVerifier {
 
+    final CaptchaProviderConfig providerConfig;
+
     @Inject
-    CaptchaProviderConfig providerConfig;
+    public CaptchaVerifier(CaptchaProviderConfig providerConfig) {
+        this.providerConfig = providerConfig;
+    }
 
     // SEC-SSRF-01: bound the synchronous booking-path call so a hung upstream can't pin a thread.
     private final HttpClient http = HttpClient.newBuilder()

@@ -33,14 +33,18 @@ public class ConsentResource {
         public static native TemplateInstance done(String title, String h1, String desc);
     }
 
-    @Inject
-    MeetingHosts meetingHosts;
+    final MeetingHosts meetingHosts;
+
+    final AppMessageResolver messages;
+
+    final ActiveLocale activeLocale;
 
     @Inject
-    AppMessageResolver messages;
-
-    @Inject
-    ActiveLocale activeLocale;
+    public ConsentResource(MeetingHosts meetingHosts, AppMessageResolver messages, ActiveLocale activeLocale) {
+        this.meetingHosts = meetingHosts;
+        this.messages = messages;
+        this.activeLocale = activeLocale;
+    }
 
     /** Resolves the token to a still-pending host row, or 404 (unknown, already-used, or malformed). */
     private MeetingTypeHost requireHost(String token) {

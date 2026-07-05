@@ -11,6 +11,7 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.net.URI;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import site.asm0dey.calit.i18n.ActiveLocale;
 import site.asm0dey.calit.i18n.AppMessageResolver;
 import site.asm0dey.calit.i18n.AppMessages;
@@ -24,20 +25,29 @@ public class LoginResource {
                 String title, boolean error, boolean googleEnabled, boolean oidcEnabled, String notice);
     }
 
-    @Inject
-    SecurityIdentity identity;
+    final SecurityIdentity identity;
+
+    final AppMessageResolver messages;
+
+    final ActiveLocale activeLocale;
 
     @Inject
-    AppMessageResolver messages;
+    public LoginResource(
+            SecurityIdentity identity,
+            AppMessageResolver messages,
+            ActiveLocale activeLocale,
+            @ConfigProperty(name = "google.oauth.client-id", defaultValue = "") String googleClientId,
+            @ConfigProperty(name = "calit.oidc.enabled", defaultValue = "false") boolean oidcEnabled) {
+        this.identity = identity;
+        this.messages = messages;
+        this.activeLocale = activeLocale;
+        this.googleClientId = googleClientId;
+        this.oidcEnabled = oidcEnabled;
+    }
 
-    @Inject
-    ActiveLocale activeLocale;
+    final String googleClientId;
 
-    @org.eclipse.microprofile.config.inject.ConfigProperty(name = "google.oauth.client-id", defaultValue = "")
-    String googleClientId;
-
-    @org.eclipse.microprofile.config.inject.ConfigProperty(name = "calit.oidc.enabled", defaultValue = "false")
-    boolean oidcEnabled;
+    final boolean oidcEnabled;
 
     @GET
     @Produces(MediaType.TEXT_HTML)

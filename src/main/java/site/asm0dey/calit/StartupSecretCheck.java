@@ -4,6 +4,7 @@ import io.quarkus.arc.profile.IfBuildProfile;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
@@ -27,14 +28,21 @@ public class StartupSecretCheck {
     private static final String TOKEN_KEY_DEV_DEFAULT =
             "0000000000000000000000000000000000000000000000000000000000000000";
 
-    @ConfigProperty(name = "google.oauth.state-secret")
-    String stateSecret;
+    final String stateSecret;
 
-    @ConfigProperty(name = "quarkus.http.auth.session.encryption-key")
-    String sessionKey;
+    final String sessionKey;
 
-    @ConfigProperty(name = "token.encryption-key")
-    String tokenKey;
+    final String tokenKey;
+
+    @Inject
+    public StartupSecretCheck(
+            @ConfigProperty(name = "google.oauth.state-secret") String stateSecret,
+            @ConfigProperty(name = "quarkus.http.auth.session.encryption-key") String sessionKey,
+            @ConfigProperty(name = "token.encryption-key") String tokenKey) {
+        this.stateSecret = stateSecret;
+        this.sessionKey = sessionKey;
+        this.tokenKey = tokenKey;
+    }
 
     void onStart(@Observes StartupEvent ev) {
         // HMAC key for the OAuth CSRF state; >=32 chars (e.g. `openssl rand -hex 32`).

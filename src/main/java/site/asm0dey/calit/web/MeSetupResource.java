@@ -9,6 +9,7 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriBuilder;
+import java.time.ZoneId;
 import java.util.List;
 import org.jboss.resteasy.reactive.RestForm;
 import site.asm0dey.calit.domain.OwnerSettings;
@@ -29,21 +30,29 @@ public class MeSetupResource {
                 boolean mustChangePassword, OwnerSettings settings, List<String> zones, String error, String title);
     }
 
-    @Inject
-    CurrentOwner currentOwner;
+    final CurrentOwner currentOwner;
+
+    final PasswordHasher passwordHasher;
+
+    final AdminMessageResolver adminMsgs;
+
+    final ActiveLocale activeLocale;
 
     @Inject
-    PasswordHasher passwordHasher;
-
-    @Inject
-    AdminMessageResolver adminMsgs;
-
-    @Inject
-    ActiveLocale activeLocale;
+    public MeSetupResource(
+            CurrentOwner currentOwner,
+            PasswordHasher passwordHasher,
+            AdminMessageResolver adminMsgs,
+            ActiveLocale activeLocale) {
+        this.currentOwner = currentOwner;
+        this.passwordHasher = passwordHasher;
+        this.adminMsgs = adminMsgs;
+        this.activeLocale = activeLocale;
+    }
 
     /** All IANA zone ids, sorted — for the timezone combobox. */
     private static List<String> zoneIds() {
-        return java.time.ZoneId.getAvailableZoneIds().stream().sorted().toList();
+        return ZoneId.getAvailableZoneIds().stream().sorted().toList();
     }
 
     @GET

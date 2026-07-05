@@ -24,17 +24,25 @@ public class SignupResource {
         public static native TemplateInstance signup(String title, String error);
     }
 
-    @ConfigProperty(name = "calit.signup.enabled", defaultValue = "false")
-    boolean signupEnabled;
+    final boolean signupEnabled;
+
+    final PasswordHasher passwordHasher;
+
+    final AppMessageResolver messages;
+
+    final ActiveLocale activeLocale;
 
     @Inject
-    PasswordHasher passwordHasher;
-
-    @Inject
-    AppMessageResolver messages;
-
-    @Inject
-    ActiveLocale activeLocale;
+    public SignupResource(
+            PasswordHasher passwordHasher,
+            AppMessageResolver messages,
+            ActiveLocale activeLocale,
+            @ConfigProperty(name = "calit.signup.enabled", defaultValue = "false") boolean signupEnabled) {
+        this.passwordHasher = passwordHasher;
+        this.messages = messages;
+        this.activeLocale = activeLocale;
+        this.signupEnabled = signupEnabled;
+    }
 
     /** When signup is disabled the whole resource is invisible: behave exactly like no route. */
     private void requireEnabled() {

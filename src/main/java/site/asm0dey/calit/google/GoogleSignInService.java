@@ -1,6 +1,7 @@
 package site.asm0dey.calit.google;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import java.util.List;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -26,8 +27,13 @@ import site.asm0dey.calit.user.Usernames;
 @ApplicationScoped
 public class GoogleSignInService {
 
-    @ConfigProperty(name = "calit.signup.enabled", defaultValue = "false")
-    boolean signupEnabled;
+    final boolean signupEnabled;
+
+    @Inject
+    public GoogleSignInService(
+            @ConfigProperty(name = "calit.signup.enabled", defaultValue = "false") boolean signupEnabled) {
+        this.signupEnabled = signupEnabled;
+    }
 
     @Transactional
     public AppUser resolveOrProvision(GoogleIdentity identity) {

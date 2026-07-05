@@ -21,11 +21,15 @@ import site.asm0dey.calit.user.CurrentOwner;
 @Provider
 public class MeOwnerFilter implements ContainerRequestFilter {
 
-    @Inject
-    SecurityIdentity identity;
+    final SecurityIdentity identity;
+
+    final CurrentOwner currentOwner;
 
     @Inject
-    CurrentOwner currentOwner;
+    public MeOwnerFilter(SecurityIdentity identity, CurrentOwner currentOwner) {
+        this.identity = identity;
+        this.currentOwner = currentOwner;
+    }
 
     @Override
     public void filter(ContainerRequestContext ctx) {

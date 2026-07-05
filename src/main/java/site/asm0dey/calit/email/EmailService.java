@@ -36,28 +36,38 @@ public class EmailService {
 
     private static final String OWNER_ROLE = "owner";
 
-    @Inject
-    MailSender mailSender;
+    final MailSender mailSender;
+
+    final AppMessageResolver messages;
+
+    final CalendarPort calendarPort;
+
+    final MeetingHosts meetingHosts;
 
     @Inject
-    AppMessageResolver messages;
+    public EmailService(
+            MailSender mailSender,
+            AppMessageResolver messages,
+            CalendarPort calendarPort,
+            MeetingHosts meetingHosts,
+            @ConfigProperty(name = "app.base-url") String baseUrl,
+            @ConfigProperty(name = "app.mail-from") String mailFrom) {
+        this.mailSender = mailSender;
+        this.messages = messages;
+        this.calendarPort = calendarPort;
+        this.meetingHosts = meetingHosts;
+        this.baseUrl = baseUrl;
+        this.mailFrom = mailFrom;
+    }
 
-    @Inject
-    CalendarPort calendarPort;
-
-    @Inject
-    MeetingHosts meetingHosts;
-
-    @ConfigProperty(name = "app.base-url")
-    String baseUrl;
+    final String baseUrl;
 
     /**
      * The address every mail is actually sent From. Gmail refuses to render an iTIP REQUEST whose
      * ORGANIZER differs from the message sender ("Unable to load event"), so the .ics ORGANIZER must
      * use this address; the owner's real name is kept as the ORGANIZER CN. (Gmail ignores SENT-BY.)
      */
-    @ConfigProperty(name = "app.mail-from")
-    String mailFrom;
+    final String mailFrom;
 
     /**
      * Sends a password-reset link. Caller has already resolved the destination address.

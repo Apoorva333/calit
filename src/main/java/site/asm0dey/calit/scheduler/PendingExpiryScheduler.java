@@ -45,17 +45,25 @@ import site.asm0dey.calit.email.EmailService;
 @ApplicationScoped
 public class PendingExpiryScheduler {
 
-    @ConfigProperty(name = "calit.approval.hold-hours", defaultValue = "24")
-    int holdHours;
+    final int holdHours;
 
-    @ConfigProperty(name = "calit.scheduler.grace-seconds", defaultValue = "30")
-    int graceSeconds;
+    final int graceSeconds;
+
+    final EntityManager em;
+
+    final EmailService emailService;
 
     @Inject
-    EntityManager em;
-
-    @Inject
-    EmailService emailService;
+    public PendingExpiryScheduler(
+            EntityManager em,
+            EmailService emailService,
+            @ConfigProperty(name = "calit.approval.hold-hours", defaultValue = "24") int holdHours,
+            @ConfigProperty(name = "calit.scheduler.grace-seconds", defaultValue = "30") int graceSeconds) {
+        this.em = em;
+        this.emailService = emailService;
+        this.holdHours = holdHours;
+        this.graceSeconds = graceSeconds;
+    }
 
     /**
      * Feature 14 expiry tick. Runs on EVERY replica every 60s, leaderless (exclusivity via a

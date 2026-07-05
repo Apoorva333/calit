@@ -17,8 +17,12 @@ import site.asm0dey.calit.user.CurrentOwner;
 @RequestScoped
 public class AdminNav {
 
+    final CurrentOwner currentOwner;
+
     @Inject
-    CurrentOwner currentOwner;
+    public AdminNav(CurrentOwner currentOwner) {
+        this.currentOwner = currentOwner;
+    }
 
     /**
      * True when the current owner is involved — in ANY role (creator or co-host) and ANY status

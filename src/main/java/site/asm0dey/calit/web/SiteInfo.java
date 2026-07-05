@@ -1,6 +1,7 @@
 package site.asm0dey.calit.web;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.inject.Named;
 import java.util.Optional;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -18,17 +19,25 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 @ApplicationScoped
 public class SiteInfo {
 
-    @ConfigProperty(name = "app.google-site-verification")
-    Optional<String> googleSiteVerification;
+    final Optional<String> googleSiteVerification;
 
-    @ConfigProperty(name = "app.operator-name")
-    Optional<String> operatorName;
+    final Optional<String> operatorName;
 
-    @ConfigProperty(name = "app.privacy-contact")
-    Optional<String> privacyContact;
+    final Optional<String> privacyContact;
 
-    @ConfigProperty(name = "app.base-url")
-    String baseUrl;
+    final String baseUrl;
+
+    @Inject
+    public SiteInfo(
+            @ConfigProperty(name = "app.google-site-verification") Optional<String> googleSiteVerification,
+            @ConfigProperty(name = "app.operator-name") Optional<String> operatorName,
+            @ConfigProperty(name = "app.privacy-contact") Optional<String> privacyContact,
+            @ConfigProperty(name = "app.base-url") String baseUrl) {
+        this.googleSiteVerification = googleSiteVerification;
+        this.operatorName = operatorName;
+        this.privacyContact = privacyContact;
+        this.baseUrl = baseUrl;
+    }
 
     /** Token for {@code <meta name="google-site-verification">}, or null when unset so {@code {#if}} hides the tag. */
     public String getGoogleVerification() {

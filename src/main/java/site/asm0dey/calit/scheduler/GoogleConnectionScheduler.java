@@ -25,17 +25,25 @@ import site.asm0dey.calit.i18n.AppLocales;
 @ApplicationScoped
 public class GoogleConnectionScheduler {
 
-    @ConfigProperty(name = "calit.google.probe-interval")
-    Duration probeInterval;
+    final Duration probeInterval;
+
+    final EntityManager em;
+
+    final GoogleTokenService tokens;
+
+    final EmailService emailService;
 
     @Inject
-    EntityManager em;
-
-    @Inject
-    GoogleTokenService tokens;
-
-    @Inject
-    EmailService emailService;
+    public GoogleConnectionScheduler(
+            EntityManager em,
+            GoogleTokenService tokens,
+            EmailService emailService,
+            @ConfigProperty(name = "calit.google.probe-interval") Duration probeInterval) {
+        this.em = em;
+        this.tokens = tokens;
+        this.emailService = emailService;
+        this.probeInterval = probeInterval;
+    }
 
     @Scheduled(every = "{calit.google.probe-interval}")
     void tick() {

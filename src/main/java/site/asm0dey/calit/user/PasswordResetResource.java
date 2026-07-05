@@ -25,23 +25,33 @@ import site.asm0dey.calit.i18n.AppMessages;
 @Path("/")
 public class PasswordResetResource {
 
-    @Inject
-    PasswordResetService resetService;
+    final PasswordResetService resetService;
+
+    final PasswordHasher passwordHasher;
+
+    final EmailService emailService;
+
+    final AppMessageResolver messages;
+
+    final ActiveLocale activeLocale;
 
     @Inject
-    PasswordHasher passwordHasher;
+    public PasswordResetResource(
+            PasswordResetService resetService,
+            PasswordHasher passwordHasher,
+            EmailService emailService,
+            AppMessageResolver messages,
+            ActiveLocale activeLocale,
+            @ConfigProperty(name = "app.base-url") String baseUrl) {
+        this.resetService = resetService;
+        this.passwordHasher = passwordHasher;
+        this.emailService = emailService;
+        this.messages = messages;
+        this.activeLocale = activeLocale;
+        this.baseUrl = baseUrl;
+    }
 
-    @Inject
-    EmailService emailService;
-
-    @Inject
-    AppMessageResolver messages;
-
-    @Inject
-    ActiveLocale activeLocale;
-
-    @ConfigProperty(name = "app.base-url")
-    String baseUrl;
+    final String baseUrl;
 
     @CheckedTemplate
     public static class Templates {

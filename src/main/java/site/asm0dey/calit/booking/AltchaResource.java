@@ -15,8 +15,12 @@ import org.altcha.altcha.v1.Altcha;
 @Path("/altcha")
 public class AltchaResource {
 
+    final CaptchaProviderConfig providerConfig;
+
     @Inject
-    CaptchaProviderConfig providerConfig;
+    public AltchaResource(CaptchaProviderConfig providerConfig) {
+        this.providerConfig = providerConfig;
+    }
 
     /**
      * Mints a signed proof-of-work challenge valid for 5 minutes.

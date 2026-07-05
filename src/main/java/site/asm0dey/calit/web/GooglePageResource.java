@@ -10,9 +10,9 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.net.URI;
+import java.util.*;
+import java.util.stream.Collectors;
 import site.asm0dey.calit.booking.Booking;
 import site.asm0dey.calit.booking.BookingStatus;
 import site.asm0dey.calit.google.CalendarListPort;
@@ -21,6 +21,7 @@ import site.asm0dey.calit.google.GoogleCalendar;
 import site.asm0dey.calit.google.GoogleCredential;
 import site.asm0dey.calit.i18n.ActiveLocale;
 import site.asm0dey.calit.i18n.AdminMessageResolver;
+import site.asm0dey.calit.user.CurrentOwner;
 
 @Path("/me/google")
 @RolesAllowed("user")
@@ -32,23 +33,33 @@ public class GooglePageResource {
                 List<AccountView> accounts, boolean loadError, Long pendingCount, boolean isAdmin, String title);
     }
 
-    @Inject
-    CalendarListPort calendarListPort;
+    final CalendarListPort calendarListPort;
+
+    final CalendarSelectionService selectionService;
+
+    final CurrentOwner currentOwner;
+
+    final SecurityIdentity identity;
+
+    final AdminMessageResolver adminMsgs;
+
+    final ActiveLocale activeLocale;
 
     @Inject
-    CalendarSelectionService selectionService;
-
-    @Inject
-    site.asm0dey.calit.user.CurrentOwner currentOwner;
-
-    @Inject
-    SecurityIdentity identity;
-
-    @Inject
-    AdminMessageResolver adminMsgs;
-
-    @Inject
-    ActiveLocale activeLocale;
+    public GooglePageResource(
+            CalendarListPort calendarListPort,
+            CalendarSelectionService selectionService,
+            CurrentOwner currentOwner,
+            SecurityIdentity identity,
+            AdminMessageResolver adminMsgs,
+            ActiveLocale activeLocale) {
+        this.calendarListPort = calendarListPort;
+        this.selectionService = selectionService;
+        this.currentOwner = currentOwner;
+        this.identity = identity;
+        this.adminMsgs = adminMsgs;
+        this.activeLocale = activeLocale;
+    }
 
     private boolean isAdmin() {
         return identity.hasRole("admin");
@@ -68,7 +79,7 @@ public class GooglePageResource {
         for (GoogleCredential cred : creds) {
             Map<String, GoogleCalendar> saved =
                     GoogleCalendar.<GoogleCalendar>list("googleCredentialId", cred.id).stream()
-                            .collect(java.util.stream.Collectors.toMap(c -> c.googleCalendarId, c -> c, (a, b) -> a));
+                            .collect(Collectors.toMap(c -> c.googleCalendarId, c -> c, (a, b) -> a));
             List<CalendarRow> rows = new ArrayList<>();
             var holdsWriteTarget = false;
             var loadFailed = false;
@@ -125,7 +136,7 @@ public class GooglePageResource {
         String writeVal = form.getFirst("writeTarget");
 
         List<CalendarSelectionService.Selection> selections = new ArrayList<>();
-        java.util.Set<Long> reachable = new java.util.HashSet<>();
+        Set<Long> reachable = new HashSet<>();
         for (GoogleCredential cred : GoogleCredential.listForOwner(ownerId)) {
             if (cred.needsReconnect) {
                 continue; // unreachable: preserved from DB below
@@ -173,7 +184,7 @@ public class GooglePageResource {
                     .build();
         }
         selectionService.save(ownerId, selections);
-        return Response.seeOther(java.net.URI.create("/me/google")).build();
+        return Response.seeOther(URI.create("/me/google")).build();
     }
 
     @POST
@@ -195,6 +206,6 @@ public class GooglePageResource {
                     .build();
         }
         cred.delete(); // ON DELETE CASCADE removes this account's google_calendar rows
-        return Response.seeOther(java.net.URI.create("/me/google")).build();
+        return Response.seeOther(URI.create("/me/google")).build();
     }
 }

@@ -20,17 +20,25 @@ import site.asm0dey.calit.email.EmailService;
 @ApplicationScoped
 public class ReminderScheduler {
 
-    @ConfigProperty(name = "calit.reminder.lead-minutes", defaultValue = "1440")
-    int leadMinutes;
+    final int leadMinutes;
 
-    @ConfigProperty(name = "calit.scheduler.grace-seconds", defaultValue = "30")
-    int graceSeconds;
+    final int graceSeconds;
+
+    final EntityManager em;
+
+    final EmailService emailService;
 
     @Inject
-    EntityManager em;
-
-    @Inject
-    EmailService emailService;
+    public ReminderScheduler(
+            EntityManager em,
+            EmailService emailService,
+            @ConfigProperty(name = "calit.reminder.lead-minutes", defaultValue = "1440") int leadMinutes,
+            @ConfigProperty(name = "calit.scheduler.grace-seconds", defaultValue = "30") int graceSeconds) {
+        this.em = em;
+        this.emailService = emailService;
+        this.leadMinutes = leadMinutes;
+        this.graceSeconds = graceSeconds;
+    }
 
     // --- lifecycle observers (creation/recompute/delete side) ---
 
