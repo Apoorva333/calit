@@ -168,7 +168,7 @@ services:
     restart: unless-stopped
 
   app:
-    image: ghcr.io/asm0dey/calit:1.17.0   # or :latest (native variant: :1.17.0-native)
+    image: ghcr.io/asm0dey/calit:1.18.0   # or :latest (native variant: :1.18.0-native)
     depends_on:
       db:
         condition: service_healthy
