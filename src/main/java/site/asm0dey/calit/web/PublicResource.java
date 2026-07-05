@@ -14,7 +14,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.resteasy.reactive.RestForm;
 import site.asm0dey.calit.availability.TimeSlot;
 import site.asm0dey.calit.booking.*;
@@ -133,11 +132,6 @@ public class PublicResource {
     @jakarta.inject.Inject
     CaptchaProviderConfig captchaProviderConfig;
 
-    // SmallRye converts the empty-string property value to null, so bind it as Optional
-    // and unwrap to "" — a non-Optional String injection would fail config validation.
-    @ConfigProperty(name = "calit.turnstile.site-key")
-    java.util.Optional<String> turnstileSiteKeyConfig;
-
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy");
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -237,7 +231,7 @@ public class PublicResource {
     }
 
     private String turnstileSiteKey() {
-        return turnstileSiteKeyConfig.orElse("");
+        return captchaProviderConfig.turnstileSiteKey().orElse("");
     }
 
     /** Resolved booking target; a non-null {@code earlyExit} page means "render it and stop". */

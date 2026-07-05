@@ -9,13 +9,13 @@ import static org.mockito.Mockito.when;
 
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.junit.TestProfile;
+import io.quarkus.test.junit.mockito.InjectSpy;
 import jakarta.transaction.Transactional;
 import java.time.DayOfWeek;
 import java.time.LocalTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import site.asm0dey.calit.booking.AltchaProfile;
+import site.asm0dey.calit.booking.CaptchaProviderConfig;
 import site.asm0dey.calit.domain.AvailabilityRule;
 import site.asm0dey.calit.domain.MeetingType;
 import site.asm0dey.calit.domain.MeetingType.LocationType;
@@ -24,11 +24,13 @@ import site.asm0dey.calit.google.CalendarPort;
 import site.asm0dey.calit.user.AppUser;
 
 @QuarkusTest
-@TestProfile(AltchaProfile.class)
 class BookPageAltchaEnabledTest {
 
     @InjectMock
     CalendarPort calendarPort;
+
+    @InjectSpy
+    CaptchaProviderConfig providerConfig;
 
     @Transactional
     void seed() {
@@ -70,6 +72,7 @@ class BookPageAltchaEnabledTest {
     void bookPageRendersAltchaWidgetAndScript() {
         when(calendarPort.isConnected(anyLong())).thenReturn(true);
         when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
+        when(providerConfig.provider()).thenReturn("altcha");
         seed();
 
         given().when()

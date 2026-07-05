@@ -2,23 +2,38 @@ package site.asm0dey.calit.booking;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.when;
 
 import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.junit.TestProfile;
+import io.quarkus.test.junit.mockito.InjectSpy;
 import jakarta.inject.Inject;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.Optional;
 import org.altcha.altcha.v1.Altcha;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+/**
+ * Runs in the default (no-profile) Quarkus boot: spy the config bean and force the altcha provider +
+ * hmac key per-test instead of a @TestProfile restart.
+ */
 @QuarkusTest
-@TestProfile(AltchaProfile.class)
 class CaptchaVerifierTest {
 
-    static final String KEY = AltchaProfile.KEY;
+    static final String KEY = "test-hmac-secret";
 
     @Inject
     CaptchaVerifier verifier;
+
+    @InjectSpy
+    CaptchaProviderConfig providerConfig;
+
+    @BeforeEach
+    void enableAltcha() {
+        when(providerConfig.provider()).thenReturn("altcha");
+        when(providerConfig.altchaHmacKey()).thenReturn(Optional.of(KEY));
+    }
 
     /** Build the exact base64 payload the ALTCHA widget would POST after solving. */
     static String validPayload() throws Exception {

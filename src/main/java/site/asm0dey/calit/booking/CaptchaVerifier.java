@@ -9,10 +9,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.Optional;
 import java.util.regex.Pattern;
 import org.altcha.altcha.v1.Altcha;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
  * Server-side CAPTCHA verification. The active provider ({@code none} | {@code turnstile} |
@@ -24,21 +22,6 @@ public class CaptchaVerifier {
 
     @Inject
     CaptchaProviderConfig providerConfig;
-
-    // --- Turnstile ---
-    // SmallRye treats an empty-string config value as null for the String converter, so bind
-    // the optional secret as Optional<String> (empty/unset in the off-by-default local/test case).
-    @ConfigProperty(name = "calit.abuse.turnstile.secret")
-    Optional<String> secret;
-
-    @ConfigProperty(
-            name = "calit.abuse.turnstile.verify-url",
-            defaultValue = "https://challenges.cloudflare.com/turnstile/v0/siteverify")
-    String verifyUrl;
-
-    // --- ALTCHA ---
-    @ConfigProperty(name = "calit.captcha.altcha.hmac-key")
-    Optional<String> altchaHmacKey;
 
     // SEC-SSRF-01: bound the synchronous booking-path call so a hung upstream can't pin a thread.
     private final HttpClient http = HttpClient.newBuilder()
@@ -65,7 +48,8 @@ public class CaptchaVerifier {
             throw new AbuseException("Missing ALTCHA solution");
         }
         try {
-            boolean ok = Altcha.verifySolution(solution, altchaHmacKey.orElse(""), true);
+            boolean ok = Altcha.verifySolution(
+                    solution, providerConfig.altchaHmacKey().orElse(""), true);
             if (!ok) {
                 throw new AbuseException("ALTCHA verification failed");
             }
@@ -81,9 +65,10 @@ public class CaptchaVerifier {
             throw new AbuseException("Missing Turnstile token");
         }
         try {
-            var body = "secret=" + URLEncoder.encode(secret.orElse(""), StandardCharsets.UTF_8) + "&response="
-                    + URLEncoder.encode(token, StandardCharsets.UTF_8);
-            var req = HttpRequest.newBuilder(URI.create(verifyUrl))
+            var body = "secret="
+                    + URLEncoder.encode(providerConfig.turnstileSecret().orElse(""), StandardCharsets.UTF_8)
+                    + "&response=" + URLEncoder.encode(token, StandardCharsets.UTF_8);
+            var req = HttpRequest.newBuilder(URI.create(providerConfig.turnstileVerifyUrl()))
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .timeout(Duration.ofSeconds(10))
                     .POST(HttpRequest.BodyPublishers.ofString(body))

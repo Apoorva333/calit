@@ -28,8 +28,45 @@ public class CaptchaProviderConfig {
     @ConfigProperty(name = "calit.captcha.altcha.hmac-key")
     Optional<String> altchaHmacKey;
 
+    @ConfigProperty(name = "calit.captcha.altcha.max-number", defaultValue = "100000")
+    long altchaMaxNumber;
+
+    @ConfigProperty(name = "calit.abuse.turnstile.secret")
+    Optional<String> turnstileSecret;
+
+    @ConfigProperty(
+            name = "calit.abuse.turnstile.verify-url",
+            defaultValue = "https://challenges.cloudflare.com/turnstile/v0/siteverify")
+    String turnstileVerifyUrl;
+
+    @ConfigProperty(name = "calit.turnstile.site-key")
+    Optional<String> turnstileSiteKey;
+
     public String provider() {
         return resolve(explicit.orElse(null), turnstileEnabled);
+    }
+
+    // Single source of truth for all CAPTCHA config: AltchaResource, CaptchaVerifier and
+    // PublicResource read these accessors (not their own @ConfigProperty fields) so tests can
+    // mock this one bean instead of restarting Quarkus under a @TestProfile per flag combination.
+    public Optional<String> altchaHmacKey() {
+        return altchaHmacKey;
+    }
+
+    public long altchaMaxNumber() {
+        return altchaMaxNumber;
+    }
+
+    public Optional<String> turnstileSecret() {
+        return turnstileSecret;
+    }
+
+    public String turnstileVerifyUrl() {
+        return turnstileVerifyUrl;
+    }
+
+    public Optional<String> turnstileSiteKey() {
+        return turnstileSiteKey;
     }
 
     static String resolve(String explicit, boolean turnstileEnabled) {
