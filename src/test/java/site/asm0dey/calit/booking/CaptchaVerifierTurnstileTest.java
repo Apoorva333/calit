@@ -2,18 +2,19 @@ package site.asm0dey.calit.booking;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.when;
 
 import com.sun.net.httpserver.HttpServer;
 import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.junit.QuarkusTestProfile;
-import io.quarkus.test.junit.TestProfile;
+import io.quarkus.test.junit.mockito.InjectSpy;
 import jakarta.inject.Inject;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -21,25 +22,14 @@ import org.junit.jupiter.api.Test;
  * local stub of the Cloudflare siteverify endpoint (a JDK {@link HttpServer}, no extra dependency).
  * The stub echoes {@code {"success": true}} only when the submitted token is {@code good}, so both
  * the accept and reject branches of {@code verifyTurnstile} are covered without touching the network.
+ * Runs in the default boot: the config bean is spied to select the turnstile provider + point the
+ * verifier at the local stub, instead of a @TestProfile restart.
  */
 @QuarkusTest
-@TestProfile(CaptchaVerifierTurnstileTest.TurnstileOn.class)
 class CaptchaVerifierTurnstileTest {
 
-    // Fixed port for the stub; the @TestProfile below points the verifier at it. CI runs in a fresh
-    // container so the port is free.
     static final int PORT = 18477;
     static HttpServer server;
-
-    public static class TurnstileOn implements QuarkusTestProfile {
-        @Override
-        public Map<String, String> getConfigOverrides() {
-            return Map.of(
-                    "calit.captcha.provider", "turnstile",
-                    "calit.abuse.turnstile.secret", "test-secret",
-                    "calit.abuse.turnstile.verify-url", "http://localhost:" + PORT + "/siteverify");
-        }
-    }
 
     @BeforeAll
     static void startStub() throws IOException {
@@ -66,6 +56,16 @@ class CaptchaVerifierTurnstileTest {
 
     @Inject
     CaptchaVerifier verifier;
+
+    @InjectSpy
+    CaptchaProviderConfig providerConfig;
+
+    @BeforeEach
+    void enableTurnstile() {
+        when(providerConfig.provider()).thenReturn("turnstile");
+        when(providerConfig.turnstileSecret()).thenReturn(Optional.of("test-secret"));
+        when(providerConfig.turnstileVerifyUrl()).thenReturn("http://localhost:" + PORT + "/siteverify");
+    }
 
     @Test
     void validTurnstileTokenPasses() {

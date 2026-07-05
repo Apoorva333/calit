@@ -13,10 +13,8 @@ class SmtpHealthCheckTest {
 
     @Test
     void unreachableHostReportsUpWithState() {
-        SmtpHealthCheck c = new SmtpHealthCheck();
-        c.mock = false;
-        c.host = Optional.of("localhost");
-        c.port = 2; // closed port -> connection refused fast, no slow timeout
+        // closed port -> connection refused fast, no slow timeout
+        SmtpHealthCheck c = new SmtpHealthCheck(false, Optional.of("localhost"), 2);
         HealthCheckResponse r = c.call();
         assertEquals(HealthCheckResponse.Status.UP, r.getStatus(), "informational: always UP");
         assertTrue(r.getData().orElseThrow().containsKey("state"));
@@ -24,10 +22,7 @@ class SmtpHealthCheckTest {
 
     @Test
     void mockedReportsUp() {
-        SmtpHealthCheck c = new SmtpHealthCheck();
-        c.mock = true;
-        c.host = Optional.empty();
-        c.port = 587;
+        SmtpHealthCheck c = new SmtpHealthCheck(true, Optional.empty(), 587);
         assertEquals(HealthCheckResponse.Status.UP, c.call().getStatus());
     }
 }

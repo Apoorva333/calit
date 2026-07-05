@@ -2,25 +2,24 @@ package site.asm0dey.calit.booking;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.mockito.Mockito.when;
 
 import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.junit.QuarkusTestProfile;
-import io.quarkus.test.junit.TestProfile;
-import java.util.Map;
+import io.quarkus.test.junit.mockito.InjectSpy;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+/** Default-boot: spy the config bean to hand the challenge endpoint an hmac key, no @TestProfile. */
 @QuarkusTest
-@TestProfile(AltchaChallengeTest.AltchaOn.class)
 class AltchaChallengeTest {
 
-    public static class AltchaOn implements QuarkusTestProfile {
-        @Override
-        public Map<String, String> getConfigOverrides() {
-            return Map.of(
-                    "calit.captcha.provider", "altcha",
-                    "calit.captcha.altcha.hmac-key", "test-hmac-secret",
-                    "calit.captcha.altcha.max-number", "100000");
-        }
+    @InjectSpy
+    CaptchaProviderConfig providerConfig;
+
+    @BeforeEach
+    void configureAltcha() {
+        when(providerConfig.altchaHmacKey()).thenReturn(Optional.of("test-hmac-secret"));
     }
 
     @Test

@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 import site.asm0dey.calit.user.AppUser;
 
 @QuarkusTest
-@TestProfile(SignupEnabledProfile.class)
+@TestProfile(CommonFeaturesProfile.class)
 class SignupEnabledTest {
 
     @Test

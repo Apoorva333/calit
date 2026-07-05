@@ -19,17 +19,23 @@ import site.asm0dey.calit.i18n.AppMessages;
 @Path("/setup")
 public class SetupResource {
 
-    @Inject
-    PasswordHasher passwordHasher;
+    final PasswordHasher passwordHasher;
+
+    final AppMessageResolver messages;
+
+    final ActiveLocale activeLocale;
 
     @Inject
-    AppMessageResolver messages;
-
-    @Inject
-    ActiveLocale activeLocale;
+    public SetupResource(PasswordHasher passwordHasher, AppMessageResolver messages, ActiveLocale activeLocale) {
+        this.passwordHasher = passwordHasher;
+        this.messages = messages;
+        this.activeLocale = activeLocale;
+    }
 
     @CheckedTemplate
     public static class Templates {
+        private Templates() {}
+
         public static native TemplateInstance setup(String title, boolean error);
     }
 

@@ -9,6 +9,8 @@ import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
+import java.time.Clock;
+import site.asm0dey.calit.audit.AuditLog;
 
 /**
  * Authenticates form-login submissions. Two paths, in order:
@@ -23,17 +25,22 @@ import jakarta.inject.Inject;
 @ApplicationScoped
 public class AppUserIdentityProvider implements IdentityProvider<UsernamePasswordAuthenticationRequest> {
 
-    @Inject
-    PasswordHasher passwordHasher;
+    final PasswordHasher passwordHasher;
+
+    final LoginTicketService loginTickets;
+
+    final Clock clock;
+
+    final AuditLog audit;
 
     @Inject
-    LoginTicketService loginTickets;
-
-    @Inject
-    java.time.Clock clock;
-
-    @Inject
-    site.asm0dey.calit.audit.AuditLog audit;
+    public AppUserIdentityProvider(
+            PasswordHasher passwordHasher, LoginTicketService loginTickets, Clock clock, AuditLog audit) {
+        this.passwordHasher = passwordHasher;
+        this.loginTickets = loginTickets;
+        this.clock = clock;
+        this.audit = audit;
+    }
 
     @Override
     public Class<UsernamePasswordAuthenticationRequest> getRequestType() {

@@ -14,7 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.calit.domain.OwnerSettings;
 import site.asm0dey.calit.user.AppUser;
-import site.asm0dey.calit.web.SignupEnabledProfile;
+import site.asm0dey.calit.web.CommonFeaturesProfile;
 
 /**
  * End-to-end Google sign-in proving the two end-user journeys:
@@ -25,7 +25,7 @@ import site.asm0dey.calit.web.SignupEnabledProfile;
  * QuarkusTransaction.requiringNew so the separate HTTP-request transaction can see it.
  */
 @QuarkusTest
-@TestProfile(SignupEnabledProfile.class)
+@TestProfile(CommonFeaturesProfile.class)
 class GoogleSignInFlowTest {
 
     @Inject

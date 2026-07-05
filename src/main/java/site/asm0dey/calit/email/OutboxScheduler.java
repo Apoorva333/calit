@@ -27,11 +27,15 @@ public class OutboxScheduler {
 
     private static final int BATCH = 20;
 
-    @Inject
-    EntityManager em;
+    final EntityManager em;
+
+    final MailSender mailSender;
 
     @Inject
-    MailSender mailSender;
+    public OutboxScheduler(EntityManager em, MailSender mailSender) {
+        this.em = em;
+        this.mailSender = mailSender;
+    }
 
     @Scheduled(every = "60s")
     void scheduledTick() {

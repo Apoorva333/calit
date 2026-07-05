@@ -3,27 +3,18 @@ package site.asm0dey.calit.oidc;
 import static org.junit.jupiter.api.Assertions.*;
 
 import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.calit.domain.OwnerSettings;
 import site.asm0dey.calit.user.AppUser;
+import site.asm0dey.calit.web.CommonFeaturesProfile;
 
 @QuarkusTest
-@TestProfile(OidcSignInServiceTest.SignupOnAdminGroup.class)
+@TestProfile(CommonFeaturesProfile.class)
 class OidcSignInServiceTest {
-
-    /** Enable signup + define the admin group, so provisioning and admin mapping are exercised. */
-    public static class SignupOnAdminGroup implements QuarkusTestProfile {
-        @Override
-        public Map<String, String> getConfigOverrides() {
-            return Map.of("calit.signup.enabled", "true", "calit.oidc.admin-group", "calit-admins");
-        }
-    }
 
     @Inject
     OidcSignInService service;

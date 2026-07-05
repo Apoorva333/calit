@@ -14,9 +14,10 @@ import org.junit.jupiter.api.Test;
 import site.asm0dey.calit.booking.Booking;
 import site.asm0dey.calit.booking.BookingStatus;
 import site.asm0dey.calit.domain.MeetingType;
+import site.asm0dey.calit.web.CommonFeaturesProfile;
 
 @QuarkusTest
-@TestProfile(Grace120Profile.class)
+@TestProfile(CommonFeaturesProfile.class)
 class ReminderGraceWindowTest {
 
     @Inject

@@ -5,8 +5,12 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
+import site.asm0dey.calit.domain.MeetingType;
 import site.asm0dey.calit.i18n.ActiveLocale;
+import site.asm0dey.calit.user.AppUser;
+import site.asm0dey.calit.user.Usernames;
 
 /**
  * Public JSON booking API. SECURITY (SEC-AUTHZ-02): every mutation MUST route through
@@ -19,11 +23,15 @@ import site.asm0dey.calit.i18n.ActiveLocale;
 @Produces(MediaType.APPLICATION_JSON)
 public class BookingResource {
 
-    @Inject
-    BookingService bookingService;
+    final BookingService bookingService;
+
+    final ActiveLocale activeLocale;
 
     @Inject
-    ActiveLocale activeLocale;
+    public BookingResource(BookingService bookingService, ActiveLocale activeLocale) {
+        this.bookingService = bookingService;
+        this.activeLocale = activeLocale;
+    }
 
     public record BookRequest(
             String user,
@@ -46,13 +54,11 @@ public class BookingResource {
         if (req.user() == null || req.user().isBlank()) {
             throw new NotFoundException("Missing user");
         }
-        site.asm0dey.calit.user.AppUser owner =
-                site.asm0dey.calit.user.AppUser.findByUsername(site.asm0dey.calit.user.Usernames.normalize(req.user()));
+        AppUser owner = AppUser.findByUsername(Usernames.normalize(req.user()));
         if (owner == null) {
             throw new NotFoundException("No user " + req.user());
         }
-        site.asm0dey.calit.domain.MeetingType type =
-                site.asm0dey.calit.domain.MeetingType.findBySlug(owner.id, req.slug());
+        MeetingType type = MeetingType.findBySlug(owner.id, req.slug());
         if (type == null) {
             throw new NotFoundException("No meeting type with slug " + req.slug());
         }
@@ -70,7 +76,7 @@ public class BookingResource {
                 req.altchaSolution(),
                 req.honeypot(),
                 locale,
-                java.util.List.of());
+                List.of());
         return Response.status(Response.Status.CREATED).entity(b).build();
     }
 

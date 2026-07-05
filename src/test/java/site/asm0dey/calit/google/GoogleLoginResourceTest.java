@@ -10,14 +10,14 @@ import jakarta.inject.Inject;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import site.asm0dey.calit.web.SignupEnabledProfile;
+import site.asm0dey.calit.web.CommonFeaturesProfile;
 
 /**
  * End-to-end sign-in: stub the Google network seam, then drive callback -> bridge -> j_security_check
  * and assert a session cookie is minted. Signup enabled so an unknown identity provisions a user.
  */
 @QuarkusTest
-@TestProfile(SignupEnabledProfile.class)
+@TestProfile(CommonFeaturesProfile.class)
 class GoogleLoginResourceTest {
 
     @Inject

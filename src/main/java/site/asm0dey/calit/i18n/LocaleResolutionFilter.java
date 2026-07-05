@@ -27,11 +27,15 @@ import site.asm0dey.calit.user.CurrentOwner;
 @Priority(Priorities.USER + 100) // 5100 — runs AFTER MeOwnerFilter (5000)
 public class LocaleResolutionFilter implements ContainerRequestFilter {
 
-    @Inject
-    CurrentOwner currentOwner;
+    final CurrentOwner currentOwner;
+
+    final ActiveLocale activeLocale;
 
     @Inject
-    ActiveLocale activeLocale;
+    public LocaleResolutionFilter(CurrentOwner currentOwner, ActiveLocale activeLocale) {
+        this.currentOwner = currentOwner;
+        this.activeLocale = activeLocale;
+    }
 
     @Override
     public void filter(ContainerRequestContext ctx) {

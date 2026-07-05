@@ -15,9 +15,10 @@ import site.asm0dey.calit.booking.Booking;
 import site.asm0dey.calit.booking.BookingStatus;
 import site.asm0dey.calit.domain.MeetingType;
 import site.asm0dey.calit.domain.OwnerSettings;
+import site.asm0dey.calit.web.CommonFeaturesProfile;
 
 @QuarkusTest
-@TestProfile(Grace120Profile.class)
+@TestProfile(CommonFeaturesProfile.class)
 class PendingExpiryGraceWindowTest {
 
     @Inject

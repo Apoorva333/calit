@@ -2,7 +2,9 @@ package site.asm0dey.calit.web;
 
 import io.quarkus.qute.CheckedTemplate;
 import io.quarkus.qute.TemplateInstance;
+import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedMap;
@@ -10,17 +12,15 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
+import java.util.*;
+import java.util.stream.Collectors;
 import org.jboss.resteasy.reactive.RestForm;
 import site.asm0dey.calit.availability.TimeSlot;
 import site.asm0dey.calit.booking.*;
 import site.asm0dey.calit.domain.BookingField;
 import site.asm0dey.calit.domain.MeetingType;
 import site.asm0dey.calit.domain.OwnerSettings;
+import site.asm0dey.calit.google.CalendarPort;
 import site.asm0dey.calit.google.CalendarUnavailableException;
 import site.asm0dey.calit.i18n.ActiveLocale;
 import site.asm0dey.calit.i18n.AppMessageResolver;
@@ -39,14 +39,14 @@ public class PublicResource {
         public static native TemplateInstance index(String title, boolean authenticated, String username);
 
         public static native TemplateInstance landing(
-                String title, List<PublicResource.LandingType> types, String user, String ownerName);
+                String title, List<LandingType> types, String user, String ownerName);
 
         public static native TemplateInstance book(
                 String title,
                 String user,
                 MeetingType type,
-                List<PublicResource.DaySlots> days,
-                List<site.asm0dey.calit.domain.BookingField> fields,
+                List<DaySlots> days,
+                List<BookingField> fields,
                 String error,
                 String tzBar,
                 String tzScript,
@@ -74,7 +74,7 @@ public class PublicResource {
                 Booking booking,
                 String currentLabel,
                 String currentUtcIso,
-                List<PublicResource.DaySlots> days,
+                List<DaySlots> days,
                 String tzBar,
                 String tzScript,
                 String calScript,
@@ -107,36 +107,43 @@ public class PublicResource {
         public static native TemplateInstance hostPending(String title);
     }
 
-    @Inject
-    BookingService bookingService;
+    final BookingService bookingService;
 
-    @Inject
-    MeetingHosts meetingHosts;
+    final MeetingHosts meetingHosts;
 
-    @Inject
-    CurrentOwner currentOwner;
+    final CurrentOwner currentOwner;
 
-    @Inject
-    ActiveLocale activeLocale;
+    final ActiveLocale activeLocale;
 
-    @Inject
-    AppMessageResolver messages;
+    final AppMessageResolver messages;
 
-    @jakarta.inject.Inject
-    site.asm0dey.calit.google.CalendarPort calendarPort;
+    final CalendarPort calendarPort;
 
     // Root landing is public; with proactive auth this is the anonymous identity when logged out,
     // or the logged-in user's identity (so the landing can show Logout/Settings instead of Sign in).
-    @jakarta.inject.Inject
-    io.quarkus.security.identity.SecurityIdentity identity;
+    final SecurityIdentity identity;
 
-    @jakarta.inject.Inject
-    CaptchaProviderConfig captchaProviderConfig;
+    final CaptchaProviderConfig captchaProviderConfig;
 
-    // SmallRye converts the empty-string property value to null, so bind it as Optional
-    // and unwrap to "" — a non-Optional String injection would fail config validation.
-    @ConfigProperty(name = "calit.turnstile.site-key")
-    java.util.Optional<String> turnstileSiteKeyConfig;
+    @Inject
+    public PublicResource(
+            BookingService bookingService,
+            MeetingHosts meetingHosts,
+            CurrentOwner currentOwner,
+            ActiveLocale activeLocale,
+            AppMessageResolver messages,
+            CalendarPort calendarPort,
+            SecurityIdentity identity,
+            CaptchaProviderConfig captchaProviderConfig) {
+        this.bookingService = bookingService;
+        this.meetingHosts = meetingHosts;
+        this.currentOwner = currentOwner;
+        this.activeLocale = activeLocale;
+        this.messages = messages;
+        this.calendarPort = calendarPort;
+        this.identity = identity;
+        this.captchaProviderConfig = captchaProviderConfig;
+    }
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy");
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
@@ -186,7 +193,7 @@ public class PublicResource {
         List<MeetingType> candidates = MeetingType.listPublicIncludingCohosted(owner.id);
         // Batch the multi-host bookability check: one host query + one user query for the whole
         // set, instead of isMultiHost() + bookable() (forType + findById per host) per type.
-        java.util.Set<Long> bookableIds = meetingHosts.bookableTypeIds(candidates);
+        Set<Long> bookableIds = meetingHosts.bookableTypeIds(candidates);
         List<LandingType> types = candidates.stream()
                 .filter(t -> bookableIds.contains(t.id))
                 .map(t -> new LandingType(t, "/" + bookUsernameFor(t, owner) + "/" + t.slug))
@@ -237,7 +244,7 @@ public class PublicResource {
     }
 
     private String turnstileSiteKey() {
-        return turnstileSiteKeyConfig.orElse("");
+        return captchaProviderConfig.turnstileSiteKey().orElse("");
     }
 
     /** Resolved booking target; a non-null {@code earlyExit} page means "render it and stop". */
@@ -285,7 +292,7 @@ public class PublicResource {
         if (raw == null || raw.isBlank()) {
             return List.of();
         }
-        return java.util.Arrays.stream(raw.split("[,\\s]+"))
+        return Arrays.stream(raw.split("[,\\s]+"))
                 .map(String::trim)
                 .filter(s -> !s.isBlank())
                 .toList();
@@ -317,7 +324,7 @@ public class PublicResource {
 
         // Collect every "answers.<fieldKey>" form param into the answers map (strip the prefix).
         Map<String, String> answers = new HashMap<>();
-        for (Map.Entry<String, java.util.List<String>> e : form.entrySet()) {
+        for (Map.Entry<String, List<String>> e : form.entrySet()) {
             if (e.getKey().startsWith("answers.")) {
                 answers.put(
                         e.getKey().substring("answers.".length()),
@@ -426,7 +433,7 @@ public class PublicResource {
         String currentUtcIso = booking.startUtc.toString(); // absolute instant for data-utc
         String guestsCsv = BookingGuest.activeForBooking(booking.id).stream()
                 .map(g -> g.email)
-                .collect(java.util.stream.Collectors.joining(","));
+                .collect(Collectors.joining(","));
         return Templates.manage(
                 m.pub_manage_title(),
                 booking,
@@ -451,7 +458,7 @@ public class PublicResource {
     // request's long-lived non-transactional EntityManager, which would still hold the pre-update entity
     // in its L1 cache and serve stale data back to renderManage (same reasoning as AdminResource's
     // ownerEditDetails).
-    @jakarta.transaction.Transactional
+    @Transactional
     public TemplateInstance editDetails(
             @PathParam("manageToken") String manageToken,
             @RestForm String title,
@@ -554,14 +561,12 @@ public class PublicResource {
             var day = byIso.computeIfAbsent(
                     isoDate,
                     k -> new DaySlots(
-                            k,
-                            slot.start().format(DATE_FMT.withLocale(activeLocale.current())),
-                            new java.util.ArrayList<>()));
+                            k, slot.start().format(DATE_FMT.withLocale(activeLocale.current())), new ArrayList<>()));
             day.slots()
                     .add(new SlotView(
                             slot.start().format(TIME_FMT),
                             slot.start().toInstant().toString()));
         }
-        return new java.util.ArrayList<>(byIso.values());
+        return new ArrayList<>(byIso.values());
     }
 }

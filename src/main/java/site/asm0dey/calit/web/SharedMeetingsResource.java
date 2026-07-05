@@ -73,23 +73,33 @@ public class SharedMeetingsResource {
 
     public record PendingRequestRow(MeetingType type, String creatorName) {}
 
-    @Inject
-    CurrentOwner currentOwner;
+    final CurrentOwner currentOwner;
+
+    final MeetingHosts meetingHosts;
+
+    final BookingService bookingService;
+
+    final SecurityIdentity identity;
+
+    final AdminMessageResolver adminMsgs;
+
+    final ActiveLocale activeLocale;
 
     @Inject
-    MeetingHosts meetingHosts;
-
-    @Inject
-    BookingService bookingService;
-
-    @Inject
-    SecurityIdentity identity;
-
-    @Inject
-    AdminMessageResolver adminMsgs;
-
-    @Inject
-    ActiveLocale activeLocale;
+    public SharedMeetingsResource(
+            CurrentOwner currentOwner,
+            MeetingHosts meetingHosts,
+            BookingService bookingService,
+            SecurityIdentity identity,
+            AdminMessageResolver adminMsgs,
+            ActiveLocale activeLocale) {
+        this.currentOwner = currentOwner;
+        this.meetingHosts = meetingHosts;
+        this.bookingService = bookingService;
+        this.identity = identity;
+        this.adminMsgs = adminMsgs;
+        this.activeLocale = activeLocale;
+    }
 
     private boolean isAdmin() {
         return identity.hasRole("admin");

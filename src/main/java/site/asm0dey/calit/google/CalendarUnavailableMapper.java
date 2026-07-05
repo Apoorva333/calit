@@ -17,11 +17,15 @@ import site.asm0dey.calit.web.PublicResource;
 @Provider
 public class CalendarUnavailableMapper implements ExceptionMapper<CalendarUnavailableException> {
 
-    @Inject
-    AppMessageResolver messages;
+    final AppMessageResolver messages;
+
+    final ActiveLocale activeLocale;
 
     @Inject
-    ActiveLocale activeLocale;
+    public CalendarUnavailableMapper(AppMessageResolver messages, ActiveLocale activeLocale) {
+        this.messages = messages;
+        this.activeLocale = activeLocale;
+    }
 
     @Override
     public Response toResponse(CalendarUnavailableException ex) {

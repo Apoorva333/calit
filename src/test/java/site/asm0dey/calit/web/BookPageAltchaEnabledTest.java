@@ -9,14 +9,13 @@ import static org.mockito.Mockito.when;
 
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.junit.QuarkusTestProfile;
-import io.quarkus.test.junit.TestProfile;
+import io.quarkus.test.junit.mockito.InjectSpy;
 import jakarta.transaction.Transactional;
 import java.time.DayOfWeek;
 import java.time.LocalTime;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.Test;
+import site.asm0dey.calit.booking.CaptchaProviderConfig;
 import site.asm0dey.calit.domain.AvailabilityRule;
 import site.asm0dey.calit.domain.MeetingType;
 import site.asm0dey.calit.domain.MeetingType.LocationType;
@@ -25,20 +24,13 @@ import site.asm0dey.calit.google.CalendarPort;
 import site.asm0dey.calit.user.AppUser;
 
 @QuarkusTest
-@TestProfile(BookPageAltchaEnabledTest.AltchaOn.class)
 class BookPageAltchaEnabledTest {
-
-    public static class AltchaOn implements QuarkusTestProfile {
-        @Override
-        public Map<String, String> getConfigOverrides() {
-            return Map.of(
-                    "calit.captcha.provider", "altcha",
-                    "calit.captcha.altcha.hmac-key", "test-hmac-secret");
-        }
-    }
 
     @InjectMock
     CalendarPort calendarPort;
+
+    @InjectSpy
+    CaptchaProviderConfig providerConfig;
 
     @Transactional
     void seed() {
@@ -80,6 +72,7 @@ class BookPageAltchaEnabledTest {
     void bookPageRendersAltchaWidgetAndScript() {
         when(calendarPort.isConnected(anyLong())).thenReturn(true);
         when(calendarPort.freeBusy(anyLong(), any(), any())).thenReturn(List.of());
+        when(providerConfig.provider()).thenReturn("altcha");
         seed();
 
         given().when()
