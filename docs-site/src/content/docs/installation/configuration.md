@@ -76,6 +76,7 @@ Booking and password-reset flows therefore never fail just because SMTP is unava
 | `APPROVAL_HOLD_HOURS` | How long a pending (approval-required) booking is held before it expires | `24` |
 | `SCHEDULER_GRACE_SECONDS` | Treat reminder / pending-expiry rows as due up to this many seconds early, so replicas on unsynchronised tick timers fire on time instead of a tick late. `0` = exact | `30` |
 | `PER_EMAIL_DAILY_CAP` | Maximum bookings an invitee email address may make per day (abuse protection) | `10` |
+| `SIGNUP_ENABLED` | Allow public self-service sign-up at `/signup`, and gate auto-provisioning of new accounts via OIDC SSO. `false` returns 404 on `/signup` and rejects unmatched SSO logins instead of creating an account. | `false` |
 
 ## Language
 
@@ -162,3 +163,17 @@ Self-hosted proof-of-work — no external service or account. See [ALTCHA setup]
 |---|---|---|
 | `ALTCHA_HMAC_KEY` | Secret that signs ALTCHA challenges. **Required** when `CAPTCHA_PROVIDER=altcha` (startup fails without it). Generate: `openssl rand -hex 32`. | *(blank)* |
 | `ALTCHA_MAX_NUMBER` | Proof-of-work difficulty — max number the browser brute-forces | `100000` |
+
+## OIDC / SSO (optional)
+
+Leave `OIDC_ENABLED=false` to run with form login only. See [OIDC / SSO setup](/calit/installation/oidc-sso/) for the redirect URI, required scopes/claims, and worked examples (generic provider + Authelia).
+
+| Variable | Description | Default |
+|---|---|---|
+| `OIDC_ENABLED` | Enable the "Sign in with SSO" button and the `/api/oidc/login` code-flow endpoint | `false` |
+| `OIDC_ISSUER_URL` | Base issuer URL; endpoints are discovered from `${OIDC_ISSUER_URL}/.well-known/openid-configuration` | *(blank)* |
+| `OIDC_CLIENT_ID` | Client ID registered with the provider | *(blank)* |
+| `OIDC_CLIENT_SECRET` | Client secret registered with the provider (plaintext, even if the provider stores it hashed) | *(blank)* |
+| `OIDC_ADMIN_GROUP` | Group whose members get calit admin on login. Grant-only — never demotes a locally-granted admin. | *(blank — no OIDC admin)* |
+
+New-account provisioning via OIDC is gated by `SIGNUP_ENABLED` (see [Behaviour](#behaviour) above).
