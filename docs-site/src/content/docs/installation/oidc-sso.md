@@ -11,7 +11,7 @@ OIDC / SSO is **optional** and **off by default** (`OIDC_ENABLED=false`). Form l
 
 - calit acts as an OIDC **relying party**, running an authorization-code flow scoped to a single endpoint, `/api/oidc/login`. Everything else (session cookie, `/me`, public booking pages) is unaffected.
 - The OIDC login is **login-only**: once the identity is verified, calit bridges into its own normal form-auth session. There is no ongoing OIDC session to manage.
-- **Account linking** matches the token's `email` claim against an existing calit user's settings email, but only when the provider marked it `email_verified`. If no verified-email match exists, calit provisions a new account — but only when `SIGNUP_ENABLED=true`. With `SIGNUP_ENABLED=false`, an unmatched SSO login is rejected rather than silently creating an account.
+- **Account linking** matches the token's `email` claim against an existing calit user's settings email, but only when the provider marked it `email_verified`. If no verified-email match exists, calit provisions a new account — but only when `SIGNUP_ENABLED=true`. With `SIGNUP_ENABLED=false`, an unmatched SSO login is rejected rather than silently creating an account. If the verified email matches more than one calit account, the SSO login is rejected (the user must sign in with a password instead) rather than calit picking one — resolve it by making the accounts' settings emails unique.
 - **Admin is grant-only, never demote**: if `OIDC_ADMIN_GROUP` is set and the token's `groups` claim contains it, the user gets calit admin on that login. Losing the group on a later login revokes the OIDC-granted admin — but an admin granted locally (via `/me/users`) is **never** demoted by OIDC group state.
 
 ## Steps
@@ -22,7 +22,7 @@ Every OIDC-compliant provider needs the same three facts from calit:
 
 | Setting | Value |
 |---|---|
-| Redirect URI | `${APP_BASE_URL}/api/oidc/login` (e.g. `https://book.example.com/api/oidc/login`) |
+| Redirect URI | `${APP_BASE_URL}/api/oidc/login` (e.g. `https://cal.example.com/api/oidc/login`) |
 | Scopes | `openid email profile groups` |
 | Claims calit reads | `sub`, `email`, `email_verified`, `groups` |
 
@@ -102,6 +102,7 @@ Authelia only ever stores the **hash** of the client secret; calit's `OIDC_CLIEN
 ## Shared behaviour (applies to any provider)
 
 - **Email must match and be verified.** Account linking requires the token's `email` claim to equal an existing user's settings email *and* `email_verified: true` on the token. An unverified email is treated the same as no match.
+- **An ambiguous email is rejected.** If the verified email matches more than one calit account, the SSO login is rejected (the user must sign in with a password instead) rather than calit picking one — resolve it by making the accounts' settings emails unique.
 - **New-account creation is gated by `SIGNUP_ENABLED`.** With no matching local account, a new user is auto-provisioned only when `SIGNUP_ENABLED=true`; otherwise the login is rejected.
 - **Admin is grant-only, never a demotion.** `OIDC_ADMIN_GROUP` membership grants calit admin on each login where present, and is revoked on a subsequent login if the group is removed — but a locally-granted admin (via `/me/users`) is never demoted by OIDC group state.
 - **Silent failures look like `/login`.** A wrong issuer URL, client ID/secret, or a provider that isn't reachable typically manifests as the user landing back on `/login` rather than a clear error page — check calit's logs and the provider's client configuration first.
