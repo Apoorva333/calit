@@ -7,6 +7,29 @@ This changelog is maintained manually. The canonical release notes, including
 asset downloads, are on
 [GitHub Releases](https://github.com/asm0dey/calit/releases).
 
+## 1.18.0
+
+Optional OpenID Connect single sign-on.
+
+- **Sign in with SSO (OIDC).** calit can now sit behind any OpenID Connect
+  provider (Authelia, Keycloak, Auth0, Zitadel, Authentik, …) as a relying
+  party. It is **optional and off by default** (`OIDC_ENABLED=false`) — form
+  login is unchanged whether or not OIDC is configured. SSO is **login-only**:
+  once the provider verifies the identity, calit bridges into its normal
+  session, so there is no OIDC session to manage. Accounts link by the
+  **verified** `email` claim; an unmatched login provisions a new account only
+  when `SIGNUP_ENABLED=true`, and a verified email matching more than one
+  account is rejected rather than guessed. Optional `OIDC_ADMIN_GROUP` grants
+  calit admin from a `groups` claim (grant-only — never demotes a
+  locally-granted admin). Configure with `OIDC_ENABLED`, `OIDC_ISSUER_URL`,
+  `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, and optional `OIDC_ADMIN_GROUP`; the
+  redirect URI is `${APP_BASE_URL}/api/oidc/login`. See
+  [OIDC / SSO setup](/calit/installation/oidc-sso/).
+
+- **Localised booking-page dates.** The timezone bar and slot-day date on the
+  public booking pages now localise to the viewer's language (en/de/he) instead
+  of always rendering in English.
+
 ## 1.17.0
 
 Self-hosted ALTCHA CAPTCHA and email invitations for admin-created users.
