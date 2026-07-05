@@ -5,13 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.sun.net.httpserver.HttpServer;
 import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
 import jakarta.inject.Inject;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -23,27 +21,14 @@ import org.junit.jupiter.api.Test;
  * the accept and reject branches of {@code verifyTurnstile} are covered without touching the network.
  */
 @QuarkusTest
-@TestProfile(CaptchaVerifierTurnstileTest.TurnstileOn.class)
+@TestProfile(TurnstileProfile.class)
 class CaptchaVerifierTurnstileTest {
 
-    // Fixed port for the stub; the @TestProfile below points the verifier at it. CI runs in a fresh
-    // container so the port is free.
-    static final int PORT = 18477;
     static HttpServer server;
-
-    public static class TurnstileOn implements QuarkusTestProfile {
-        @Override
-        public Map<String, String> getConfigOverrides() {
-            return Map.of(
-                    "calit.captcha.provider", "turnstile",
-                    "calit.abuse.turnstile.secret", "test-secret",
-                    "calit.abuse.turnstile.verify-url", "http://localhost:" + PORT + "/siteverify");
-        }
-    }
 
     @BeforeAll
     static void startStub() throws IOException {
-        server = HttpServer.create(new InetSocketAddress(PORT), 0);
+        server = HttpServer.create(new InetSocketAddress(TurnstileProfile.VERIFY_PORT), 0);
         server.createContext("/siteverify", exchange -> {
             var body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
             var ok = body.contains("response=good");

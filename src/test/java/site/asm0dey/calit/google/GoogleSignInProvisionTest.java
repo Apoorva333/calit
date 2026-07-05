@@ -9,10 +9,10 @@ import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.calit.domain.OwnerSettings;
 import site.asm0dey.calit.user.AppUser;
-import site.asm0dey.calit.web.SignupEnabledProfile;
+import site.asm0dey.calit.web.CommonFeaturesProfile;
 
 @QuarkusTest
-@TestProfile(SignupEnabledProfile.class)
+@TestProfile(CommonFeaturesProfile.class)
 class GoogleSignInProvisionTest {
 
     @Inject

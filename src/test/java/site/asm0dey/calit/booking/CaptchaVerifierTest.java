@@ -4,30 +4,18 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
 import jakarta.inject.Inject;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-import java.util.Map;
 import org.altcha.altcha.v1.Altcha;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
-@TestProfile(CaptchaVerifierTest.AltchaOn.class)
+@TestProfile(AltchaProfile.class)
 class CaptchaVerifierTest {
 
-    static final String KEY = "test-hmac-secret";
-
-    public static class AltchaOn implements QuarkusTestProfile {
-        @Override
-        public Map<String, String> getConfigOverrides() {
-            return Map.of(
-                    "calit.captcha.provider", "altcha",
-                    "calit.captcha.altcha.hmac-key", KEY,
-                    "calit.captcha.altcha.max-number", "100000");
-        }
-    }
+    static final String KEY = AltchaProfile.KEY;
 
     @Inject
     CaptchaVerifier verifier;

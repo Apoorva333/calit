@@ -8,14 +8,13 @@ import static org.mockito.Mockito.when;
 
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
 import jakarta.transaction.Transactional;
 import java.time.DayOfWeek;
 import java.time.LocalTime;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.Test;
+import site.asm0dey.calit.booking.TurnstileProfile;
 import site.asm0dey.calit.domain.AvailabilityRule;
 import site.asm0dey.calit.domain.MeetingType;
 import site.asm0dey.calit.domain.MeetingType.LocationType;
@@ -24,18 +23,8 @@ import site.asm0dey.calit.google.CalendarPort;
 import site.asm0dey.calit.user.AppUser;
 
 @QuarkusTest
-@TestProfile(BookPageTurnstileEnabledTest.TurnstileOn.class)
+@TestProfile(TurnstileProfile.class)
 class BookPageTurnstileEnabledTest {
-
-    /** Flip the owner-configurable flag on + pin a known public site key for this test only. */
-    public static class TurnstileOn implements QuarkusTestProfile {
-        @Override
-        public Map<String, String> getConfigOverrides() {
-            return Map.of(
-                    "calit.turnstile.enabled", "true",
-                    "calit.turnstile.site-key", "1x00000000000000000000AA");
-        }
-    }
 
     @InjectMock
     CalendarPort calendarPort;
